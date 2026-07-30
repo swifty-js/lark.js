@@ -20,7 +20,7 @@
     "build": "pnpm build:mvc && pnpm build:docs",
     "git:commit": "git add -A && git commit -m \"feat: Introduce new features\"",
     "git:commit:n": "git add -A && git commit -m \"feat: Introduce new features\" --no-verify",
-    "git:commit:ci": "git add -A && git commit -m \"feat: Deploy gomoku\" --no-verify",
+    "git:commit:ci": "git add -A && git commit -m \"feat: Deploy gomoku\"",
     "git:push": "pnpm git:commit && git push origin main",
     "git:push:n": "pnpm git:commit:n && git push origin main",
     "git:push:ci": "pnpm git:commit:ci && git push origin main"

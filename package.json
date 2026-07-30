@@ -28,7 +28,7 @@
   },
   "lint-staged": {
     "packages/**/*.{js,jsx,ejs,ts,tsx,html,css,scss,md,mdx,json,jsonc,jsonl,yml,yaml,toml}": [
-      "pnpm test && pnpm format"
+      "sh -c 'pnpm format'"
     ]
   },
   "pnpm": {

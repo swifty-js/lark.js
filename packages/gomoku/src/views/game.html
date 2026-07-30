@@ -247,37 +247,40 @@
         </div>
       </div>
 
-      <!-- AI search statistics -->
-      {{if stats}}
+      <!-- AI search statistics (always rendered to keep panel height stable) -->
       <div class="rounded-2xl bg-slate-900/70 border border-slate-700/50 backdrop-blur px-4 py-3">
         <p class="text-[11px] text-slate-500 uppercase tracking-[0.2em] mb-2 font-semibold">
           Last Search
         </p>
         <div class="grid grid-cols-3 gap-2 text-center">
           <div>
-            <p class="text-amber-300 text-base font-bold tabular-nums">{{=stats.depth}}</p>
+            <p class="text-amber-300 text-base font-bold tabular-nums">
+              {{if stats}}{{=stats.depth}}{{else}}—{{/if}}
+            </p>
             <p class="text-slate-500 text-[11px] mt-0.5">Depth</p>
           </div>
           <div>
-            <p class="text-amber-300 text-base font-bold tabular-nums">{{=stats.nodes}}</p>
+            <p class="text-amber-300 text-base font-bold tabular-nums">
+              {{if stats}}{{=stats.nodes}}{{else}}—{{/if}}
+            </p>
             <p class="text-slate-500 text-[11px] mt-0.5">Nodes</p>
           </div>
           <div>
             <p class="text-amber-300 text-base font-bold tabular-nums">
-              {{=stats.timeMs}}<span class="text-xs font-normal">ms</span>
+              {{if stats}}{{=stats.timeMs}}<span class="text-xs font-normal">ms</span
+              >{{else}}—{{/if}}
             </p>
             <p class="text-slate-500 text-[11px] mt-0.5">Time</p>
           </div>
         </div>
       </div>
-      {{/if}}
 
       <!-- Move history -->
       <div class="rounded-2xl bg-slate-900/70 border border-slate-700/50 backdrop-blur p-4">
         <p class="text-[11px] text-slate-500 uppercase tracking-[0.2em] mb-2 font-semibold">
           Move History
         </p>
-        <div class="max-h-40 overflow-y-auto space-y-1 pr-1">
+        <div class="h-40 overflow-y-auto space-y-1 pr-1">
           {{if moves.length === 0}}
           <p class="text-slate-600 text-sm text-center py-3">No moves yet</p>
           {{/if}} {{forOf moves as move idx}}

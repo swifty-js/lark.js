@@ -35,6 +35,7 @@
     "Vframes",
     "vite",
     "vitepress",
-    "vnode"
+    "vnode",
+    "Zobrist"
   ]
 }

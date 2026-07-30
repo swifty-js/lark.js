@@ -3,10 +3,10 @@
 >
   <!-- 氛围背景光斑 -->
   <div
-    class="absolute -top-32 -left-32 w-[28rem] h-[28rem] rounded-full bg-amber-500/10 blur-3xl pointer-events-none"
+    class="absolute -top-32 -left-32 w-md h-112 rounded-full bg-amber-500/10 blur-3xl pointer-events-none"
   ></div>
   <div
-    class="absolute -bottom-40 -right-24 w-[32rem] h-[32rem] rounded-full bg-emerald-500/8 blur-3xl pointer-events-none"
+    class="absolute -bottom-40 -right-24 w-lg h-128 rounded-full bg-emerald-500/8 blur-3xl pointer-events-none"
   ></div>
   <div
     class="absolute top-1/3 left-2/3 w-64 h-64 rounded-full bg-indigo-500/8 blur-3xl pointer-events-none"
@@ -15,7 +15,7 @@
   <div class="relative flex flex-col lg:flex-row gap-8 items-center lg:items-start">
     <!-- 棋盘区 -->
     <div
-      class="rounded-3xl bg-gradient-to-br from-amber-200 via-amber-300 to-amber-400 p-4 shadow-2xl shadow-black/60 ring-1 ring-amber-100/40"
+      class="rounded-3xl bg-linear-to-br from-amber-200 via-amber-300 to-amber-400 p-4 shadow-2xl shadow-black/60 ring-1 ring-amber-100/40"
     >
       <!-- 列坐标 A-O -->
       <div class="flex pl-6 pr-1">
@@ -70,7 +70,7 @@
             <!-- 黑子 -->
             {{if cell.player === 1}}
             <div
-              class="relative w-[84%] h-[84%] rounded-full bg-gradient-to-br from-slate-500 via-slate-800 to-black shadow-md shadow-black/50 z-20 {{if cell.isWin}}ring-2 ring-emerald-400 shadow-lg shadow-emerald-500/50 animate-pulse{{/if}}"
+              class="relative w-[84%] h-[84%] rounded-full bg-linear-to-br from-slate-500 via-slate-800 to-black shadow-md shadow-black/50 z-20 {{if cell.isWin}}ring-2 ring-emerald-400 shadow-lg shadow-emerald-500/50 animate-pulse{{/if}}"
             >
               <div
                 class="absolute top-[14%] left-[18%] w-[32%] h-[22%] rounded-full bg-white/25 blur-[1px]"
@@ -86,7 +86,7 @@
             <!-- 白子 -->
             {{if cell.player === 2}}
             <div
-              class="relative w-[84%] h-[84%] rounded-full bg-gradient-to-br from-white via-slate-100 to-slate-300 shadow-md shadow-black/40 border border-slate-300/60 z-20 {{if cell.isWin}}ring-2 ring-emerald-500 shadow-lg shadow-emerald-500/50 animate-pulse{{/if}}"
+              class="relative w-[84%] h-[84%] rounded-full bg-linear-to-br from-white via-slate-100 to-slate-300 shadow-md shadow-black/40 border border-slate-300/60 z-20 {{if cell.isWin}}ring-2 ring-emerald-500 shadow-lg shadow-emerald-500/50 animate-pulse{{/if}}"
             >
               <div
                 class="absolute top-[14%] left-[18%] w-[32%] h-[22%] rounded-full bg-white/80 blur-[1px]"
@@ -109,7 +109,7 @@
       <!-- 标题 -->
       <div class="text-center lg:text-left">
         <h1
-          class="font-serif text-4xl font-bold tracking-[0.3em] bg-gradient-to-r from-amber-200 via-amber-300 to-amber-500 bg-clip-text text-transparent"
+          class="font-serif text-4xl font-bold tracking-[0.3em] bg-linear-to-r from-amber-200 via-amber-300 to-amber-500 bg-clip-text text-transparent"
         >
           五子棋
         </h1>
@@ -142,7 +142,7 @@
           class="rounded-2xl bg-slate-900/70 border border-slate-700/50 backdrop-blur px-4 py-3 flex items-center gap-3"
         >
           <div
-            class="w-7 h-7 rounded-full bg-gradient-to-br from-slate-500 via-slate-800 to-black shadow shadow-black/50 shrink-0"
+            class="w-7 h-7 rounded-full bg-linear-to-br from-slate-500 via-slate-800 to-black shadow shadow-black/50 shrink-0"
           ></div>
           <div class="min-w-0">
             <p class="text-slate-200 text-sm font-medium">黑棋</p>
@@ -155,7 +155,7 @@
           class="rounded-2xl bg-slate-900/70 border border-slate-700/50 backdrop-blur px-4 py-3 flex items-center gap-3"
         >
           <div
-            class="w-7 h-7 rounded-full bg-gradient-to-br from-white via-slate-100 to-slate-300 border border-slate-300/60 shrink-0"
+            class="w-7 h-7 rounded-full bg-linear-to-br from-white via-slate-100 to-slate-300 border border-slate-300/60 shrink-0"
           ></div>
           <div class="min-w-0">
             <p class="text-slate-200 text-sm font-medium">白棋</p>

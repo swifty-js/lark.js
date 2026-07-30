@@ -23,7 +23,11 @@ export function vcfSearch(
 }
 
 /** Collect all points where player can complete five in one move (does not mutate the board) */
-function collectFivePoints(board: BoardState, player: Player, moves: readonly number[]): number[] {
+function collectFivePoints(
+  board: BoardState,
+  player: Player,
+  moves: readonly number[],
+): number[] {
   const points: number[] = [];
   for (const move of moves) {
     if (hasImmediateWin(board, move, player)) {

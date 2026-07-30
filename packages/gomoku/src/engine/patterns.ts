@@ -51,13 +51,24 @@ function analyzeDirection(
   return { count, openEnds };
 }
 
-export function scorePosition(board: BoardState, index: number, player: Player): number {
+export function scorePosition(
+  board: BoardState,
+  index: number,
+  player: Player,
+): number {
   const row = toRow(index);
   const col = toCol(index);
   let total = 0;
 
   for (const [dr, dc] of DIRECTIONS) {
-    const { count, openEnds } = analyzeDirection(board, row, col, dr, dc, player);
+    const { count, openEnds } = analyzeDirection(
+      board,
+      row,
+      col,
+      dr,
+      dc,
+      player,
+    );
     total += scoreLine(count, openEnds);
   }
 
@@ -101,16 +112,32 @@ export function evaluateBoard(board: BoardState, aiPlayer: Player): number {
   return score;
 }
 
-function evaluateCell(board: BoardState, row: number, col: number, player: Player): number {
+function evaluateCell(
+  board: BoardState,
+  row: number,
+  col: number,
+  player: Player,
+): number {
   let total = 0;
   for (const [dr, dc] of DIRECTIONS) {
-    const { count, openEnds } = analyzeDirection(board, row, col, dr, dc, player);
+    const { count, openEnds } = analyzeDirection(
+      board,
+      row,
+      col,
+      dr,
+      dc,
+      player,
+    );
     total += scoreLine(count, openEnds);
   }
   return total;
 }
 
-export function evaluateMove(board: BoardState, index: number, player: Player): number {
+export function evaluateMove(
+  board: BoardState,
+  index: number,
+  player: Player,
+): number {
   const opp = player === Player.Black ? Player.White : Player.Black;
   const attackScore = scorePosition(board, index, player);
   const defenseScore = scorePosition(board, index, opp);
@@ -121,7 +148,11 @@ export function evaluateMove(board: BoardState, index: number, player: Player): 
   return attackScore + defenseScore * 0.9 + positionBonus;
 }
 
-export function hasImmediateWin(board: BoardState, index: number, player: Player): boolean {
+export function hasImmediateWin(
+  board: BoardState,
+  index: number,
+  player: Player,
+): boolean {
   const row = toRow(index);
   const col = toCol(index);
   for (const [dr, dc] of DIRECTIONS) {
@@ -131,36 +162,75 @@ export function hasImmediateWin(board: BoardState, index: number, player: Player
   return false;
 }
 
-export function createsOpenFour(board: BoardState, index: number, player: Player): boolean {
+export function createsOpenFour(
+  board: BoardState,
+  index: number,
+  player: Player,
+): boolean {
   const row = toRow(index);
   const col = toCol(index);
   for (const [dr, dc] of DIRECTIONS) {
-    const { count, openEnds } = analyzeDirection(board, row, col, dr, dc, player);
+    const { count, openEnds } = analyzeDirection(
+      board,
+      row,
+      col,
+      dr,
+      dc,
+      player,
+    );
     if (count === 4 && openEnds === 2) return true;
   }
   return false;
 }
 
-export function createsFour(board: BoardState, index: number, player: Player): boolean {
+export function createsFour(
+  board: BoardState,
+  index: number,
+  player: Player,
+): boolean {
   const row = toRow(index);
   const col = toCol(index);
   for (const [dr, dc] of DIRECTIONS) {
-    const { count, openEnds } = analyzeDirection(board, row, col, dr, dc, player);
+    const { count, openEnds } = analyzeDirection(
+      board,
+      row,
+      col,
+      dr,
+      dc,
+      player,
+    );
     if (count === 4 && openEnds >= 1) return true;
   }
   return false;
 }
 
-export function createsOpenThree(board: BoardState, index: number, player: Player): boolean {
+export function createsOpenThree(
+  board: BoardState,
+  index: number,
+  player: Player,
+): boolean {
   const row = toRow(index);
   const col = toCol(index);
   for (const [dr, dc] of DIRECTIONS) {
-    const { count, openEnds } = analyzeDirection(board, row, col, dr, dc, player);
+    const { count, openEnds } = analyzeDirection(
+      board,
+      row,
+      col,
+      dr,
+      dc,
+      player,
+    );
     if (count === 3 && openEnds === 2) return true;
   }
   return false;
 }
 
-export function isThreat(board: BoardState, index: number, player: Player): boolean {
-  return createsFour(board, index, player) || createsOpenThree(board, index, player);
+export function isThreat(
+  board: BoardState,
+  index: number,
+  player: Player,
+): boolean {
+  return (
+    createsFour(board, index, player) || createsOpenThree(board, index, player)
+  );
 }

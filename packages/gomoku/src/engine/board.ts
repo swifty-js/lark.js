@@ -73,7 +73,8 @@ export function makeMove(board: BoardState, index: number): void {
   board.moveCount++;
   board.history.push({ index, player });
   if (checkWin(board, index, player)) {
-    board.status = player === Player.Black ? GameStatus.BlackWin : GameStatus.WhiteWin;
+    board.status =
+      player === Player.Black ? GameStatus.BlackWin : GameStatus.WhiteWin;
   } else if (board.moveCount === CELL_COUNT) {
     board.status = GameStatus.Draw;
   }
@@ -89,7 +90,11 @@ export function unmakeMove(board: BoardState): void {
   board.status = GameStatus.Playing;
 }
 
-export function checkWin(board: BoardState, index: number, player: Player): boolean {
+export function checkWin(
+  board: BoardState,
+  index: number,
+  player: Player,
+): boolean {
   const row = toRow(index);
   const col = toCol(index);
   for (const [dr, dc] of DIRECTIONS) {
@@ -112,7 +117,11 @@ export function checkWin(board: BoardState, index: number, player: Player): bool
 }
 
 /** Returns the cells of the winning line (at least five in a row) through index, or an empty array if none */
-export function getWinLine(board: BoardState, index: number, player: Player): number[] {
+export function getWinLine(
+  board: BoardState,
+  index: number,
+  player: Player,
+): number[] {
   const row = toRow(index);
   const col = toCol(index);
   for (const [dr, dc] of DIRECTIONS) {

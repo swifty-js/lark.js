@@ -19,5 +19,10 @@ export function computeAIMove(
   aiPlayer: Player,
   difficulty: Difficulty,
 ): SearchResult {
-  return findBestMove(board, aiPlayer, difficulty.maxDepth, difficulty.timeLimitMs);
+  return findBestMove(
+    board,
+    aiPlayer,
+    difficulty.maxDepth,
+    difficulty.timeLimitMs,
+  );
 }

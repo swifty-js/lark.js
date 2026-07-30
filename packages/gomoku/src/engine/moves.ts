@@ -58,7 +58,10 @@ export function orderMoves(
   return scored.map((s) => s.move);
 }
 
-export function generateThreatMoves(board: BoardState, player: Player): number[] {
+export function generateThreatMoves(
+  board: BoardState,
+  player: Player,
+): number[] {
   const allMoves = generateMoves(board);
   const threats: number[] = [];
   const cells = board.cells;
@@ -74,7 +77,11 @@ export function generateThreatMoves(board: BoardState, player: Player): number[]
   return threats;
 }
 
-function isThreatMove(board: BoardState, index: number, player: Player): boolean {
+function isThreatMove(
+  board: BoardState,
+  index: number,
+  player: Player,
+): boolean {
   const row = toRow(index);
   const col = toCol(index);
   const dirs: ReadonlyArray<readonly [number, number]> = [

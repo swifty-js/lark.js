@@ -1,4 +1,5 @@
 import { defineView, useState } from "@lark.js/mvc";
+import { ArrowLeftRight, RotateCcw, Undo2 } from "lucide-static";
 import template from "./game.html";
 import {
   createBoard,
@@ -43,14 +44,21 @@ const STAR_POINTS = new Set([
   toIndex(11, 11),
 ]);
 
-const COL_LABELS = Array.from({ length: BOARD_SIZE }, (_, i) => String.fromCharCode(65 + i));
-const ROW_LABELS = Array.from({ length: BOARD_SIZE }, (_, i) => String(BOARD_SIZE - i));
+const COL_LABELS = Array.from({ length: BOARD_SIZE }, (_, i) =>
+  String.fromCharCode(65 + i),
+);
+const ROW_LABELS = Array.from({ length: BOARD_SIZE }, (_, i) =>
+  String(BOARD_SIZE - i),
+);
 
 /** Minimum display duration for AI response to avoid the "thinking" state flashing by */
 const MIN_THINK_MS = 300;
 
 function computeWinLine(board: BoardState): Set<number> {
-  if (board.status !== GameStatus.BlackWin && board.status !== GameStatus.WhiteWin) {
+  if (
+    board.status !== GameStatus.BlackWin &&
+    board.status !== GameStatus.WhiteWin
+  ) {
     return new Set();
   }
   const last = board.history[board.history.length - 1];
@@ -79,7 +87,11 @@ function buildCells(board: BoardState, lastMove: number): CellData[] {
   return cells;
 }
 
-function statusText(board: BoardState, aiPlayer: Player, thinking: boolean): string {
+function statusText(
+  board: BoardState,
+  aiPlayer: Player,
+  thinking: boolean,
+): string {
   if (thinking) return "AI is thinking";
   const human = opponent(aiPlayer);
   switch (board.status) {
@@ -117,6 +129,15 @@ function isLarkEvent(e: unknown): e is LarkClickEvent {
 }
 
 export default defineView((ctx) => {
+  // lucide-static exports raw SVG strings; rendered via {{!icons.*}} (trusted HTML)
+  ctx.updater.set({
+    icons: {
+      newGame: RotateCcw,
+      undo: Undo2,
+      switchSide: ArrowLeftRight,
+    },
+  });
+
   let board = createBoard();
   let aiPlayer = Player.White;
   let difficulty: Difficulty = DIFFICULTIES[1];
@@ -128,7 +149,10 @@ export default defineView((ctx) => {
 
   const [getDifficultyIdx, setDifficultyIdx] = useState("difficultyIdx", 1);
 
-  const worker = new Worker(new URL("../engine/ai.worker.ts", import.meta.url), { type: "module" });
+  const worker = new Worker(
+    new URL("../engine/ai.worker.ts", import.meta.url),
+    { type: "module" },
+  );
   let requestSentAt = 0;
 
   ctx.on("destroy", () => {
@@ -137,7 +161,10 @@ export default defineView((ctx) => {
   });
 
   function buildData(): Record<string, unknown> {
-    const lastMove = board.history.length > 0 ? board.history[board.history.length - 1].index : -1;
+    const lastMove =
+      board.history.length > 0
+        ? board.history[board.history.length - 1].index
+        : -1;
     const humanIsBlack = aiPlayer === Player.White;
     return {
       cells: buildCells(board, lastMove),

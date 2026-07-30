@@ -1,4 +1,8 @@
-import { Framework, registerViewClass, type FrameworkConfig } from "@lark.js/mvc";
+import {
+  Framework,
+  registerViewClass,
+  type FrameworkConfig,
+} from "@lark.js/mvc";
 import gameView from "./views/game";
 import "./main.css";
 

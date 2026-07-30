@@ -7,14 +7,16 @@
     "dev": "vite",
     "build": "vite build",
     "typecheck": "tsc --noEmit",
-    "format": "oxfmt --write ."
+    "format": "prettier -w ."
   },
   "dependencies": {
-    "@lark.js/mvc": "workspace:^"
+    "@lark.js/mvc": "workspace:^",
+    "lucide-static": "^1.27.0"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
-    "oxfmt": "^0.61.0",
+    "prettier": "^3.9.6",
+    "prettier-plugin-tailwindcss": "^0.8.1",
     "tailwindcss": "^4.3.3",
     "typescript": "^5.8.3",
     "vite": "^8.1.5"

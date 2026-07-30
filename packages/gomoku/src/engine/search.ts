@@ -1,4 +1,10 @@
-import { CELL_COUNT, GameStatus, Player, TTFlag, type SearchResult } from "./types";
+import {
+  CELL_COUNT,
+  GameStatus,
+  Player,
+  TTFlag,
+  type SearchResult,
+} from "./types";
 import { type BoardState, makeMove, unmakeMove, opponent } from "./board";
 import { evaluateBoard, hasImmediateWin, isThreat } from "./patterns";
 import { generateMoves, orderMoves, createHistoryTable } from "./moves";
@@ -171,10 +177,14 @@ function rootPass(
 ): RootResult {
   const moves = generateMoves(board);
   const killers = state.killerMoves[0] ?? [-1, -1];
-  const ordered = orderMoves(board, moves, aiPlayer, prevBest, killers, state.historyTable).slice(
-    0,
-    ROOT_BEAM,
-  );
+  const ordered = orderMoves(
+    board,
+    moves,
+    aiPlayer,
+    prevBest,
+    killers,
+    state.historyTable,
+  ).slice(0, ROOT_BEAM);
 
   let bestMove = ordered[0];
   let bestScore = -INF;
@@ -275,12 +285,23 @@ function negamax(
 
   if (board.status !== GameStatus.Playing) {
     if (board.status === GameStatus.Draw) return 0;
-    const winner = board.status === GameStatus.BlackWin ? Player.Black : Player.White;
+    const winner =
+      board.status === GameStatus.BlackWin ? Player.Black : Player.White;
     return winner === aiPlayer ? WIN_SCORE - ply : -(WIN_SCORE - ply);
   }
 
   if (depth <= 0) {
-    return quiescence(board, state, aiPlayer, current, alpha, beta, ply, startTime, timeLimitMs);
+    return quiescence(
+      board,
+      state,
+      aiPlayer,
+      current,
+      alpha,
+      beta,
+      ply,
+      startTime,
+      timeLimitMs,
+    );
   }
 
   const hash = board.hash;
@@ -315,7 +336,8 @@ function negamax(
 
   // Futility Pruning: prune at shallow depth when static eval is far below alpha
   if (depth <= 3 && ply > 0) {
-    const staticEval = evaluateBoard(board, aiPlayer) * (current === aiPlayer ? 1 : -1);
+    const staticEval =
+      evaluateBoard(board, aiPlayer) * (current === aiPlayer ? 1 : -1);
     if (staticEval + FUTILITY_MARGIN * depth <= alpha) {
       return staticEval;
     }
@@ -460,7 +482,8 @@ function quiescence(
     return 0;
   }
 
-  const standPat = evaluateBoard(board, aiPlayer) * (current === aiPlayer ? 1 : -1);
+  const standPat =
+    evaluateBoard(board, aiPlayer) * (current === aiPlayer ? 1 : -1);
 
   if (standPat >= beta) return standPat;
   if (standPat > alpha) alpha = standPat;
@@ -471,7 +494,10 @@ function quiescence(
   const threatMoves: number[] = [];
 
   for (const move of moves) {
-    if (hasImmediateWin(board, move, current) || isThreat(board, move, current)) {
+    if (
+      hasImmediateWin(board, move, current) ||
+      isThreat(board, move, current)
+    ) {
       threatMoves.push(move);
     }
   }

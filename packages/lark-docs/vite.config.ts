@@ -259,8 +259,8 @@ function mergeImports(allImports: string[]): string[] {
  * consumer's FrameworkConfig.vdom setting.
  *
  * Uses virtual modules (virtual:lark-docs/<name>) to avoid conflicts with
- * larkNextPlugin7 which intercepts all .html imports via resolveId. Virtual
- * module IDs never end in .html, so neither larkNextPlugin7 nor Vite's
+ * larkMvcPlugin7 which intercepts all .html imports via resolveId. Virtual
+ * module IDs never end in .html, so neither larkMvcPlugin7 nor Vite's
  * built-in HTML asset handler can intercept them — no suffix tricks needed.
  *
  * Each virtual module exports { __str, __vdom } — two pre-compiled template
@@ -384,7 +384,7 @@ function docsConfig(): UserConfig {
     plugins: [
       // Virtual module plugin — no ordering constraint needed since virtual
       // module IDs (virtual:lark-docs/*) are never intercepted by
-      // larkNextPlugin7 or Vite's built-in HTML handler.
+      // larkMvcPlugin7 or Vite's built-in HTML handler.
       themeDualMode() as PluginOption,
       ...larkDocsPlugin({
         config: larkDocsConfig,

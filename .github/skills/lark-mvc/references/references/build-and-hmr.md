@@ -10,9 +10,9 @@ Source of truth: `src/vite.ts`, `src/webpack.ts`, `src/rspack.ts`,
 
 ```ts
 // vite.config.ts
-import { larkNextPlugin } from "@lark.js/lark-mvc/vite";
+import { larkMvcPlugin } from "@lark.js/lark-mvc/vite";
 export default defineConfig({
-  plugins: [larkNextPlugin({ debug: false, vdom: false })],
+  plugins: [larkMvcPlugin({ debug: false, vdom: false })],
 });
 ```
 
@@ -24,9 +24,9 @@ injects view HMR into any `.ts/.js` file that imports a `.html`.
 ### Webpack / Rspack — plugin form (recommended, zero config)
 
 ```ts
-import { LarkNextPlugin } from "@lark.js/lark-mvc/webpack"; // or /rspack
+import { LarkMvcPlugin } from "@lark.js/lark-mvc/webpack"; // or /rspack
 export default {
-  plugins: [new LarkNextPlugin({ debug: false, vdom: false })],
+  plugins: [new LarkMvcPlugin({ debug: false, vdom: false })],
 };
 // Options: { debug?, vdom?, test? (default /\.html$/), exclude? (default /node_modules/) }
 ```

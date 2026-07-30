@@ -21,7 +21,7 @@
  */
 
 /**
- * Ambient type declarations for Lark Next's DOM and module augmentations.
+ * Ambient type declarations for Lark Mvc's DOM and module augmentations.
  *
  * Lark attaches metadata to DOM elements (frame references, compare-key
  * caches, range-event tags) and relies on the `import.meta.hot` HMR context.

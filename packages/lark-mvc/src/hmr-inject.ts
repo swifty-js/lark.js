@@ -27,7 +27,7 @@
  *
  * React's `@vitejs/plugin-react` and Vue's `@vitejs/plugin-vue` auto-inject
  * HMR boilerplate at compile time so users never write `import.meta.hot`
- * themselves. Lark's `larkNextPlugin` / `larkNextLoader` previously did NOT
+ * themselves. Lark's `larkMvcPlugin` / `larkMvcLoader` previously did NOT
  * inject any HMR code, forcing users to manually write HMR accept/dispose
  * boilerplate in every view file — a poor DX.
  *
@@ -119,7 +119,7 @@ export type Bundler = "vite" | "webpack" | "rspack";
 function getTemplateHmrSnippet(bundler: Bundler): string {
   if (bundler === "vite") {
     return `
-// Auto-injected by larkNextPlugin
+// Auto-injected by larkMvcPlugin
 if (import.meta.hot) {
   import.meta.hot.dispose((data) => {
     data.oldTemplate = __lark_template__;
@@ -165,7 +165,7 @@ if (import.meta.hot) {
   // change, no .hot-update.js is emitted → ChunkLoadError. globalThis
   // sidesteps all module-resolution / chunk-graph side effects.
   return `
-// Auto-injected by larkNextPlugin
+// Auto-injected by larkMvcPlugin
 if (import.meta.webpackHot) {
   const oldTemplate = import.meta.webpackHot.data?.oldTemplate;
   if (oldTemplate) {
@@ -220,7 +220,7 @@ export function injectTemplateHmrSnippet(source: string, bundler: Bundler): stri
 function getViewHmrSnippet(bundler: Bundler): string {
   if (bundler === "vite") {
     return `
-// Auto-injected by larkNextPlugin
+// Auto-injected by larkMvcPlugin
 if (import.meta.hot) {
   import.meta.hot.dispose((data) => {
     data.oldView = __lark_view__;
@@ -242,7 +242,7 @@ if (import.meta.hot) {
   // Uses `import.meta.webpackHot` (the canonical ESM HMR API) —
   // see getTemplateHmrSnippet for the full rationale.
   return `
-// Auto-injected by larkNextPlugin
+// Auto-injected by larkMvcPlugin
 if (import.meta.webpackHot) {
   const oldView = import.meta.webpackHot.data?.oldView;
   if (oldView) {

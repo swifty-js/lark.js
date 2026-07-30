@@ -18,8 +18,8 @@ description: >-
   useResource, useEvent, createStore, computed, bindStore, State, Router,
   Router.to, Router.beforeEach, Frame, createFrame, registerViewClass,
   createService, PayloadApi, updater.set().digest(), ctx.owner.fire,
-  mountZone, mountView, v-lark, p-lark-, e-lark-, larkNextPlugin,
-  LarkNextPlugin, larkNextLoader, hotSwapByTemplate, hotSwapByView,
+  mountZone, mountView, v-lark, p-lark-, e-lark-, larkMvcPlugin,
+  LarkMvcPlugin, larkMvcLoader, hotSwapByTemplate, hotSwapByView,
   vdomCreate, EventDelegator, compileTemplate, extractGlobalVars,
   "handler<click>" event maps, or Lark template syntax in .html files. Even
   if the user just says "add a page/view/component to the Lark app", consult
@@ -27,7 +27,7 @@ description: >-
   or for unrelated React/Vue projects.
 ---
 
-# Lark Next Framework (`@lark.js/lark-mvc`)
+# Lark Mvc Framework (`@lark.js/lark-mvc`)
 
 A lightweight, functional-first TypeScript framework for SPAs and
 micro-frontends. Source: `packages/lark-mvc` (v0.0.19, ESM+CJS dual build,
@@ -43,9 +43,9 @@ re-renders until you call `.digest()` (or a hook/store does it for you).
 | Import                       | Provides                                                                                                                                                                                                      |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `@lark.js/lark-mvc`          | Runtime: `Framework`, `defineView`, hooks, `State`, `Router`, `Frame`, `createStore`, `computed`, `bindStore`, `createService`, `useUrlState`, `EventDelegator`, `vdomCreate`, `registerViewClass`, all types |
-| `@lark.js/lark-mvc/vite`     | `larkNextPlugin({ debug?, vdom? })`                                                                                                                                                                           |
-| `@lark.js/lark-mvc/webpack`  | `larkNextLoader`, `LarkNextPlugin` (auto-registers loader)                                                                                                                                                    |
-| `@lark.js/lark-mvc/rspack`   | `larkNextLoader`, `LarkNextPlugin`                                                                                                                                                                            |
+| `@lark.js/lark-mvc/vite`     | `larkMvcPlugin({ debug?, vdom? })`                                                                                                                                                                            |
+| `@lark.js/lark-mvc/webpack`  | `larkMvcLoader`, `LarkMvcPlugin` (auto-registers loader)                                                                                                                                                      |
+| `@lark.js/lark-mvc/rspack`   | `larkMvcLoader`, `LarkMvcPlugin`                                                                                                                                                                              |
 | `@lark.js/lark-mvc/runtime`  | Template helpers (`encHtml`, `strSafe`, `encUri`, `encQuote`, `refFn`) — imported by compiled templates, not by app code                                                                                      |
 | `@lark.js/lark-mvc/compiler` | Build-time `compileTemplate`, `extractGlobalVars`                                                                                                                                                             |
 | `@lark.js/lark-mvc/devtool`  | `installFrameDevtoolBridge`, frame-tree serialization types                                                                                                                                                   |
@@ -125,8 +125,8 @@ Framework.boot({
 
 ```ts
 // vite.config.ts
-import { larkNextPlugin } from "@lark.js/lark-mvc/vite";
-export default defineConfig({ plugins: [larkNextPlugin({ vdom: false })] });
+import { larkMvcPlugin } from "@lark.js/lark-mvc/vite";
+export default defineConfig({ plugins: [larkMvcPlugin({ vdom: false })] });
 ```
 
 HTML entry needs `<div id="app"></div>` matching `rootId`. HMR for both
@@ -146,7 +146,7 @@ boilerplate by hand.
    required for view-event handlers; `@event="name"` (no parens) on a
    `v-lark` element is a child→parent event binding instead.
 3. **`vdom` must match in two places**: `FrameworkConfig.vdom` and the bundler
-   plugin option (`larkNextPlugin({ vdom })`). Mismatch = broken rendering.
+   plugin option (`larkMvcPlugin({ vdom })`). Mismatch = broken rendering.
 4. **Hooks only inside setup** — they read a module-level `currentCtx`; calling
    them in event handlers or async callbacks throws.
 5. **Setup runs once** — no re-execution on render. Put per-render data logic

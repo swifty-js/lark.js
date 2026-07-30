@@ -27,7 +27,7 @@
  * 1. .md file compilation (frontmatter, markdown-it, Shiki)
  * 2. .html template compilation (lark-mvc template engine)
  *
- * Consumers only need this one plugin — no separate larkNextPlugin7() required.
+ * Consumers only need this one plugin — no separate larkMvcPlugin7() required.
  *
  * Usage:
  * ```ts
@@ -48,8 +48,8 @@ import { extractFrontmatter } from "./markdown/frontmatter";
 import type { Plugin } from "vite";
 import { createCipheriv, pbkdf2Sync, randomBytes } from "node:crypto";
 import {
-  larkNextPlugin,
-  type LarkNextVitePluginOptions,
+  larkMvcPlugin,
+  type LarkMvcVitePluginOptions,
 } from "@lark.js/mvc/vite";
 
 // Re-export build-time utilities for use in vite.config
@@ -59,7 +59,7 @@ export { scanDocsDir } from "./scanner";
 export { generateSidebar } from "./sidebar-generator";
 export type { DocsConfig, SidebarConfig } from "./types";
 
-export interface LarkDocsVitePluginOptions extends LarkNextVitePluginOptions {
+export interface LarkDocsVitePluginOptions extends LarkMvcVitePluginOptions {
   /** Full docs config. */
   config: DocsConfig;
 }
@@ -179,7 +179,7 @@ export function larkDocsPlugin(options: LarkDocsVitePluginOptions): Plugin[] {
 
   // The lark-mvc template plugin handles .html template compilation.
   // We integrate it internally so consumers don't need to configure it separately.
-  const plugin = larkNextPlugin({ debug, vdom });
+  const plugin = larkMvcPlugin({ debug, vdom });
 
   return [docsPlugin, baseSyncPlugin, spaFallbackPlugin, plugin as Plugin];
 }

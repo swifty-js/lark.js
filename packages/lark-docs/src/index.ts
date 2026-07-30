@@ -35,7 +35,7 @@
  *   - "@lark.js/docs/compiler" (compileMarkdown)
  */
 
-import type { FrameworkConfig as LarkNextFrameworkConfig } from "@lark.js/mvc";
+import type { FrameworkConfig as LarkMvcFrameworkConfig } from "@lark.js/mvc";
 
 // ============================================================
 // Re-exports from @lark.js/mvc (so consumers don't need it directly)
@@ -49,7 +49,7 @@ export {
   registerViewClass,
 } from "@lark.js/mvc";
 
-export type FrameworkConfig = Omit<LarkNextFrameworkConfig, "routeMode"> & {
+export type FrameworkConfig = Omit<LarkMvcFrameworkConfig, "routeMode"> & {
   routeMode: "history";
 };
 

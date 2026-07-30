@@ -23,7 +23,7 @@
 /**
  * @lark.js/mvc Store
  *
- * Zustand-aligned state management for Lark Next.
+ * Zustand-aligned state management for Lark Mvc.
  *
  * Core API:
  * - createStore(name, creator): define a store with (set, get) => initialState

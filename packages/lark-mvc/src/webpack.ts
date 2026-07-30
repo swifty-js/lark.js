@@ -25,11 +25,11 @@
  *
  * Provides two integration modes:
  *
- * 1. **Loader** (larkNextLoader) — Direct file transformation
+ * 1. **Loader** (larkMvcLoader) — Direct file transformation
  *    - Transforms .html files into JS function modules
  *    - Requires manual webpack.config.mjs setup
  *
- * 2. **Plugin** (LarkNextPlugin) — Auto-registers the loader
+ * 2. **Plugin** (LarkMvcPlugin) — Auto-registers the loader
  *    - Automatically configures the loader rule for .html files
  *    - Zero-config: just add the plugin to your webpack config
  *    - Recommended approach for most use cases
@@ -45,11 +45,11 @@
  *
  * Usage with Plugin (recommended):
  * ```js
- * import { LarkNextPlugin } from '@lark.js/mvc/webpack';
+ * import { LarkMvcPlugin } from '@lark.js/mvc/webpack';
  *
  * export default {
  *   plugins: [
- *     new LarkNextPlugin({
+ *     new LarkMvcPlugin({
  *       debug: process.env.NODE_ENV !== 'production',
  *       vdom: false,
  *     }),
@@ -72,9 +72,9 @@
  */
 import { compileTemplate, extractGlobalVars } from "./compiler";
 import { injectTemplateHmrSnippet, injectViewHmrSnippet } from "./hmr-inject";
-import type { LarkNextVitePluginOptions } from "./vite";
+import type { LarkMvcVitePluginOptions } from "./vite";
 
-export type LarkNextWebpackLoaderOptions = LarkNextVitePluginOptions & {
+export type LarkMvcWebpackLoaderOptions = LarkMvcVitePluginOptions & {
   hmr?: "view";
 };
 
@@ -83,11 +83,11 @@ interface LoaderContext {
   /** Whether in development mode */
   dev?: boolean;
   /** Loader options */
-  getOptions: () => LarkNextWebpackLoaderOptions;
+  getOptions: () => LarkMvcWebpackLoaderOptions;
 }
 
 /** Plugin options */
-export interface LarkNextWebpackPluginOptions extends LarkNextWebpackLoaderOptions {
+export interface LarkMvcWebpackPluginOptions extends LarkMvcWebpackLoaderOptions {
   /** File extension to match (default: /\.html$/) */
   test?: RegExp;
   /** Exclude pattern (default: /node_modules/) */
@@ -103,7 +103,7 @@ export interface LarkNextWebpackPluginOptions extends LarkNextWebpackLoaderOptio
  * reliably support returning a Promise from the loader function; the
  * callback approach works across all webpack 5.x versions.
  */
-async function larkNextLoader(this: LoaderContext, source: string): Promise<string> {
+async function larkMvcLoader(this: LoaderContext, source: string): Promise<string> {
   try {
     const options = this.getOptions() || {};
     const { debug = false, vdom = false, hmr } = options;
@@ -142,11 +142,11 @@ async function larkNextLoader(this: LoaderContext, source: string): Promise<stri
  *
  * Usage:
  * ```js
- * import { LarkNextPlugin } from '@lark.js/mvc/webpack';
+ * import { LarkMvcPlugin } from '@lark.js/mvc/webpack';
  *
  * export default {
  *   plugins: [
- *     new LarkNextPlugin({
+ *     new LarkMvcPlugin({
  *       debug: true,
  *       vdom: false,
  *     }),
@@ -154,10 +154,10 @@ async function larkNextLoader(this: LoaderContext, source: string): Promise<stri
  * };
  * ```
  */
-class LarkNextPlugin {
-  private options: LarkNextWebpackPluginOptions;
+class LarkMvcPlugin {
+  private options: LarkMvcWebpackPluginOptions;
 
-  constructor(options: LarkNextWebpackPluginOptions = {}) {
+  constructor(options: LarkMvcWebpackPluginOptions = {}) {
     this.options = {
       debug: false,
       vdom: false,
@@ -226,5 +226,5 @@ class LarkNextPlugin {
   }
 }
 
-export { larkNextLoader, LarkNextPlugin };
-export { larkNextLoader as default };
+export { larkMvcLoader, LarkMvcPlugin };
+export { larkMvcLoader as default };

@@ -38,7 +38,7 @@ import { registerViewClass } from "@lark.js/mvc";
 // and __vdom (VDOM-mode) compiled functions. The lib build's themeDualMode
 // Vite plugin resolves virtual:lark-docs/* IDs and compiles each .html in
 // both modes. Virtual modules are used instead of direct .html imports to
-// avoid conflicts with larkNextPlugin7 which intercepts all .html via resolveId.
+// avoid conflicts with larkMvcPlugin7 which intercepts all .html via resolveId.
 import {
   __str as docLayoutStr,
   __vdom as docLayoutVdom,

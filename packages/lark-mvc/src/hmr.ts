@@ -21,7 +21,7 @@
  */
 
 /**
- * Hot Module Replacement (HMR) for Lark Next views.
+ * Hot Module Replacement (HMR) for Lark Mvc views.
  *
  * HMR hot-swaps view code without a full page reload, preserving view-local
  * state (counter values, form input, scroll-derived data) across updates.

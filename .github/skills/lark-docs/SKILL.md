@@ -2,7 +2,7 @@
 name: lark-docs
 description: >-
   Authoritative reference for @lark.js/lark-docs (v0.0.1), the documentation site
-  generator built on the Lark Next framework, located at packages/lark-docs
+  generator built on the Lark Mvc framework, located at packages/lark-docs
   — analogous to VitePress for Vue or Docusaurus for React. Covers
   defineConfig() in lark-docs.config.ts, the generated
   .lark-docs/generated module (@lark-docs/generated alias: routes,
@@ -26,14 +26,14 @@ description: >-
   sidebar_label/draft), customizes the docs theme/search/dark-mode, or asks to
   "set up a docs site", "add a docs page", "fix the sidebar/TOC/search" in a
   Lark project. Do NOT use for VitePress/Docusaurus/Rspress sites or for
-  general Lark Next app work unrelated to documentation (use the lark-mvc
+  general Lark Mvc app work unrelated to documentation (use the lark-mvc
   skill for framework APIs).
 ---
 
 # Lark Docs (`@lark.js/lark-docs`)
 
 Documentation site generator for `@lark.js/lark-mvc` — what VitePress is to Vue,
-this is to Lark Next. Source: `packages/lark-docs` (v0.0.1, ESM+CJS dual
+this is to Lark Mvc. Source: `packages/lark-docs` (v0.0.1, ESM+CJS dual
 build via Vite lib mode). It turns a `docs/` directory of markdown into an
 SPA: one persistent layout view, per-page compiled `.md` modules loaded on
 navigation, auto-generated sidebar, MiniSearch command palette, Shiki

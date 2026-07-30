@@ -111,7 +111,7 @@ export default defineConfig({
   plugins: [
     // larkDocsPlugin returns a plugin array that handles BOTH .md
     // compilation and .html template compilation (the lark-mvc template
-    // plugin is embedded) — no separate larkNextPlugin is needed.
+    // plugin is embedded) — no separate larkMvcPlugin is needed.
     ...larkDocsPlugin({ config: docsConfig, vdom: false }),
     tailwindcss(),
   ],
@@ -448,7 +448,7 @@ docs-layout (root)
 |   +-- Sidebar (236px, left, visible on lg+; v-lark="theme/sidebar")
 |   +-- Content (prose max-w-none; skeleton while loading; 404 state)
 |   +-- TOC (224px, right, visible on xl+; v-lark="theme/toc")
-+-- Prev/Next pager (bottom of content, flattened from sidebar order)
++-- Prev/Mvc pager (bottom of content, flattened from sidebar order)
 +-- Mobile navigation drawer (focus trap, Escape to close)
 +-- Search dialog (v-lark="theme/search", when search enabled)
 ```

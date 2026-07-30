@@ -25,11 +25,11 @@
  *
  * Provides two integration modes:
  *
- * 1. **Loader** (larkNextLoader) — Direct file transformation
+ * 1. **Loader** (larkMvcLoader) — Direct file transformation
  *    - Transforms .html files into JS function modules
  *    - Requires manual rspack.config.ts setup
  *
- * 2. **Plugin** (LarkNextPlugin) — Auto-registers the loader
+ * 2. **Plugin** (LarkMvcPlugin) — Auto-registers the loader
  *    - Automatically configures the loader rule for .html files
  *    - Zero-config: just add the plugin to your rspack config
  *    - Recommended approach for most use cases
@@ -45,11 +45,11 @@
  *
  * Usage with Plugin (recommended):
  * ```js
- * import { LarkNextPlugin } from '@lark.js/mvc/rspack';
+ * import { LarkMvcPlugin } from '@lark.js/mvc/rspack';
  *
  * export default {
  *   plugins: [
- *     new LarkNextPlugin({
+ *     new LarkMvcPlugin({
  *       debug: process.env.NODE_ENV !== 'production',
  *       vdom: false,
  *     }),
@@ -73,15 +73,15 @@
 import type { Compiler, RspackPluginInstance } from "@rspack/core";
 import { compileTemplate, extractGlobalVars } from "./compiler";
 import { injectTemplateHmrSnippet, injectViewHmrSnippet } from "./hmr-inject";
-import type { LarkNextWebpackLoaderOptions, LarkNextWebpackPluginOptions } from "./webpack";
-export type { LarkNextWebpackLoaderOptions, LarkNextWebpackPluginOptions } from "./webpack";
+import type { LarkMvcWebpackLoaderOptions, LarkMvcWebpackPluginOptions } from "./webpack";
+export type { LarkMvcWebpackLoaderOptions, LarkMvcWebpackPluginOptions } from "./webpack";
 
 /** Rspack loader context */
 interface LoaderContext {
   /** Whether in development mode */
   dev?: boolean;
   /** Loader options */
-  getOptions: () => LarkNextWebpackLoaderOptions;
+  getOptions: () => LarkMvcWebpackLoaderOptions;
 }
 
 /**
@@ -93,7 +93,7 @@ interface LoaderContext {
  * an async function causes "callback already called" errors because the
  * resolved promise also signals completion.
  */
-export async function larkNextLoader(this: LoaderContext, source: string): Promise<string> {
+export async function larkMvcLoader(this: LoaderContext, source: string): Promise<string> {
   try {
     const options = this.getOptions();
     const { debug = false, vdom = false, hmr } = options;
@@ -132,11 +132,11 @@ export async function larkNextLoader(this: LoaderContext, source: string): Promi
  *
  * Usage:
  * ```js
- * import { LarkNextPlugin } from '@lark.js/mvc/rspack';
+ * import { LarkMvcPlugin } from '@lark.js/mvc/rspack';
  *
  * export default {
  *   plugins: [
- *     new LarkNextPlugin({
+ *     new LarkMvcPlugin({
  *       debug: true,
  *       vdom: false,
  *     }),
@@ -144,10 +144,10 @@ export async function larkNextLoader(this: LoaderContext, source: string): Promi
  * };
  * ```
  */
-export class LarkNextPlugin implements RspackPluginInstance {
-  private options: LarkNextWebpackPluginOptions;
+export class LarkMvcPlugin implements RspackPluginInstance {
+  private options: LarkMvcWebpackPluginOptions;
 
-  constructor(options: LarkNextWebpackPluginOptions = {}) {
+  constructor(options: LarkMvcWebpackPluginOptions = {}) {
     this.options = {
       debug: false,
       vdom: false,
@@ -213,4 +213,4 @@ export class LarkNextPlugin implements RspackPluginInstance {
   }
 }
 
-export { larkNextLoader as default };
+export { larkMvcLoader as default };

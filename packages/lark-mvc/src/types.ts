@@ -29,7 +29,7 @@
  *
  * ## Framework architecture
  *
- * Lark is a lightweight Next frontend framework for single-page applications
+ * Lark is a lightweight Mvc frontend framework for single-page applications
  * and micro-frontend scenarios:
  *
  * - **View** — functional view system via `defineView()` + `ViewCtx` + Hooks

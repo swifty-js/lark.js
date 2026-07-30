@@ -1,6 +1,6 @@
 # @lark.js/mvc
 
-A lightweight TypeScript Next frontend framework for single-page applications and micro-frontend scenarios.
+A lightweight TypeScript Mvc frontend framework for single-page applications and micro-frontend scenarios.
 
 ## Overview
 
@@ -73,28 +73,28 @@ Install the bundler plugin matching your build tool:
 
 ```ts
 // vite.config.ts
-import { larkNextPlugin } from "@lark.js/mvc/vite";
+import { larkMvcPlugin } from "@lark.js/mvc/vite";
 
 export default defineConfig({
-  plugins: [larkNextPlugin()],
+  plugins: [larkMvcPlugin()],
 });
 ```
 
 ```ts
 // webpack.config.js — plugin form (recommended, zero config)
-import { LarkNextPlugin } from "@lark.js/mvc/webpack";
+import { LarkMvcPlugin } from "@lark.js/mvc/webpack";
 
 export default {
-  plugins: [new LarkNextPlugin({ debug: false, vdom: false })],
+  plugins: [new LarkMvcPlugin({ debug: false, vdom: false })],
 };
 ```
 
 ```ts
 // rspack.config.js — plugin form (recommended, zero config)
-import { LarkNextPlugin } from "@lark.js/mvc/rspack";
+import { LarkMvcPlugin } from "@lark.js/mvc/rspack";
 
 export default {
-  plugins: [new LarkNextPlugin({ debug: false, vdom: false })],
+  plugins: [new LarkMvcPlugin({ debug: false, vdom: false })],
 };
 ```
 
@@ -126,7 +126,7 @@ export default defineView((ctx, params) => {
 ```html
 <!-- src/views/home.html -->
 <div class="home">
-  <h1>Welcome to Lark Next</h1>
+  <h1>Welcome to Lark Mvc</h1>
   <p>Count: {{=count}}</p>
   <button @click="increment()">Increment</button>
 </div>
@@ -155,7 +155,7 @@ Framework.boot({
 <!doctype html>
 <html>
   <head>
-    <title>Lark Next App</title>
+    <title>Lark Mvc App</title>
   </head>
   <body>
     <div id="root"></div>
@@ -925,11 +925,11 @@ VDOM mode (`vdom: true`):
 ### Vite Plugin
 
 ```ts
-import { larkNextPlugin } from "@lark.js/mvc/vite";
+import { larkMvcPlugin } from "@lark.js/mvc/vite";
 
 export default defineConfig({
   plugins: [
-    larkNextPlugin({
+    larkMvcPlugin({
       debug: false, // enable debug mode with line tracking
       vdom: false, // enable VDOM output mode
     }),
@@ -949,10 +949,10 @@ The Vite plugin:
 ```ts
 // Plugin form (recommended) — auto-registers two rules: .html template
 // compilation and .ts/.js view-file HMR injection (enforce: "pre").
-import { LarkNextPlugin } from "@lark.js/mvc/webpack";
+import { LarkMvcPlugin } from "@lark.js/mvc/webpack";
 
 export default {
-  plugins: [new LarkNextPlugin({ debug: false, vdom: false })],
+  plugins: [new LarkMvcPlugin({ debug: false, vdom: false })],
 };
 ```
 
@@ -977,10 +977,10 @@ Plugin options: `{ debug?, vdom?, test? (default /\.html$/), exclude? (default /
 
 ```ts
 // Plugin form (recommended):
-import { LarkNextPlugin } from "@lark.js/mvc/rspack";
+import { LarkMvcPlugin } from "@lark.js/mvc/rspack";
 
 export default {
-  plugins: [new LarkNextPlugin({ debug: false, vdom: false })],
+  plugins: [new LarkMvcPlugin({ debug: false, vdom: false })],
 };
 ```
 
@@ -1095,9 +1095,9 @@ All DOM events are delegated to `document.body` in the capture phase. The EventD
 | Import                  | Description                                                                    |
 | ----------------------- | ------------------------------------------------------------------------------ |
 | `@lark.js/mvc`          | Main runtime API                                                               |
-| `@lark.js/mvc/vite`     | Vite plugin (`larkNextPlugin`)                                                 |
-| `@lark.js/mvc/webpack`  | Webpack integration (`LarkNextPlugin`, `larkNextLoader`)                       |
-| `@lark.js/mvc/rspack`   | Rspack integration (`LarkNextPlugin`, `larkNextLoader`)                        |
+| `@lark.js/mvc/vite`     | Vite plugin (`larkMvcPlugin`)                                                  |
+| `@lark.js/mvc/webpack`  | Webpack integration (`LarkMvcPlugin`, `larkMvcLoader`)                         |
+| `@lark.js/mvc/rspack`   | Rspack integration (`LarkMvcPlugin`, `larkMvcLoader`)                          |
 | `@lark.js/mvc/runtime`  | Template runtime helpers (`encHtml`, `strSafe`, `encUri`, `encQuote`, `refFn`) |
 | `@lark.js/mvc/compiler` | Build-time compiler (`compileTemplate`, `extractGlobalVars`)                   |
 | `@lark.js/mvc/devtool`  | Devtool bridge (`installFrameDevtoolBridge`)                                   |

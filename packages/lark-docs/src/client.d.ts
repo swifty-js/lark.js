@@ -56,7 +56,7 @@ declare module "*.html" {
  * consumer's FrameworkConfig.vdom setting at runtime.
  *
  * Virtual modules (virtual:lark-docs/*) are used instead of direct .html
- * imports to avoid conflicts with larkNextPlugin7 which intercepts all .html
+ * imports to avoid conflicts with larkMvcPlugin7 which intercepts all .html
  * imports via its own resolveId hook.
  */
 

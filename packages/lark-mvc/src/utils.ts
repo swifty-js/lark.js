@@ -112,10 +112,10 @@ const schedulerYield: (() => Promise<void>) | undefined = getSchedulerYield();
  *    Pauses the current batch and resumes after the browser handles
  *    higher-priority work. Keeps loop state intact across the pause.
  * 2. setTimeout(0) — universal fallback. Returns from startCall and
- *    re-enters via scheduleNextChunk, processing the rest of the queue
+ *    re-enters via scheduleMvcChunk, processing the rest of the queue
  *    in a new batch with a fresh CALL_BREAK_TIME budget.
  *
- * Inter-batch scheduling always uses setTimeout (see scheduleNextChunk).
+ * Inter-batch scheduling always uses setTimeout (see scheduleMvcChunk).
  */
 async function startCall(): Promise<void> {
   callScheduled = false;
@@ -138,7 +138,7 @@ async function startCall(): Promise<void> {
         await schedulerYield();
       } else {
         // Fallback: schedule new batch and return
-        scheduleNextChunk();
+        scheduleMvcChunk();
         return;
       }
     }
@@ -161,7 +161,7 @@ async function startCall(): Promise<void> {
  * is still handled by scheduler.yield() in startCall() (tier 1 of the
  * 3-tier strategy).
  */
-function scheduleNextChunk(): void {
+function scheduleMvcChunk(): void {
   setTimeout(() => startCall(), 0);
   callScheduled = true;
 }
@@ -187,7 +187,7 @@ export function callFunction<T extends unknown[]>(fn: (...args: T) => void, args
     fn(...args);
   });
   if (!callScheduled) {
-    scheduleNextChunk();
+    scheduleMvcChunk();
   }
 }
 

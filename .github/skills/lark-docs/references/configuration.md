@@ -114,7 +114,7 @@ defineConfig({
   docs: "docs",
   baseUrl: "/lark/",
   nav: [
-    { text: "Lark Next", link: "/lark-mvc/" },
+    { text: "Lark Mvc", link: "/lark-mvc/" },
     { text: "Lark Docs", link: "/lark-docs/" },
   ],
   sidebar: {

@@ -36,10 +36,10 @@
  *
  * Usage in vite.config.ts:
  * ```ts
- * import { larkNextPlugin } from '@lark.js/mvc/vite';
+ * import { larkMvcPlugin } from '@lark.js/mvc/vite';
  *
  * export default defineConfig({
- *   plugins: [larkNextPlugin()],
+ *   plugins: [larkMvcPlugin()],
  * });
  * ```
  */
@@ -49,7 +49,7 @@ import { existsSync, readFileSync } from "fs";
 import { compileTemplate, extractGlobalVars } from "./compiler";
 import { injectTemplateHmrSnippet, injectViewHmrSnippet, importsHtmlTemplate } from "./hmr-inject";
 
-export interface LarkNextVitePluginOptions {
+export interface LarkMvcVitePluginOptions {
   /** Enable debug mode with line tracking (default: false) */
   debug?: boolean;
   /** Enable virtual DOM output (default: false) */
@@ -66,7 +66,7 @@ const LARK_TEMPLATE_SUFFIX = "?lark-template";
  * @param options.vdom - Generate VDOM output instead of HTML string (default: false)
  * @returns Vite plugin instance
  */
-export function larkNextPlugin(options: LarkNextVitePluginOptions = {}): Plugin {
+export function larkMvcPlugin(options: LarkMvcVitePluginOptions = {}): Plugin {
   const { debug = false, vdom = false } = options;
   let root = __dirname;
 
@@ -181,4 +181,4 @@ export function larkNextPlugin(options: LarkNextVitePluginOptions = {}): Plugin 
   };
 }
 
-export default larkNextPlugin;
+export default larkMvcPlugin;

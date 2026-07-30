@@ -136,7 +136,7 @@ function decodedLocationHash(): string {
   }
 }
 
-function computePrevNext(
+function computePrevMvc(
   sidebar: RuntimeSidebarMap | undefined,
   currentPath: string,
 ): { prevPage: NavLink | null; nextPage: NavLink | null } {
@@ -417,7 +417,7 @@ export function createDocsLayoutView(
         document.title = cfg.title;
       }
 
-      const { prevPage, nextPage } = computePrevNext(cfg.sidebar, path);
+      const { prevPage, nextPage } = computePrevMvc(cfg.sidebar, path);
 
       // Nav items with active state (prefix match). External links render
       // as real anchors with target="_blank" in the template.

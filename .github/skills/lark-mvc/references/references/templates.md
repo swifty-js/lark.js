@@ -142,6 +142,6 @@ await compileTemplate(source, {
 }): string                // ES module source
 ```
 
-Debug mode (`larkNextPlugin({ debug: true })`) makes runtime render errors
+Debug mode (`larkMvcPlugin({ debug: true })`) makes runtime render errors
 report the original `{{...}}` expression and line — enable it in dev when
 diagnosing "render error" messages.

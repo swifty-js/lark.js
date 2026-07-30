@@ -34,8 +34,8 @@ plugins: [larkDocsPlugin({ config: docsConfig, vdom: false })];
 
 Returns **an array of two plugins**: `lark-docs` (enforce pre; `resolveId`
 tags `.md` imports with `?lark-docs` — node_modules markdown is skipped;
-`load` reads + `compileMarkdown`s) and the embedded `larkNextPlugin` for
-`.html` templates. Do **not** add `larkNextPlugin` separately, and keep the
+`load` reads + `compileMarkdown`s) and the embedded `larkMvcPlugin` for
+`.html` templates. Do **not** add `larkMvcPlugin` separately, and keep the
 `vdom` option in sync with `FrameworkConfig.vdom`. Editing an existing `.md`
 hot-reloads through the normal Vite pipeline; adding/renaming files requires
 re-running `defineConfig` (dev-server restart).
@@ -51,7 +51,7 @@ plugins: [new LarkDocsPlugin({ config: docsConfig })];
 The plugin pushes a `.md` loader rule referencing itself via `__filename`
 (ESM shim injected at build). Loader difference: webpack uses
 `this.callback()`, rspack returns the Promise. You still need lark-mvc's
-`LarkNextPlugin` (from `@lark.js/lark-mvc/webpack|rspack`) for `.html` theme
+`LarkMvcPlugin` (from `@lark.js/lark-mvc/webpack|rspack`) for `.html` theme
 templates in these bundlers — only the Vite plugin bundles both.
 
 ## Required project wiring (any bundler)

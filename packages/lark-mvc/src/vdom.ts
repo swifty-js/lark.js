@@ -21,7 +21,7 @@
  */
 
 /**
- * Virtual DOM Engine for Lark Next (VDOM-mode rendering pipeline).
+ * Virtual DOM Engine for Lark Mvc (VDOM-mode rendering pipeline).
  *
  * When `FrameworkConfig.vdom` is **true**, the Updater uses this engine
  * instead of the string-based real-DOM diff in `dom.ts`. The compiled template

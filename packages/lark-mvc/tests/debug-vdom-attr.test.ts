@@ -40,11 +40,11 @@ describe("VDOM Attribute XSS Investigation", () => {
     // Transform and execute
     const transformed = moduleCode
       .replace(
-        /import\s*\{[^}]*\}\s*from\s*["']@lark.js\/lark-mvc["'];?\n?/,
+        /import\s*\{[^}]*\}\s*from\s*["']@lark.js\/mvc["'];?\n?/,
         "const __lark_vdom_create__ = __lark.vdomCreate;\n",
       )
       .replace(
-        /import\s*\{[^}]*\}\s*from\s*["']@lark.js\/lark-mvc\/runtime["'];?\n?/,
+        /import\s*\{[^}]*\}\s*from\s*["']@lark.js\/mvc\/runtime["'];?\n?/,
         "const { strSafe: __lark_str_safe__, refFn: __lark_ref_fn__ } = __runtime;\n",
       )
       .replace("function __lark_template__(", "return function(")

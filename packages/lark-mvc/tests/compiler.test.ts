@@ -44,7 +44,7 @@ async function render(
   // `return function` so `new Function` produces the template.
   const transformed = moduleCode
     .replace(
-      /import\s*\{[\s\S]*?\}\s*from\s*["']@lark.js\/lark-mvc\/runtime["'];?/,
+      /import\s*\{[\s\S]*?\}\s*from\s*["']@lark.js\/mvc\/runtime["'];?/,
       "const { encHtml: __lark_enc_html__, strSafe: __lark_str_safe__, encUri: __lark_enc_uri__, encQuote: __lark_enc_quote__, refFn: __lark_ref_fn__ } = __runtime;",
     )
     .replace("function __lark_template__(", "return function(")
@@ -297,7 +297,7 @@ describe("compileTemplate", () => {
       });
       const transformed = moduleCode
         .replace(
-          /import\s*\{[\s\S]*?\}\s*from\s*["']@lark.js\/lark-mvc\/runtime["'];?/,
+          /import\s*\{[\s\S]*?\}\s*from\s*["']@lark.js\/mvc\/runtime["'];?/,
           "const { encHtml: __lark_enc_html__, strSafe: __lark_str_safe__, encUri: __lark_enc_uri__, encQuote: __lark_enc_quote__, refFn: __lark_ref_fn__ } = __runtime;",
         )
         .replace("function __lark_template__(", "return function(")

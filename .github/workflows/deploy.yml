@@ -40,7 +40,7 @@ jobs:
       - name: Build lark-mvc
         run: pnpm build:mvc
       - name: Build gomoku
-        run: pnpm --filter @lark.js/gomoku build
+        run: pnpm build:gomoku
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:

@@ -13,7 +13,8 @@
     "format:docs": "pnpm --filter @lark.js/docs format",
     "test:docs": "pnpm --filter @lark.js/docs test",
     "build:docs": "pnpm --filter @lark.js/docs build",
-    "format:gomoku": "pnpm --filter gomoku build",
+    "format:gomoku": "pnpm --filter gomoku format",
+    "build:gomoku": "pnpm --filter gomoku build",
     "format:assets": "prettier -w ./.github ./README.md",
     "format": "concurrently \"pnpm format:mvc\" \"pnpm format:docs\" \"pnpm format:gomoku\" \"pnpm format:assets\"",
     "test": "concurrently \"pnpm test:mvc\" \"pnpm test:docs\"",
@@ -27,8 +28,7 @@
   },
   "lint-staged": {
     "packages/**/*.{js,jsx,ejs,ts,tsx,html,css,scss,md,mdx,json,jsonc,jsonl,yml,yaml,toml}": [
-      "pnpm test",
-      "pnpm format"
+      "pnpm test && pnpm format"
     ]
   },
   "pnpm": {

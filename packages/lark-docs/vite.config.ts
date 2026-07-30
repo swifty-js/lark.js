@@ -24,7 +24,7 @@
  * Vite configuration for @lark.js/docs.
  *
  * Dual-mode config:
- *   --mode lib   → Library build (6 entries, ESM+CJS+dts)
+ *   --mode lib   → Library build (7 entries, ESM+CJS+dts)
  *   --mode docs  → Documentation site (generates routes.ts, Vite dev/build)
  *
  * Vite 7 uses Rollup internally, so build.lib is Rollup-based.
@@ -41,33 +41,29 @@ import { resolve } from "node:path";
 import { compileTemplate, extractGlobalVars } from "@lark.js/mvc/compiler";
 import tailwindcss from "@tailwindcss/vite";
 // !!! For your project, it should be:
-// import { larkDocsPlugin } from "@lark.js/docs/vite";
-import { larkDocsPlugin } from "./src/vite";
-import { existsSync, copyFileSync } from "node:fs";
+// import { larkDocsPlugin, docsGuardPlugin } from "@lark.js/docs/vite";
+import { larkDocsPlugin, docsGuardPlugin } from "./src/vite";
+import { existsSync, copyFileSync, readFileSync, writeFileSync } from "node:fs";
 import { VitePWA } from "vite-plugin-pwa";
 /** Documentation site configuration used in docs mode. */
 import larkDocsConfig from "./lark-docs.config";
+import pkg from "./package.json" with { type: "json" };
 
 // === Shared constants ===
 
 const PKG_DIR = import.meta.dirname;
 
 /** All deps + peerDeps are externalized in lib mode (users install them). */
-const EXTERNAL_PKGS = [
-  "js-yaml",
-  "lucide-static",
-  "markdown-it",
-  "markdown-it-container",
-  "shiki",
-  "@lark.js/mvc",
-  "@tailwindcss/typography",
-  "tailwindcss",
-  "node:fs",
-  "node:path",
-  "node:process",
-  "node:url",
-  "node:crypto",
+const EXTERNAL_IDS = [
+  ...Object.keys(pkg.dependencies ?? {}),
+  ...Object.keys(pkg.devDependencies ?? {}),
+  ...Object.keys(pkg.peerDependencies ?? {}),
 ];
+
+function isExternal(id: string): boolean {
+  if (id.startsWith("node:")) return true;
+  return EXTERNAL_IDS.some((e) => id === e || id.startsWith(e + "/"));
+}
 
 /**
  * __filename / __dirname ESM shims.
@@ -117,7 +113,16 @@ function copyAssetsPlugin(): Rollup.Plugin {
       for (const file of ASSETS) {
         const src = resolve(srcDir, file);
         const dest = resolve(distDir, file);
-        if (existsSync(src)) {
+        if (!existsSync(src)) continue;
+        if (file === "client.css") {
+          // In src/ the @source lines point at the theme sources; in the
+          // published package the utility classes live in the bundled
+          // theme.js chunk.
+          const css = readFileSync(src, "utf-8")
+            .replace('@source "./theme/*.html";', '@source "./theme.js";')
+            .replace(/@source "\.\/theme\/\*\.ts";\n?/, "");
+          writeFileSync(dest, css, "utf-8");
+        } else {
           copyFileSync(src, dest);
         }
       }
@@ -274,7 +279,6 @@ function themeDualMode(): PluginOption {
     "toc",
     "search",
     "theme-toggle",
-    "locale-switcher",
   ];
 
   return {
@@ -338,8 +342,7 @@ function libConfig(): UserConfig {
           format === "es" ? `${entryName}.js` : `${entryName}.cjs`,
       },
       rollupOptions: {
-        external: (id: string) =>
-          EXTERNAL_PKGS.some((e) => id === e || id.startsWith(e + "/")),
+        external: isExternal,
       },
       outDir: "dist",
       emptyOutDir: true,
@@ -388,6 +391,7 @@ function docsConfig(): UserConfig {
         vdom: false,
         debug: true,
       }),
+      docsGuardPlugin(),
       tailwindcss() as PluginOption,
       VitePWA({
         registerType: "autoUpdate",

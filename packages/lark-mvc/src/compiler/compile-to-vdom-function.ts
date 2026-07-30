@@ -68,10 +68,7 @@ function vdomEscapeStr(s: string): string {
  * a concatenation expression. We emit them inside an IIFE that accumulates
  * text into `_s` and returns it.
  */
-function vdomResolveAttrValueIIFE(
-  rawValue: string,
-  exprStore: VDomExprEntry[],
-): string {
+function vdomResolveAttrValueIIFE(rawValue: string, exprStore: VDomExprEntry[]): string {
   const stmts: string[] = [];
   let remaining = rawValue;
 
@@ -138,10 +135,7 @@ function vdomResolveAttrValueIIFE(
  * expression. When code-block placeholders are present, routes to the
  * IIFE-based resolver.
  */
-function vdomResolveAttrValue(
-  rawValue: string,
-  exprStore: VDomExprEntry[],
-): string {
+function vdomResolveAttrValue(rawValue: string, exprStore: VDomExprEntry[]): string {
   const hasPlaceholders = rawValue.includes("\x00");
   const hasViewId = rawValue.includes("\x1f");
 
@@ -251,11 +245,7 @@ function vdomBuildPropsFromAttribs(
  * Output is an arrow function:
  *   `(__lark_data__,__lark_view_id__,__lark_ref_alt__,__lark_str_safe__,__lark_ref_fn__)=>{...}`
  */
-export function compileToVDomFunction(
-  source: string,
-  debug: boolean,
-  file?: string,
-): string {
+export function compileToVDomFunction(source: string, debug: boolean, file?: string): string {
   const lines: string[] = [];
   let varCounter = 0;
   let propsCounter = 0;
@@ -311,9 +301,7 @@ export function compileToVDomFunction(
       if (i % 2 === 0) {
         const trimmed = parts[i];
         if (trimmed.trim()) {
-          lines.push(
-            `${parentVar}.push(__lark_vdom_create__(0,'${vdomEscapeStr(trimmed)}'))`,
-          );
+          lines.push(`${parentVar}.push(__lark_vdom_create__(0,'${vdomEscapeStr(trimmed)}'))`);
         }
       } else {
         const idx = parseInt(parts[i]);
@@ -325,13 +313,9 @@ export function compileToVDomFunction(
 
   function emitExpr(expr: VDomExprEntry, parentVar: string): void {
     if (expr.op === "=" || expr.op === ":") {
-      lines.push(
-        `${parentVar}.push(__lark_vdom_create__(0,__lark_str_safe__(${expr.content})))`,
-      );
+      lines.push(`${parentVar}.push(__lark_vdom_create__(0,__lark_str_safe__(${expr.content})))`);
     } else if (expr.op === "!") {
-      lines.push(
-        `${parentVar}.push(__lark_vdom_create__(0,__lark_str_safe__(${expr.content}),1))`,
-      );
+      lines.push(`${parentVar}.push(__lark_vdom_create__(0,__lark_str_safe__(${expr.content}),1))`);
     } else if (expr.op === "@") {
       lines.push(
         `${parentVar}.push(__lark_vdom_create__(0,__lark_ref_fn__(__lark_ref_alt__,${expr.content})))`,
@@ -357,9 +341,7 @@ export function compileToVDomFunction(
 
     const isVoid = VOID_ELEMENTS.has(tagName) && children.length === 0;
     const childrenArg = isVoid ? "1" : childVar;
-    lines.push(
-      `${parentVar}.push(__lark_vdom_create__('${tagName}',${propsKey},${childrenArg}))`,
-    );
+    lines.push(`${parentVar}.push(__lark_vdom_create__('${tagName}',${propsKey},${childrenArg}))`);
   }
 
   for (const child of doc.children) {

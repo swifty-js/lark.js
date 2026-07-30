@@ -142,11 +142,46 @@ export function larkDocsPlugin(options: LarkDocsVitePluginOptions): Plugin[] {
     },
   };
 
+  const baseSyncPlugin: Plugin = {
+    name: "lark-docs:base-sync",
+    config(userConfig) {
+      if (userConfig.base === undefined && config.baseUrl) {
+        return { base: config.baseUrl };
+      }
+      return null;
+    },
+  };
+
+  // GitHub Pages (and similar static hosts) serve 404.html for unknown
+  // paths. Shipping a copy of index.html restores deep links / refreshes
+  // for the history-based SPA router.
+  let resolvedOutDir = "";
+  const spaFallbackPlugin: Plugin = {
+    name: "lark-docs:spa-fallback",
+    apply: "build",
+    configResolved(resolvedConfig) {
+      resolvedOutDir = resolve(
+        resolvedConfig.root,
+        resolvedConfig.build.outDir,
+      );
+    },
+    closeBundle() {
+      const indexHtml = resolve(resolvedOutDir, "index.html");
+      const fallbackHtml = resolve(resolvedOutDir, "404.html");
+      if (fs.existsSync(indexHtml) && !fs.existsSync(fallbackHtml)) {
+        fs.copyFileSync(indexHtml, fallbackHtml);
+        if (debug) {
+          console.log("[@lark.js/docs] emitted 404.html SPA fallback");
+        }
+      }
+    },
+  };
+
   // The lark-mvc template plugin handles .html template compilation.
   // We integrate it internally so consumers don't need to configure it separately.
   const plugin = larkNextPlugin({ debug, vdom });
 
-  return [docsPlugin, plugin as Plugin];
+  return [docsPlugin, baseSyncPlugin, spaFallbackPlugin, plugin as Plugin];
 }
 
 function isProtectedMarkdown(id: string): string | null {

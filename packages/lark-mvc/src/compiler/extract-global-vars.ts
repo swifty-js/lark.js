@@ -144,20 +144,13 @@ export async function extractGlobalVars(source: string): Promise<string[]> {
   for (const fnNode of fnRange) {
     const params =
       "params" in fnNode
-        ? (
-            fnNode as
-              | t.FunctionDeclaration
-              | t.FunctionExpression
-              | t.ArrowFunctionExpression
-          ).params
+        ? (fnNode as t.FunctionDeclaration | t.FunctionExpression | t.ArrowFunctionExpression)
+            .params
         : [];
     for (const p of params) {
       if (p.type === "Identifier") {
         functionParams[p.name] = 1;
-      } else if (
-        p.type === "AssignmentPattern" &&
-        p.left.type === "Identifier"
-      ) {
+      } else if (p.type === "AssignmentPattern" && p.left.type === "Identifier") {
         functionParams[p.left.name] = 1;
       } else if (p.type === "RestElement" && p.argument.type === "Identifier") {
         functionParams[p.argument.name] = 1;
@@ -236,13 +229,7 @@ function walkAst(
     }
     // Recurse into child nodes. We treat the node as a string-indexable
     for (const key of Object.keys(node)) {
-      if (
-        key === "type" ||
-        key === "start" ||
-        key === "end" ||
-        key === "loc" ||
-        key === "range"
-      )
+      if (key === "type" || key === "start" || key === "end" || key === "loc" || key === "range")
         continue;
       // Skip 'property' of non-computed MemberExpression
       // (e.g., obj.prop — 'prop' is not a standalone variable).
@@ -276,11 +263,7 @@ function walkAst(
 
 /** Type guard: is `v` a Babel-style AST node (has a string `type` field)? */
 function isAstNode(v: unknown): v is t.Node {
-  return (
-    !!v &&
-    typeof v === "object" &&
-    typeof (v as { type?: unknown }).type === "string"
-  );
+  return !!v && typeof v === "object" && typeof (v as { type?: unknown }).type === "string";
 }
 
 // ─── Built-in globals exclusion list ───────────────────────────────────────

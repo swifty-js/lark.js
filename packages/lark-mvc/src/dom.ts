@@ -206,7 +206,7 @@ export function domSetAttributes(
   const newAttrs = newNode.attributes;
 
   // Remove attributes not in new
-  for (let i = oldAttrs.length; i--;) {
+  for (let i = oldAttrs.length; i--; ) {
     const name = oldAttrs[i].name;
     if (!newNode.hasAttribute(name)) {
       if (name === "id") {
@@ -221,7 +221,7 @@ export function domSetAttributes(
   }
 
   // Add/update attributes from new
-  for (let i = newAttrs.length; i--;) {
+  for (let i = newAttrs.length; i--; ) {
     const attr = newAttrs[i];
     const key = attr.name;
     const value = attr.value;
@@ -351,17 +351,11 @@ export function domSetNode(
   const newAsEl = newNode instanceof Element ? newNode : null;
 
   const equalAsNodes =
-    oldAsEl !== null &&
-    newAsEl !== null &&
-    oldAsEl.isEqualNode &&
-    oldAsEl.isEqualNode(newAsEl);
+    oldAsEl !== null && newAsEl !== null && oldAsEl.isEqualNode && oldAsEl.isEqualNode(newAsEl);
 
   if (domSpecialDiff(oldNode, newNode) || !equalAsNodes) {
     // Same type (same nodeName and nodeType) → diff in place
-    if (
-      oldNode.nodeType === newNode.nodeType &&
-      oldNode.nodeName === newNode.nodeName
-    ) {
+    if (oldNode.nodeType === newNode.nodeType && oldNode.nodeName === newNode.nodeName) {
       if (oldAsEl !== null && newAsEl !== null) {
         const oldEl = oldAsEl;
         const newEl = newAsEl;

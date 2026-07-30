@@ -200,10 +200,7 @@ if (import.meta.webpackHot) {
  * @param bundler - Which bundler's HMR API to use
  * @returns The source with HMR accept/dispose code appended
  */
-export function injectTemplateHmrSnippet(
-  source: string,
-  bundler: Bundler,
-): string {
+export function injectTemplateHmrSnippet(source: string, bundler: Bundler): string {
   return source + "\n" + getTemplateHmrSnippet(bundler);
 }
 
@@ -270,8 +267,7 @@ if (import.meta.webpackHot) {
 }
 
 /** Regex to detect a `.html` import statement in a `.ts` source. */
-const HTML_IMPORT_RE =
-  /import\s+(?:template\s+from\s+|.*from\s+)?["'][^"']+\.html["']/;
+const HTML_IMPORT_RE = /import\s+(?:template\s+from\s+|.*from\s+)?["'][^"']+\.html["']/;
 
 /**
  * Quick check: does this `.ts` source import a `.html` template?

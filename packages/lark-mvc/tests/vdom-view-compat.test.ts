@@ -29,12 +29,7 @@
  *
  */
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import {
-  vdomCreate,
-  vdomSetChildNodes,
-  createVDomRef,
-  vdomCreateNode,
-} from "../src/vdom";
+import { vdomCreate, vdomSetChildNodes, createVDomRef, vdomCreateNode } from "../src/vdom";
 import { LARK_VIEW, LARK_PROP_PREFIX } from "../src/common";
 import {
   Frame,
@@ -328,13 +323,9 @@ describe("VDOM v-lark compatibility", () => {
               const d = (data || {}) as Record<string, unknown>;
               const children: VDomNode[] = [];
               if (d["show"]) {
-                children.push(
-                  vdomCreate("div", { [LARK_VIEW]: "test/child" }, []),
-                );
+                children.push(vdomCreate("div", { [LARK_VIEW]: "test/child" }, []));
               } else {
-                children.push(
-                  vdomCreate("span", 0, [vdomCreate(0, "placeholder")]),
-                );
+                children.push(vdomCreate("span", 0, [vdomCreate(0, "placeholder")]));
               }
               return vdomCreate(viewId || "root", 0, children) as VDomNode;
             },

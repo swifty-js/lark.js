@@ -103,10 +103,7 @@ export interface LarkNextWebpackPluginOptions extends LarkNextWebpackLoaderOptio
  * reliably support returning a Promise from the loader function; the
  * callback approach works across all webpack 5.x versions.
  */
-async function larkNextLoader(
-  this: LoaderContext,
-  source: string,
-): Promise<string> {
+async function larkNextLoader(this: LoaderContext, source: string): Promise<string> {
   try {
     const options = this.getOptions() || {};
     const { debug = false, vdom = false, hmr } = options;

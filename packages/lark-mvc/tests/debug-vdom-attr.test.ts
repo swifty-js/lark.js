@@ -55,11 +55,7 @@ describe("VDOM Attribute XSS Investigation", () => {
 
     const factory = new Function("__lark", "__runtime", transformed);
     const templateFn = factory({ vdomCreate }, runtime);
-    const result = templateFn(
-      { xss: '"><script>alert(1)</script>' },
-      "test-view",
-      null,
-    );
+    const result = templateFn({ xss: '"><script>alert(1)</script>' }, "test-view", null);
 
     console.log("\n=== Result ===");
     console.log("Full result:", JSON.stringify(result, null, 2));
@@ -77,10 +73,7 @@ describe("VDOM Attribute XSS Investigation", () => {
     console.log("Type:", typeof classValue);
     console.log("Value:", classValue);
     console.log("Contains <script>?", classValue.includes("<script>"));
-    console.log(
-      "Contains &lt;script&gt;?",
-      classValue.includes("&lt;script&gt;"),
-    );
+    console.log("Contains &lt;script&gt;?", classValue.includes("&lt;script&gt;"));
 
     expect(div).toBeDefined();
   });

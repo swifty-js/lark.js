@@ -167,9 +167,7 @@ describe("v-lark Props & Events", () => {
       registerViewClass(
         "test/child",
         defineView((ctx, params) => {
-          received = String(
-            (params as Record<string, unknown>)?.["val"] ?? "UNSET",
-          );
+          received = String((params as Record<string, unknown>)?.["val"] ?? "UNSET");
           ctx.updater.digest({});
           return { template: () => "<div>child</div>" };
         }),
@@ -288,18 +286,14 @@ describe("v-lark Props & Events", () => {
       frame.mountView("test/parent");
       await flush();
 
-      const childEl3 = document
-        .getElementById("o3")!
-        .querySelector("[data-len]");
+      const childEl3 = document.getElementById("o3")!.querySelector("[data-len]");
       expect(childEl3?.getAttribute("data-len")).toBe("1");
 
       arr.push("b", "c");
       frame.view!.updater.set({ history: arr }).digest();
       await flush();
 
-      const childEl3b = document
-        .getElementById("o3")!
-        .querySelector("[data-len]");
+      const childEl3b = document.getElementById("o3")!.querySelector("[data-len]");
       expect(childEl3b?.getAttribute("data-len")).toBe("3");
     });
 
@@ -528,8 +522,7 @@ describe("v-lark Props & Events", () => {
         defineView((ctx) => {
           ctx.updater.digest({});
           return {
-            template: () =>
-              `<div v-lark="test/child" e-lark-customEvent="onCustom"></div>`,
+            template: () => `<div v-lark="test/child" e-lark-customEvent="onCustom"></div>`,
             events: { "onCustom<click>": handler },
           };
         }),
@@ -567,8 +560,7 @@ describe("v-lark Props & Events", () => {
         defineView((ctx) => {
           ctx.updater.digest({});
           return {
-            template: () =>
-              `<div v-lark="test/child" e-lark-dataEvent="onData"></div>`,
+            template: () => `<div v-lark="test/child" e-lark-dataEvent="onData"></div>`,
             events: {
               "onData<click>": (data: Record<string, unknown>) => {
                 received = data;
@@ -610,8 +602,7 @@ describe("v-lark Props & Events", () => {
         defineView((ctx) => {
           ctx.updater.digest({});
           return {
-            template: () =>
-              `<div v-lark="test/child" e-lark-asyncEvent="onAsync"></div>`,
+            template: () => `<div v-lark="test/child" e-lark-asyncEvent="onAsync"></div>`,
             events: {
               "onAsync<click>": () => {
                 return new Promise<void>((resolve) => {
@@ -660,8 +651,7 @@ describe("v-lark Props & Events", () => {
           return {
             // HTML lowercases attr name: e-lark-clearHistory → e-lark-clearhistory
             // Emitter matches case-insensitively: fire("clearHistory") matches on("clearhistory")
-            template: () =>
-              `<div v-lark="test/child" e-lark-clearHistory="onClear"></div>`,
+            template: () => `<div v-lark="test/child" e-lark-clearHistory="onClear"></div>`,
             events: { "onClear<click>": handler },
           };
         }),
@@ -699,8 +689,7 @@ describe("v-lark Props & Events", () => {
         defineView((ctx) => {
           ctx.updater.digest({});
           return {
-            template: () =>
-              `<div v-lark="test/child" e-lark-childEvent="parentHandler"></div>`,
+            template: () => `<div v-lark="test/child" e-lark-childEvent="parentHandler"></div>`,
             events: { "parentHandler<click>": handler },
           };
         }),
@@ -737,8 +726,7 @@ describe("v-lark Props & Events", () => {
         defineView((ctx) => {
           ctx.updater.digest({});
           return {
-            template: () =>
-              `<div v-lark="test/child" e-lark-noHandler="nonExistent"></div>`,
+            template: () => `<div v-lark="test/child" e-lark-noHandler="nonExistent"></div>`,
             events: {},
           };
         }),
@@ -748,9 +736,7 @@ describe("v-lark Props & Events", () => {
       frame.mountView("test/parent");
       await flush();
 
-      expect(() =>
-        findChild(frame)?.view?.owner.fire("noHandler"),
-      ).not.toThrow();
+      expect(() => findChild(frame)?.view?.owner.fire("noHandler")).not.toThrow();
     });
   });
 

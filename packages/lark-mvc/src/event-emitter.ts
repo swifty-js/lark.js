@@ -38,12 +38,7 @@
  */
 import { SPLITTER } from "./common";
 import { noop, funcWithTry } from "./utils";
-import type {
-  AnyFunc,
-  ChangeEvent,
-  EmitterApi,
-  EventListenerEntry,
-} from "./types";
+import type { AnyFunc, ChangeEvent, EmitterApi, EventListenerEntry } from "./types";
 
 /**
  * Internal emitter shape — the public `EmitterApi` plus the `listeners` Map

@@ -108,9 +108,7 @@ export function hotSwapView(frame: FrameObj, newSetup: ViewSetup): void {
  * @param viewPath - The view path (without query params) to match
  * @returns Array of `{ frame, fullPath }` for each matching frame
  */
-function findFramesByViewPath(
-  viewPath: string,
-): Array<{ frame: FrameObj; fullPath: string }> {
+function findFramesByViewPath(viewPath: string): Array<{ frame: FrameObj; fullPath: string }> {
   const result: Array<{ frame: FrameObj; fullPath: string }> = [];
   for (const [, frame] of Frame.getAll()) {
     const vp = frame.getViewPath();
@@ -151,10 +149,7 @@ export function hotSwapFrames(viewPath: string, newSetup: ViewSetup): void {
  * @param oldTemplate - The previous template function reference
  * @param newTemplate - The new template function reference
  */
-export function hotSwapByTemplate(
-  oldTemplate: ViewTemplate,
-  newTemplate: ViewTemplate,
-): boolean {
+export function hotSwapByTemplate(oldTemplate: ViewTemplate, newTemplate: ViewTemplate): boolean {
   if (!oldTemplate || !newTemplate || oldTemplate === newTemplate) return false;
   let swapped = false;
   for (const [, frame] of Frame.getAll()) {
@@ -183,10 +178,7 @@ export function hotSwapByTemplate(
  * @param oldSetup - The previous setup function reference
  * @param newSetup - The new setup function reference
  */
-export function hotSwapByView(
-  oldSetup: ViewSetup,
-  newSetup: ViewSetup,
-): boolean {
+export function hotSwapByView(oldSetup: ViewSetup, newSetup: ViewSetup): boolean {
   if (!oldSetup || !newSetup || oldSetup === newSetup) return false;
   const reg = getViewClassRegistry();
   for (const path in reg) {

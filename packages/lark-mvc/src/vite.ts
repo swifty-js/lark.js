@@ -47,11 +47,7 @@ import type { Plugin } from "vite";
 import { dirname, isAbsolute, join, resolve } from "path";
 import { existsSync, readFileSync } from "fs";
 import { compileTemplate, extractGlobalVars } from "./compiler";
-import {
-  injectTemplateHmrSnippet,
-  injectViewHmrSnippet,
-  importsHtmlTemplate,
-} from "./hmr-inject";
+import { injectTemplateHmrSnippet, injectViewHmrSnippet, importsHtmlTemplate } from "./hmr-inject";
 
 export interface LarkNextVitePluginOptions {
   /** Enable debug mode with line tracking (default: false) */
@@ -70,9 +66,7 @@ const LARK_TEMPLATE_SUFFIX = "?lark-template";
  * @param options.vdom - Generate VDOM output instead of HTML string (default: false)
  * @returns Vite plugin instance
  */
-export function larkNextPlugin(
-  options: LarkNextVitePluginOptions = {},
-): Plugin {
+export function larkNextPlugin(options: LarkNextVitePluginOptions = {}): Plugin {
   const { debug = false, vdom = false } = options;
   let root = __dirname;
 

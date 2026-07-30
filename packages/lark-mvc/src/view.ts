@@ -124,8 +124,7 @@ export function createCtx(frame: FrameObj): ViewCtx {
     endUpdatePending: undefined as number | undefined,
     template: undefined as ViewTemplate | VDomTemplate | undefined,
     events: undefined as Record<string, AnyFunc> | undefined,
-    assignFn: undefined as
-      ((options?: unknown) => boolean | undefined) | undefined,
+    assignFn: undefined as ((options?: unknown) => boolean | undefined) | undefined,
   };
 
   const cleanups: Array<() => void> = [];
@@ -163,11 +162,7 @@ export function createCtx(frame: FrameObj): ViewCtx {
    * @param destroyOnRender - If true, destroyed on the next `render()` call
    * @returns The stored entity (when reading) or the resource (when writing)
    */
-  function capture(
-    key: string,
-    resource?: unknown,
-    destroyOnRender = false,
-  ): unknown {
+  function capture(key: string, resource?: unknown, destroyOnRender = false): unknown {
     if (resource !== undefined) {
       destroyResource(resources, key, true, resource);
       resources[key] = { entity: resource, destroyOnRender };
@@ -359,13 +354,10 @@ export function createCtx(frame: FrameObj): ViewCtx {
   function setEvents(v: Record<string, AnyFunc> | undefined): void {
     mutable.events = v;
   }
-  function getAssign():
-    ((options?: unknown) => boolean | undefined) | undefined {
+  function getAssign(): ((options?: unknown) => boolean | undefined) | undefined {
     return mutable.assignFn;
   }
-  function setAssign(
-    v: ((options?: unknown) => boolean | undefined) | undefined,
-  ): void {
+  function setAssign(v: ((options?: unknown) => boolean | undefined) | undefined): void {
     mutable.assignFn = v;
   }
 
@@ -440,8 +432,7 @@ export function registerEvents(ctx: ViewCtx): void {
     }
 
     for (const eventType of eventTypes.split(",")) {
-      const globalNode: EventTarget | undefined =
-        VIEW_GLOBALS[selectorOrCallback];
+      const globalNode: EventTarget | undefined = VIEW_GLOBALS[selectorOrCallback];
 
       if (isSelector && globalNode) {
         // Global event (window/document)
@@ -474,8 +465,7 @@ export function unregisterEvents(ctx: ViewCtx): void {
     const eventTypes = matches[3];
 
     for (const eventType of eventTypes.split(",")) {
-      const globalNode: EventTarget | undefined =
-        VIEW_GLOBALS[selectorOrCallback];
+      const globalNode: EventTarget | undefined = VIEW_GLOBALS[selectorOrCallback];
 
       if (isSelector && globalNode) {
         // Global event (window/document): cleanup is handled by the
@@ -610,11 +600,7 @@ export function runInvokes(frame: FrameObj): void {
  * 6. Register events via `registerEvents(ctx)`
  * 7. Render via `ctx.render()` (or `ctx.endUpdate()` if no template)
  */
-export function mountCtx(
-  frame: FrameObj,
-  setup: ViewSetup,
-  params?: unknown,
-): ViewCtx {
+export function mountCtx(frame: FrameObj, setup: ViewSetup, params?: unknown): ViewCtx {
   const ctx = createCtx(frame);
 
   // Set currentCtx so hooks (useState, useEffect, etc.) can access the ctx

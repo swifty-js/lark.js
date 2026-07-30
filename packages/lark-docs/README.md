@@ -39,7 +39,7 @@ lark-docs.config.ts          Bundler Plugin              Browser Runtime
   generateSidebar()           createParser()             routes + loadContent
        |                      getHighlighter()           from generated module
        |                            |                          |
-  .lark-docs/generated/        JS module string          4 theme Views
+  .lark-docs/generated/        JS module string          5 theme Views
   index.js                   ({pageData,                 render the docs UI
                                contentHtml})
 ```
@@ -58,8 +58,7 @@ The theme templates use Tailwind CSS v4 utility classes and the Typography plugi
 
 ```css
 @import "tailwindcss";
-/* client.css ships in dist but is not in the exports map — use a file path */
-@import "../node_modules/@lark.js/docs/dist/client.css";
+@import "@lark.js/docs/client.css";
 @source "../node_modules/@lark.js/docs/dist/theme.js";
 @plugin "@tailwindcss/typography";
 ```
@@ -75,7 +74,6 @@ export default defineConfig({
   docs: "docs",
   baseUrl: "/docs/",
   title: "My Library",
-  description: "Documentation for My Library",
   nav: [
     { text: "Guide", link: "/guide/" },
     { text: "API", link: "/api/" },
@@ -255,17 +253,16 @@ Always call `registerThemeViews` before `Framework.boot()`.
 
 The `DocsConfig` interface defines all configuration options:
 
-| Field         | Type                            | Default     | Description                                               |
-| ------------- | ------------------------------- | ----------- | --------------------------------------------------------- |
-| `docs`        | `string`                        | `"docs"`    | Docs source directory, relative to project root           |
-| `baseUrl`     | `string`                        | `"/docs/"`  | Base URL prefix for all generated routes                  |
-| `title`       | `string`                        | (required)  | Site title displayed in the navbar                        |
-| `description` | `string`                        | `""`        | Site description for meta tags                            |
-| `nav`         | `NavItem[]`                     | `[]`        | Top navigation items (links auto-prefixed with `baseUrl`) |
-| `sidebar`     | `Record<string, SidebarConfig>` | `{}`        | Sidebar config per path prefix                            |
-| `markdown`    | `MarkdownOptions`               | `{}`        | Markdown processing options                               |
-| `highlight`   | `HighlightOptions`              | `undefined` | Shiki code highlighting options                           |
-| `search`      | `boolean`                       | `true`      | Enable the built-in MiniSearch command palette            |
+| Field       | Type                            | Default     | Description                                               |
+| ----------- | ------------------------------- | ----------- | --------------------------------------------------------- |
+| `docs`      | `string`                        | `"docs"`    | Docs source directory, relative to project root           |
+| `baseUrl`   | `string`                        | `"/docs/"`  | Base URL prefix for all generated routes                  |
+| `title`     | `string`                        | (required)  | Site title displayed in the navbar                        |
+| `nav`       | `NavItem[]`                     | `[]`        | Top navigation items (links auto-prefixed with `baseUrl`) |
+| `sidebar`   | `Record<string, SidebarConfig>` | `{}`        | Sidebar config per path prefix                            |
+| `markdown`  | `MarkdownOptions`               | `{}`        | Markdown processing options                               |
+| `highlight` | `HighlightOptions`              | `undefined` | Shiki code highlighting options                           |
+| `search`    | `boolean`                       | `true`      | Enable the built-in MiniSearch command palette            |
 
 Routing mode is not part of `DocsConfig` — it belongs to the lark-mvc `FrameworkConfig` in `boot.ts` (the `FrameworkConfig` type re-exported by `@lark.js/docs` pins it to `"history"`).
 
@@ -275,7 +272,6 @@ Routing mode is not part of `DocsConfig` — it belongs to the lark-mvc `Framewo
 interface NavItem {
   text: string; // Display text
   link: string; // Link URL (internal or external)
-  items?: NavItem[]; // Nested dropdown items
 }
 ```
 
@@ -365,7 +361,7 @@ Links starting with `/` or `#` are rendered as-is and use the browser's default 
 
 ### Table of Contents
 
-Insert `[[toc]]` anywhere in your markdown to render a table of contents inline. The `[[toc]]` marker is compiled to `<div v-lark="theme/toc" *inline="true"></div>`, which mounts the TOC theme View in inline mode at that position. The default theme already shows a TOC in the right rail on `xl+` screens, so inline `[[toc]]` is only needed for in-content tables of contents.
+Insert `[[toc]]` anywhere in your markdown to render a table of contents inline. The `[[toc]]` marker is compiled to `<div v-lark="theme/toc" p-lark-inline="true"></div>`, which mounts the TOC theme View in inline mode at that position. The default theme already shows a TOC in the right rail on `xl+` screens, so inline `[[toc]]` is only needed for in-content tables of contents.
 
 ### Admonition Containers
 
@@ -491,6 +487,31 @@ The built-in search is powered by [MiniSearch](https://github.com/lucaong/minise
 - Race-safe async results (a sequence counter drops stale responses), max 12 results
 - Open/close state driven by `State.searchOpen` so the navbar button and keyboard shortcuts can toggle the modal without a direct view reference
 
+## Password-Protected Pages
+
+Mark a page with `protected: true` frontmatter, register `docsGuardPlugin()`, and build with a `DOCS_PASSWORD` environment variable — the page's HTML is then AES-256-GCM encrypted at build time (PBKDF2-SHA256, 100k iterations):
+
+```ts
+// vite.config.ts
+import { larkDocsPlugin, docsGuardPlugin } from "@lark.js/docs/vite";
+
+export default defineConfig({
+  plugins: [...larkDocsPlugin({ config: docsConfig }), docsGuardPlugin()],
+});
+```
+
+On the client, wrap the generated `loadContent` with the built-in guard before injecting it into `State` — it shows a password dialog for protected pages, caches the password for the session, and renders an access-denied notice when dismissed:
+
+```ts
+import { createContentGuard, State } from "@lark.js/docs";
+import { docsConfig, loadContent, getSearchIndex } from "@lark-docs/generated";
+
+const guard = createContentGuard(loadContent);
+State.set({ docsConfig, loadContent: guard.loadContent, getSearchIndex });
+```
+
+Protected pages are excluded from the search index, and their `excerpt`/`headings` are scrubbed from the plaintext `pageData` (headings are encrypted alongside the HTML so the TOC is restored after unlock). Without `DOCS_PASSWORD` set, `docsGuardPlugin()` is a warn-only no-op and protected pages build as plain HTML (useful for local dev).
+
 ## Bundler Plugins
 
 ### Vite Plugin
@@ -505,6 +526,8 @@ export default defineConfig({
 
 The plugin runs in the `pre` enforcement phase. Its `resolveId` hook appends a `?lark-docs` suffix to `.md` imports so Vite does not treat them as static assets. Its `load` hook reads the raw markdown, compiles it through `compileMarkdown()`, and returns the JS module string.
 
+`larkDocsPlugin()` returns a plugin array: the `.md` compiler, a `base-sync` plugin (sets Vite's `base` from `config.baseUrl` unless you set `base` yourself), a `spa-fallback` plugin (copies `index.html` to `404.html` after build so GitHub-Pages-style hosts serve deep links), and the embedded lark-mvc `.html` template plugin.
+
 Options: `{ config: DocsConfig, debug?: boolean }`.
 
 ### Webpack Plugin + Loader
@@ -517,7 +540,7 @@ export default {
 };
 ```
 
-`LarkDocsPlugin` pushes a loader rule onto `compiler.options.module.rules` at the `compilation` hook. The loader (`larkDocsLoader`) uses Webpack 5's `this.callback()` pattern for async result delivery. It self-references via `__filename` to resolve the loader path.
+`LarkDocsPlugin` pushes a loader rule onto `compiler.options.module.rules` synchronously in `apply()`. The loader (`larkDocsLoader`) uses Webpack 5's `this.callback()` pattern for async result delivery. It self-references via `__filename` to resolve the loader path.
 
 Options: `{ config: DocsConfig, test?: RegExp, exclude?: RegExp }`. Defaults: `test: /\.md$/`, `exclude: /node_modules/`.
 
@@ -535,16 +558,17 @@ Same API as Webpack, but the loader returns `Promise<string>` directly (Rspack a
 
 ## Package Exports
 
-| Sub-path                 | Description                                                                                                   |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------- |
-| `@lark.js/docs`          | Main barrel: all types, scanner, sidebar, markdown, compiler, runtime, theme factories                        |
-| `@lark.js/docs/compiler` | `compileMarkdown()` + `CompileMarkdownOptions` type                                                           |
-| `@lark.js/docs/vite`     | `larkDocsPlugin()` Vite plugin + build-time utility re-exports                                                |
-| `@lark.js/docs/webpack`  | `LarkDocsPlugin` class + `larkDocsLoader()` function                                                          |
-| `@lark.js/docs/rspack`   | `LarkDocsPlugin` class + `larkDocsLoader()` async function                                                    |
-| `@lark.js/docs/runtime`  | `slugify()` (browser-safe, no build deps)                                                                     |
-| `@lark.js/docs/theme`    | `registerThemeViews()` + 5 view factories + `icons`                                                           |
-| `@lark.js/docs/client`   | Types-only: ambient module declarations for `@lark-docs/generated` and `*.html` (for `/// <reference types>`) |
+| Sub-path                   | Description                                                                                                   |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `@lark.js/docs`            | Main barrel: all types, scanner, sidebar, markdown, compiler, runtime, theme factories                        |
+| `@lark.js/docs/compiler`   | `compileMarkdown()` + `CompileMarkdownOptions` type                                                           |
+| `@lark.js/docs/vite`       | `larkDocsPlugin()` + `docsGuardPlugin()` Vite plugins + build-time utility re-exports                         |
+| `@lark.js/docs/webpack`    | `LarkDocsPlugin` class + `larkDocsLoader()` function                                                          |
+| `@lark.js/docs/rspack`     | `LarkDocsPlugin` class + `larkDocsLoader()` async function                                                    |
+| `@lark.js/docs/runtime`    | `slugify()` + `createSlugger()` (browser-safe, no build deps)                                                 |
+| `@lark.js/docs/theme`      | `registerThemeViews()` + 5 view factories + `icons`                                                           |
+| `@lark.js/docs/client`     | Types-only: ambient module declarations for `@lark-docs/generated` and `*.html` (for `/// <reference types>`) |
+| `@lark.js/docs/client.css` | The bundled theme stylesheet (`dist/client.css`)                                                              |
 
 The `/vite`, `/webpack`, and `/rspack` sub-paths re-export build-time utilities (`scanDocsDir`, `generateSidebar`, `defineConfig`) to avoid pulling in the main entry's `lucide-static` SVG `?raw` imports, which are not valid in Node.js contexts.
 
@@ -562,7 +586,7 @@ Registers all five theme views (layout, sidebar, TOC, search, theme toggle) with
 
 ### `scanDocsDir(docsDir: string, baseUrl: string): DocsRoute[]`
 
-Recursively scans a docs directory and returns route entries. Skips entries starting with `_` or `.`, plus `node_modules`, `__tests__`, `__fixtures__`, `.git`, `.vitepress`, `.lark-docs`, and `dist`. `index.md` maps to the directory root without trailing `/`.
+Recursively scans a docs directory and returns route entries. Skips entries whose names start with `_` or `.`, plus `node_modules` and `dist`. `index.md` maps to the directory root without trailing `/`.
 
 ### `generateSidebar(routes: DocsRoute[], prefix: string): SidebarItem[]`
 
@@ -575,6 +599,10 @@ Compiles a `.md` source string into a JS module string that exports `pageData` a
 ### `slugify(text: string): string`
 
 Converts text to a URL-safe slug: lowercase, strip non-word chars (except spaces and dashes), replace whitespace with dashes, collapse consecutive dashes.
+
+### `createSlugger(): (text: string) => string`
+
+Returns a per-document slugify with deduplication: repeated headings get `-1`, `-2`, ... suffixes so TOC slugs always match rendered `id`s.
 
 ### Theme View Factories
 
@@ -604,11 +632,12 @@ import type {
   PageData,
   HeadingInfo,
   DocsRoute,
-  SearchEntry,
   FrontmatterResult,
   CompileMarkdownOptions,
 } from "@lark.js/docs";
 ```
+
+`SearchEntry` is not a main-entry export — it is declared ambiently on the `@lark-docs/generated` module by `@lark.js/docs/client`.
 
 ## Generated Output
 
@@ -618,7 +647,7 @@ The generated module exports:
 
 - `loadContent(path)` -- dynamically imports the compiled `.md` module for a given route path, returns `{ pageData, contentHtml }` or `null`
 - `routes: Record<string, string>` -- maps every docs path to the layout view `"theme/docs-layout"`
-- `docsConfig` -- the runtime site configuration (title, description, baseUrl, nav with baseUrl-prefixed links, resolved sidebar, search flag)
+- `docsConfig` -- the runtime site configuration (title, baseUrl, nav with baseUrl-prefixed links, resolved sidebar, search flag)
 - `getSearchIndex()` -- lazily builds the search index by loading all non-virtual `.md` modules on first call (filtering through `_searchablePaths` to exclude virtual index routes), returns `SearchEntry[]`
 
 ```ts
@@ -647,7 +676,6 @@ Type declarations for `@lark-docs/generated` are provided by the `@lark.js/docs/
 - `markdown-it-container` ^4.0.0 -- Admonition container syntax
 - `minisearch` ^7.2.0 -- Full-text search engine (same as VitePress)
 - `shiki` ^4.3.1 -- Code syntax highlighting (dynamic import, lazy singleton)
-- `vite-plugin-pwa` ^1.3.0 -- PWA support for the docs site build
 - `zod` ^4.4.3 -- Runtime schema validation for State-injected values
 
 **Peer:**
@@ -683,9 +711,10 @@ hosts the `themeDualMode` plugin that compiles each theme `.html` in both
 string and VDOM modes into `virtual:lark-docs/*` modules.
 
 Deployment: the output is a `history`-mode SPA. Serve `dist-docs/` with a
-fallback rewrite of all paths to `index.html`. `baseUrl` is a route prefix
-_inside_ the SPA — Vite's `base` only needs changing if the whole site is
-hosted under a subpath.
+fallback rewrite of all paths to `index.html` (on GitHub-Pages-style hosts
+the build already emits a `404.html` copy via the `spa-fallback` plugin).
+`baseUrl` is a route prefix _inside_ the SPA — Vite's `base` defaults to
+`baseUrl` via the `base-sync` plugin unless you set `base` yourself.
 
 ## License
 

@@ -21,12 +21,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import {
-  hotSwapView,
-  hotSwapFrames,
-  hotSwapByTemplate,
-  hotSwapByView,
-} from "../src/hmr";
+import { hotSwapView, hotSwapFrames, hotSwapByTemplate, hotSwapByView } from "../src/hmr";
 import {
   injectTemplateHmrSnippet,
   injectViewHmrSnippet,
@@ -101,9 +96,7 @@ describe("HMR", () => {
 
       expect(frame.view!.updater.get<number>("count")).toBe(42);
       expect(frame.view).toBe(viewBefore);
-      expect(
-        document.getElementById("hot-swap-preserve")!.querySelector(".new"),
-      ).not.toBeNull();
+      expect(document.getElementById("hot-swap-preserve")!.querySelector(".new")).not.toBeNull();
       cleanupFrame(frame);
     });
 
@@ -168,9 +161,7 @@ describe("HMR", () => {
       hotSwapByTemplate(oldTpl, newTpl);
 
       expect(frame.view!.updater.get<number>("count")).toBe(77);
-      expect(
-        document.getElementById("template-swap")!.querySelector(".new"),
-      ).not.toBeNull();
+      expect(document.getElementById("template-swap")!.querySelector(".new")).not.toBeNull();
       cleanupFrame(frame);
     });
 
@@ -234,29 +225,20 @@ describe("HMR", () => {
   // ============================================================
   describe("hmr-inject", () => {
     it("injects Vite template HMR with import.meta.hot", () => {
-      const result = injectTemplateHmrSnippet(
-        "export default function() {}",
-        "vite",
-      );
+      const result = injectTemplateHmrSnippet("export default function() {}", "vite");
       expect(result).toContain("import.meta.hot");
       expect(result).toContain("hotSwapByTemplate");
       expect(result).toContain("__lark_template__");
     });
 
     it("injects webpack template HMR with import.meta.webpackHot", () => {
-      const result = injectTemplateHmrSnippet(
-        "export default function() {}",
-        "webpack",
-      );
+      const result = injectTemplateHmrSnippet("export default function() {}", "webpack");
       expect(result).toContain("import.meta.webpackHot");
       expect(result).toContain("hotSwapByTemplate");
     });
 
     it("injects rspack template HMR with import.meta.webpackHot", () => {
-      const result = injectTemplateHmrSnippet(
-        "export default function() {}",
-        "rspack",
-      );
+      const result = injectTemplateHmrSnippet("export default function() {}", "rspack");
       expect(result).toContain("import.meta.webpackHot");
       expect(result).not.toContain("import.meta.hot");
     });

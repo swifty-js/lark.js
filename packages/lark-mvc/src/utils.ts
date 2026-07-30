@@ -24,12 +24,7 @@
  * Lark framework utility functions.
  */
 
-import {
-  URL_QUERY_HASH_REGEXP,
-  URL_PARAM_REGEXP,
-  IS_URL_PARAMS,
-  isRefToken,
-} from "./common";
+import { URL_QUERY_HASH_REGEXP, URL_PARAM_REGEXP, IS_URL_PARAMS, isRefToken } from "./common";
 import type { AnyFunc, ParsedUri } from "./types";
 
 // ============================================================
@@ -137,10 +132,7 @@ async function startCall(): Promise<void> {
     }
 
     // Check if we should yield to the browser
-    if (
-      callQueue.length > 0 &&
-      performance.now() - startTime > CALL_BREAK_TIME
-    ) {
+    if (callQueue.length > 0 && performance.now() - startTime > CALL_BREAK_TIME) {
       if (schedulerYield) {
         // Modern path: pause and resume in same async function
         await schedulerYield();
@@ -190,10 +182,7 @@ function scheduleNextChunk(): void {
  * @param fn - The function to execute
  * @param args - Arguments to pass to the function
  */
-export function callFunction<T extends unknown[]>(
-  fn: (...args: T) => void,
-  args: T,
-): void {
+export function callFunction<T extends unknown[]>(fn: (...args: T) => void, args: T): void {
   callQueue.push(() => {
     fn(...args);
   });
@@ -276,10 +265,7 @@ export function keys<T extends object>(obj: T): string[] {
 }
 
 /** Assign properties from sources to target (like Object.assign but safer) */
-export function assign<T extends object>(
-  target: T,
-  ...sources: Partial<T>[]
-): T {
+export function assign<T extends object>(target: T, ...sources: Partial<T>[]): T {
   for (const source of sources) {
     if (source) {
       for (const p in source) {
@@ -410,10 +396,7 @@ export function ensureElementId(element: HTMLElement, prefix?: string): string {
  * Check if node A is inside node B (or is the same node).
  * Uses compareDocumentPosition for efficiency.
  */
-export function nodeInside(
-  a: string | HTMLElement,
-  b: string | HTMLElement,
-): boolean {
+export function nodeInside(a: string | HTMLElement, b: string | HTMLElement): boolean {
   const aNode = typeof a === "string" ? document.getElementById(a) : a;
   const bNode = typeof b === "string" ? document.getElementById(b) : b;
   if (!aNode || !bNode) return false;
@@ -441,18 +424,15 @@ export function parseUri(uri: string): ParsedUri {
   const path = uri.replace(URL_QUERY_HASH_REGEXP, "");
   const pathname = path;
   // Check if the original URI looks like it has params (e.g. YT3O0sPH1No= base64)
-  const actualPath =
-    uri === pathname && IS_URL_PARAMS.test(pathname) ? "" : pathname;
-  uri
-    .replace(actualPath, "")
-    .replace(URL_PARAM_REGEXP, (_match, name: string, value: string) => {
-      try {
-        params[name] = decodeURIComponent(value || "");
-      } catch {
-        params[name] = value || "";
-      }
-      return "";
-    });
+  const actualPath = uri === pathname && IS_URL_PARAMS.test(pathname) ? "" : pathname;
+  uri.replace(actualPath, "").replace(URL_PARAM_REGEXP, (_match, name: string, value: string) => {
+    try {
+      params[name] = decodeURIComponent(value || "");
+    } catch {
+      params[name] = value || "";
+    }
+    return "";
+  });
   return { path: actualPath, params };
 }
 

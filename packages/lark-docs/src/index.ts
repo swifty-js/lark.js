@@ -69,7 +69,6 @@ export type {
   PageData,
   HeadingInfo,
   DocsRoute,
-  SearchEntry,
   FrontmatterResult,
   CompileMarkdownOptions,
 } from "./types";
@@ -79,7 +78,11 @@ export type {
 // ============================================================
 
 // Browser-safe runtime utility (also available at @lark.js/docs/runtime)
-export { slugify } from "./runtime";
+export { slugify, createSlugger } from "./runtime";
+
+// Password guard for docsGuardPlugin-protected pages
+export { decryptContent, type EncryptedPayload } from "./utils/guard";
+export { createContentGuard, type ContentGuard } from "./theme/docs-guard";
 
 // Theme view factories
 export {

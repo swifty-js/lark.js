@@ -20,7 +20,7 @@
  * SOFTWARE.
  */
 
-import { State, defineView } from "@lark.js/mvc";
+import { State, defineView, useResource } from "@lark.js/mvc";
 import type { VDomTemplate, ViewSetup, ViewTemplate } from "@lark.js/mvc";
 import { z } from "zod";
 import { icons } from "./icons";
@@ -70,6 +70,14 @@ export function createTocView(
 
     let activeSlug = "";
     let observer: IntersectionObserver | null = null;
+
+    // Disconnect the scroll-spy observer when the view is destroyed.
+    useResource("tocScrollSpy", {
+      destroy: () => {
+        observer?.disconnect();
+        observer = null;
+      },
+    });
 
     const readHeadings = (): TocHeading[] => {
       const r = TocHeadingsSchema.safeParse(State.get("currentPageHeadings"));

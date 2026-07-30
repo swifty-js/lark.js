@@ -29,29 +29,31 @@
  * - Fall back to escaped plain text on error
  */
 import type MarkdownIt from "markdown-it";
+import { escapeHtml } from "../../utils/escape-html";
 
 export function codeBlockPlugin(md: MarkdownIt): void {
   md.renderer.rules.fence = (tokens, idx, mdOptions) => {
     const token = tokens[idx];
     const lang = token.info.trim().split(/\s+/)[0] || "";
     const code = token.content;
-    const displayLang = lang || "text";
 
+    let inner: string;
     if (mdOptions.highlight) {
+      // Shiki produces a fully styled <pre class="shiki"> with either
+      // inline colors (single theme) or --shiki-light/--shiki-dark
+      // variables (dual theme, switched by client.css).
       const highlighted = mdOptions.highlight(code, lang, "");
-      if (highlighted) {
-        return `<div class="codeblock" data-lang="${escapeHtml(displayLang)}">${highlighted}</div>\n`;
-      }
+      inner = highlighted || fallbackBlock(code, lang);
+    } else {
+      inner = fallbackBlock(code, lang);
     }
 
-    return `<div class="codeblock" data-lang="${escapeHtml(displayLang)}"><pre class="codeblock-plain"><code>${escapeHtml(code)}</code></pre></div>\n`;
+    return `<div class="codeblock" data-lang="${escapeHtml(lang || "text")}">${inner}</div>\n`;
   };
 }
 
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+function fallbackBlock(code: string, lang: string): string {
+  // Must stay a single line: <pre> preserves whitespace, so any template
+  // indentation/newlines here would render inside the code block.
+  return `<pre class="codeblock-plain"><code class="language-${escapeHtml(lang)}">${escapeHtml(code)}</code></pre>`;
 }

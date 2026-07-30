@@ -229,11 +229,7 @@ for (let idx = 0, _l = entries.length; idx < _l; idx++) {
 for (let key in config) {
   let value = config[key];
   __lark_out__ +=
-    "<p>" +
-    __lark_enc_html__(key) +
-    " = " +
-    __lark_enc_html__(value) +
-    "</p>";
+    "<p>" + __lark_enc_html__(key) + " = " + __lark_enc_html__(value) + "</p>";
 }
 ```
 
@@ -457,7 +453,7 @@ interface AsExpr {
 
 | 建议                          | 说明                                                                                                       |
 | ----------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| 使用 `id` 属性作为 compareKey | 两种模式均启用 keyed diff（字符串模式取 id/v-lark，VDOM 模式另支持 `#`），大幅减少 DOM 操作               |
+| 使用 `id` 属性作为 compareKey | 两种模式均启用 keyed diff（字符串模式取 id/v-lark，VDOM 模式另支持 `#`），大幅减少 DOM 操作                |
 | 避免在循环内创建复杂表达式    | 预计算到 store 或 `{{set}}` 中                                                                             |
 | 大列表频繁重排考虑 VDOM 模式  | 字符串模式也是 keyed diff（非全量 innerHTML 替换），但 VDOM 模式的 LIS 算法能把重排的 DOM 移动次数降到最少 |
 | 合理使用 `first`/`last`       | 它们会生成额外的变量声明，仅在需要时使用                                                                   |

@@ -43,9 +43,6 @@ export interface DocsConfig {
   /** Site title displayed in the navbar. Required. */
   title: string;
 
-  /** Site description. Serialized into the runtime config as "" when unset. */
-  description?: string;
-
   /** Top navigation items. */
   nav?: NavItem[];
 
@@ -81,11 +78,6 @@ export interface NavItem {
   text: string;
   /** Link URL (internal or external). */
   link: string;
-  /**
-   * Nested dropdown items. Reserved: `baseUrl` prefixing is applied to them,
-   * but the bundled theme renders the navbar flat and does not display them.
-   */
-  items?: NavItem[];
 }
 
 /** Sidebar config: "auto" for filesystem-based, or explicit items. */
@@ -101,10 +93,6 @@ export interface SidebarItem {
   collapsed?: boolean;
   /** Child items (for groups). */
   items?: SidebarItem[];
-  /** Whether this item matches the current route (set at runtime). */
-  isActive?: boolean;
-  /** Pre-computed CSS class string (set at runtime by sidebar view). */
-  itemClass?: string;
 }
 
 /** Markdown processing options. */
@@ -179,22 +167,11 @@ export interface DocsRoute {
    * filename order) and are excluded from the sidebar to avoid duplicates.
    */
   isDirectoryIndex?: boolean;
-}
-
-// ============================================================
-// Search types
-// ============================================================
-
-/** Search index entry for a single docs page. */
-export interface SearchEntry {
-  /** Page title. */
-  title: string;
-  /** Route link. */
-  link: string;
-  /** All heading texts on the page. */
-  headings: string[];
-  /** First ~200 chars of plain text content. */
-  excerpt: string;
+  /**
+   * True when the page has `protected: true` frontmatter (docsGuardPlugin).
+   * Protected pages are excluded from the search index.
+   */
+  isProtected?: boolean;
 }
 
 // ============================================================
@@ -219,8 +196,6 @@ export interface CompileMarkdownOptions {
   config: DocsConfig;
   /** Absolute path to the .md file being compiled. */
   filePath: string;
-  /** Enable debug line markers. */
-  debug?: boolean;
   /** Project root for resolving relative `config.docs`. Defaults to process.cwd(). */
   projectRoot?: string;
 }

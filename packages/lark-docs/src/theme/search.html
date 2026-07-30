@@ -115,7 +115,10 @@
         <div
           class="flex flex-col items-center justify-center py-10 text-center"
         >
-          <p class="text-muted-foreground/60 text-xs">Type to search…</p>
+          <p class="text-muted-foreground/60 text-xs">
+            {{if indexSize > 0}}Search across {{=indexSize}} pages{{else}}Type
+            to search…{{/if}}
+          </p>
         </div>
         {{/if}}
       </div>

@@ -155,11 +155,7 @@ const MainLayout = defineView((ctx) => {
 ```html
 <!-- layouts/main.html -->
 <div class="app-shell">
-  <aside
-    v-lark="app/views/sidebar"
-    id="layout_sidebar"
-    class="sidebar"
-  ></aside>
+  <aside v-lark="app/views/sidebar" id="layout_sidebar" class="sidebar"></aside>
   <div class="main-area">
     <nav v-lark="app/views/breadcrumb" id="layout_breadcrumb"></nav>
     <div
@@ -395,14 +391,14 @@ const CounterView = defineView((ctx) => {
 
 ## 与 Vue Slot 的对比
 
-| 特性         | Vue Slot              | Lark v-lark                        |
+| 特性         | Vue Slot              | Lark v-lark                          |
 | ------------ | --------------------- | ------------------------------------ |
 | 内容定义位置 | 父组件模板内          | 独立视图文件                         |
 | 作用域       | 可访问父组件数据      | 完全独立，通过 Props 通信            |
 | 渲染时机     | 随父组件同步渲染      | 独立异步挂载                         |
 | 状态管理     | 共享父组件作用域      | 独立 Updater/Store                   |
 | 生命周期     | 无独立生命周期        | 完整生命周期（mount/render/destroy） |
-| 动态切换     | `<component :is>`     | 动态 `v-lark` 表达式                |
+| 动态切换     | `<component :is>`     | 动态 `v-lark` 表达式                 |
 | 条件渲染     | `v-if` + `<template>` | 模板条件 + Zone 自动管理             |
 
 ## 最佳实践

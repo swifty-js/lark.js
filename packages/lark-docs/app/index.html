@@ -35,12 +35,13 @@
     <script>
       // No-FOUC dark mode: resolve preference before first paint.
       (function () {
-        var stored = localStorage.getItem("lark-docs-theme");
-        var dark =
-          stored === "dark" ||
-          (!stored &&
-            window.matchMedia("(prefers-color-scheme: dark)").matches);
-        if (dark) document.documentElement.classList.add("dark");
+        try {
+          var stored = localStorage.getItem("lark-docs-theme");
+          var dark = stored
+            ? stored === "dark"
+            : window.matchMedia("(prefers-color-scheme: dark)").matches;
+          document.documentElement.classList.toggle("dark", dark);
+        } catch (e) {}
       })();
     </script>
   </head>

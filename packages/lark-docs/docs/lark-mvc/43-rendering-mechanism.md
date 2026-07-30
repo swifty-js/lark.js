@@ -482,12 +482,7 @@ export function vdomCreate(tag, props?, children?, specials?): VDomNode {
     if (prop === LARK_VIEW && value) {
       const parsed = parseUri(value as string);
       isLarkView = parsed.path;
-      viewList.push([
-        isLarkView,
-        propsObj["lark-owner"],
-        value,
-        parsed.params,
-      ]);
+      viewList.push([isLarkView, propsObj["lark-owner"], value, parsed.params]);
       if (!compareKey) compareKey = tag + SPLITTER + isLarkView;
     }
 

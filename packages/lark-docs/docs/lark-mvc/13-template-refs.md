@@ -172,11 +172,7 @@ export default defineView((ctx) => {
 
 ```html
 <!-- demo.html -->
-<div
-  v-lark="app/views/child"
-  *history="{{@history}}"
-  *title="{{=title}}"
-></div>
+<div v-lark="app/views/child" *history="{{@history}}" *title="{{=title}}"></div>
 ```
 
 渲染后，DOM 中实际写入的是：

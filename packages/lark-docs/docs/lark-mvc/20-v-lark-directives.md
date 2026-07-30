@@ -11,11 +11,11 @@ description: 详解 Lark Next 的 v-lark 指令——核心组合机制。包括
 
 本文覆盖以下源码模块：
 
-| 模块       | 文件            | 职责                                 |
-| ---------- | --------------- | ------------------------------------ |
-| Frame 挂载 | `src/frame.ts`  | mountZone 完整实现、Zone 生命周期    |
+| 模块       | 文件            | 职责                                |
+| ---------- | --------------- | ----------------------------------- |
+| Frame 挂载 | `src/frame.ts`  | mountZone 完整实现、Zone 生命周期   |
 | 共享常量   | `src/common.ts` | LARK_VIEW 常量定义                  |
-| DOM Diff   | `src/dom.ts`    | 字符串模式下子视图保留               |
+| DOM Diff   | `src/dom.ts`    | 字符串模式下子视图保留              |
 | VDOM Diff  | `src/vdom.ts`   | VDOM 模式下子视图保留（isLarkView） |
 
 ---
@@ -351,13 +351,13 @@ if (newVDom.isLarkView) {
 
 ### 4.5 两种模式对比
 
-| 特性       | 字符串模式 (dom.ts)                  | VDOM 模式 (vdom.ts)         |
-| ---------- | ------------------------------------ | --------------------------- |
-| 检测方式   | `getAttribute(LARK_VIEW)`           | `vdomNode.isLarkView`      |
+| 特性       | 字符串模式 (dom.ts)                  | VDOM 模式 (vdom.ts)        |
+| ---------- | ------------------------------------ | -------------------------- |
+| 检测方式   | `getAttribute(LARK_VIEW)`            | `vdomNode.isLarkView`      |
 | 路径比较   | `parseUri(attr).path`                | 直接使用 `isLarkView` 字段 |
-| compareKey | `id` 或 `v-lark path`               | `tag + SPLITTER + path`     |
-| 保留判断   | `oldFrameId && newPath === oldPath`  | 相同逻辑                    |
-| 性能       | 每次 diff 需 getAttribute + parseUri | 编译时预计算，O(1) 比较     |
+| compareKey | `id` 或 `v-lark path`                | `tag + SPLITTER + path`    |
+| 保留判断   | `oldFrameId && newPath === oldPath`  | 相同逻辑                   |
+| 性能       | 每次 diff 需 getAttribute + parseUri | 编译时预计算，O(1) 比较    |
 
 ---
 
@@ -750,15 +750,15 @@ ctx.endUpdate("zone-sidebar");
 
 ## 总结
 
-| 概念        | 要点                                   |
-| ----------- | -------------------------------------- |
-| `v-lark`   | 核心组合指令，标记子视图挂载点         |
+| 概念        | 要点                                  |
+| ----------- | ------------------------------------- |
+| `v-lark`    | 核心组合指令，标记子视图挂载点        |
 | mountZone   | 查询 `[v-lark]` 元素，挂载/更新子视图 |
-| parseUri    | 解析视图路径和查询参数                 |
-| frameBound  | 区分新元素与已绑定元素                 |
-| 子视图保留  | Diff 时路径相同则保留，不递归子节点    |
+| parseUri    | 解析视图路径和查询参数                |
+| frameBound  | 区分新元素与已绑定元素                |
+| 子视图保留  | Diff 时路径相同则保留，不递归子节点   |
 | compareKey  | `v-lark` 路径作为 keyed diff 的匹配键 |
-| unmountZone | 递归卸载所有子 Frame                   |
-| 嵌套视图    | 任意深度，created 事件从叶到根冒泡     |
-| 条件渲染    | 条件消失时自动卸载子视图               |
-| 性能        | 保留机制避免不必要的销毁/重建          |
+| unmountZone | 递归卸载所有子 Frame                  |
+| 嵌套视图    | 任意深度，created 事件从叶到根冒泡    |
+| 条件渲染    | 条件消失时自动卸载子视图              |
+| 性能        | 保留机制避免不必要的销毁/重建         |

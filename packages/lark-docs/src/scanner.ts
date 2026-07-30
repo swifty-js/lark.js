@@ -38,24 +38,13 @@ import fs from "node:fs";
 import path from "node:path";
 import type { DocsRoute, PageData } from "./types";
 import { extractFrontmatter } from "./markdown/frontmatter";
-import { deriveTitleFromPath } from "./utils/derive-title";
-import {
-  extractExcerpt,
-  extractFirstHeading,
-  extractHeadings,
-} from "./utils/heading-extraction";
+import { buildPageData } from "./utils/page-data";
 import { getFirstRoute } from "./utils/route-sorting";
 
 const IGNORED_PREFIXES = ["_", "."];
-const IGNORED_DIRS = new Set([
-  "node_modules",
-  "__tests__",
-  "__fixtures__",
-  ".git",
-  ".vitepress",
-  ".lark-docs",
-  "dist",
-]);
+// Dot- and underscore-prefixed names are already skipped by
+// IGNORED_PREFIXES, so only plain directory names belong here.
+const IGNORED_DIRS = new Set(["node_modules", "dist"]);
 
 interface DirInfo {
   hasIndex: boolean;
@@ -89,6 +78,11 @@ export function scanDocsDir(docsDir: string, baseUrl: string): DocsRoute[] {
       return; // directory doesn't exist or not readable
     }
 
+    // readdir order is filesystem-dependent; sort by codepoint so route
+    // and sidebar-group order is stable across platforms, machines, and
+    // locales (localeCompare varies with ICU data).
+    entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+
     for (const entry of entries) {
       if (IGNORED_PREFIXES.some((p) => entry.name.startsWith(p))) continue;
       if (IGNORED_DIRS.has(entry.name)) continue;
@@ -118,25 +112,17 @@ export function scanDocsDir(docsDir: string, baseUrl: string): DocsRoute[] {
       const { data: frontmatter, content } = extractFrontmatter(raw);
 
       const relativePath = path.relative(docsDir, fullPath);
-      const derivedTitle = deriveTitleFromPath(relativePath);
-
-      const pageData: PageData = {
-        title:
-          (frontmatter["title"] as string) ||
-          extractFirstHeading(content) ||
-          derivedTitle,
-        description: (frontmatter["description"] as string) || derivedTitle,
-        excerpt: extractExcerpt(content),
-        sidebarPosition: frontmatter["sidebar_position"] as number | undefined,
-        sidebarLabel: frontmatter["sidebar_label"] as string | undefined,
-        headings: extractHeadings(content),
+      const pageData: PageData = buildPageData(
+        frontmatter,
+        content,
         relativePath,
-      };
+      );
 
       const route: DocsRoute = {
         path: fullRoutePath,
         filePath: fullPath,
         pageData,
+        ...(frontmatter["protected"] === true ? { isProtected: true } : {}),
       };
 
       routes.push(route);
@@ -160,8 +146,8 @@ export function scanDocsDir(docsDir: string, baseUrl: string): DocsRoute[] {
     if (info.hasIndex) continue;
     if (info.children.length === 0) continue;
 
-    const firstRoute = getFirstRoute(info.children);
-    if (!firstRoute) continue;
+    // Non-empty children guarantee getFirstRoute returns a route.
+    const firstRoute = getFirstRoute(info.children)!;
 
     const routeSegment = prefix; // treated as index
     const computedPath = effectiveBase + routeSegment;
@@ -175,6 +161,21 @@ export function scanDocsDir(docsDir: string, baseUrl: string): DocsRoute[] {
     };
 
     routes.push(virtualRoute);
+  }
+
+  // Detect route collisions (e.g. guide.md + guide/index.md both map to
+  // "/guide"). The generated loaders object keys by path, so the last
+  // entry silently wins — warn instead of failing so builds keep working.
+  const seenPaths = new Map<string, string>();
+  for (const r of routes) {
+    const prev = seenPaths.get(r.path);
+    if (prev !== undefined && prev !== r.filePath) {
+      console.warn(
+        `[@lark.js/docs] route collision: "${r.path}" is produced by both ` +
+          `${prev} and ${r.filePath} — the latter wins. Rename one of them.`,
+      );
+    }
+    seenPaths.set(r.path, r.filePath);
   }
 
   return routes;

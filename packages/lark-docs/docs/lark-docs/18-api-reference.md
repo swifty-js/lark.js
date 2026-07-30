@@ -469,9 +469,9 @@ function createThemeToggleView(
 const icons: Record<string, string>;
 ```
 
-17 个 lucide SVG 图标的原始字符串映射（键名为 camelCase）：
+14 个 lucide SVG 图标的原始字符串映射（键名为 camelCase）：
 
-search, menu, x, sun, moon, chevronDown, chevronRight, copy, check, list, arrowUpRight, arrowLeft, arrowRight, compass, info, triangleAlert, octagonAlert
+search, menu, x, sun, moon, chevronDown, chevronRight, copy, check, list, arrowUpRight, arrowLeft, arrowRight, compass
 
 ## 完整配置示例
 

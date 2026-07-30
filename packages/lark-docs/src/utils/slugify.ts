@@ -54,19 +54,22 @@ export function slugify(text: string): string {
 }
 
 /**
- * Create a per-document slug generator with deduplication.
+ * Create a per-document slugger that deduplicates repeated headings.
  *
- * Successive calls with the same base text yield "foo", "foo-1", "foo-2"…
- * The anchor plugin and heading extraction MUST share this strategy (and
- * pass ALL heading levels through the slugger) so anchor IDs and TOC slugs
- * stay consistent even with duplicate heading text.
+ * Duplicate slugs get a numeric suffix ("foo", "foo-1", "foo-2"), matching
+ * the convention used by VitePress/markdown-it-anchor. The anchor plugin and
+ * the heading extractor must both use this so anchor IDs and TOC links agree.
  */
 export function createSlugger(): (text: string) => string {
-  const seen = new Map<string, number>();
+  const seen = new Set<string>();
   return (text: string): string => {
-    const base = slugify(text);
-    const count = seen.get(base) ?? 0;
-    seen.set(base, count + 1);
-    return count === 0 ? base : `${base}-${count}`;
+    let slug = slugify(text);
+    if (seen.has(slug)) {
+      let counter = 1;
+      while (seen.has(`${slug}-${counter}`)) counter++;
+      slug = `${slug}-${counter}`;
+    }
+    seen.add(slug);
+    return slug;
   };
 }

@@ -77,7 +77,19 @@
         class="ml-4 hidden items-center gap-0.5 md:flex"
         aria-label="Primary"
       >
-        {{forOf navItems as item idx}}
+        {{forOf navItems as item idx}} {{if item.external}}
+        <a
+          class="after:bg-primary text-muted-foreground hover:bg-accent/60 hover:text-foreground relative flex items-center gap-1 rounded-md px-3 py-1.5 text-sm transition-colors duration-200 after:absolute after:inset-x-3 after:-bottom-[13px] after:h-0.5 after:origin-left after:scale-x-0 after:rounded-full after:transition-transform after:duration-300 after:ease-[cubic-bezier(0.32,0.72,0,1)] hover:after:scale-x-100"
+          href="{{=item.link}}"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          {{=item.text}}
+          <span class="size-3 opacity-60 [&>svg]:size-full"
+            >{{!icons.arrowUpRight}}</span
+          >
+        </a>
+        {{else}}
         <a
           class="relative flex items-center gap-1 rounded-md px-3 py-1.5 text-sm transition-colors duration-200 after:absolute after:inset-x-3 after:-bottom-[13px] after:h-0.5 after:origin-left after:scale-x-0 after:rounded-full after:bg-primary after:transition-transform after:duration-300 after:ease-[cubic-bezier(0.32,0.72,0,1)] {{if item.active}}text-foreground after:scale-x-100 font-medium{{else}}text-muted-foreground hover:bg-accent/60 hover:text-foreground hover:after:scale-x-100{{/if}}"
           data-href="{{=item.link}}"
@@ -85,7 +97,7 @@
         >
           {{=item.text}}
         </a>
-        {{/forOf}}
+        {{/if}} {{/forOf}}
       </nav>
 
       <!-- Right cluster -->
@@ -180,7 +192,8 @@
         <!-- Page content -->
         <article
           id="docs-content"
-          class="prose max-w-none {{if animateIn}}animate-page-in{{/if}}"
+          class="prose max-w-none"
+          @click="onContentClick()"
         >
           {{!contentHtml}}
         </article>
@@ -256,6 +269,7 @@
 
   <!-- Mobile navigation drawer -->
   <div
+    id="docs-drawer"
     class="{{if drawerOpen}}{{else}}pointer-events-none{{/if}} fixed inset-0 z-50 lg:hidden"
     aria-hidden="{{if drawerOpen}}false{{else}}true{{/if}}"
   >

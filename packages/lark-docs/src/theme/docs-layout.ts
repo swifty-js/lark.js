@@ -35,16 +35,9 @@ interface NavLink {
 // Runtime Zod schemas for State-injected values.
 // ============================================================
 
-interface RuntimeNavItem {
-  text: string;
-  link: string;
-  items?: RuntimeNavItem[];
-}
-
-const NavItemSchema: z.ZodType<RuntimeNavItem> = z.object({
+const NavItemSchema = z.object({
   text: z.string(),
   link: z.string(),
-  items: z.lazy(() => z.array(NavItemSchema)).optional(),
 });
 
 interface RuntimeSidebarItem {
@@ -52,7 +45,6 @@ interface RuntimeSidebarItem {
   link?: string;
   collapsed?: boolean;
   items?: RuntimeSidebarItem[];
-  isActive?: boolean;
 }
 
 const SidebarItemSchema: z.ZodType<RuntimeSidebarItem> = z.object({
@@ -60,7 +52,6 @@ const SidebarItemSchema: z.ZodType<RuntimeSidebarItem> = z.object({
   link: z.string().optional(),
   collapsed: z.boolean().optional(),
   items: z.lazy(() => z.array(SidebarItemSchema)).optional(),
-  isActive: z.boolean().optional(),
 });
 
 const SidebarConfigSchema = z.union([
@@ -72,7 +63,6 @@ const DocsConfigSchema = z.object({
   docs: z.string().optional(),
   baseUrl: z.string(),
   title: z.string(),
-  description: z.string().optional(),
   nav: z.array(NavItemSchema).optional(),
   sidebar: z.record(z.string(), SidebarConfigSchema).optional(),
   search: z.boolean().optional(),
@@ -121,6 +111,31 @@ function collectLinks(items: RuntimeSidebarItem[], out: NavLink[]): void {
   }
 }
 
+/** Strip trailing slashes; "/" stays "/". */
+function stripTrailingSlash(p: string): string {
+  return p.replace(/\/+$/, "") || "/";
+}
+
+/**
+ * Landing target for the logo, the 404 button and the root redirect:
+ * the first internal nav link, falling back to baseUrl.
+ */
+function landingLink(cfg: RuntimeDocsConfig | null): string {
+  const first = (cfg?.nav ?? []).find(
+    (item) => !/^https?:\/\//.test(item.link),
+  );
+  return first?.link ?? cfg?.baseUrl ?? "/";
+}
+
+/** window.location.hash, decoded (location.hash is percent-encoded for CJK). */
+function decodedLocationHash(): string {
+  try {
+    return decodeURIComponent(window.location.hash);
+  } catch {
+    return window.location.hash;
+  }
+}
+
 function computePrevNext(
   sidebar: RuntimeSidebarMap | undefined,
   currentPath: string,
@@ -131,7 +146,12 @@ function computePrevNext(
       if (Array.isArray(items)) collectLinks(items, flat);
     }
   }
-  const idx = flat.findIndex((item) => item.link === currentPath);
+  // Trailing slashes are ignored on both sides, mirroring the active-state
+  // matching in the sidebar view.
+  const target = stripTrailingSlash(currentPath);
+  const idx = flat.findIndex(
+    (item) => stripTrailingSlash(item.link) === target,
+  );
   if (idx < 0) return { prevPage: null, nextPage: null };
   const prevPage = idx > 0 ? flat[idx - 1] : null;
   const nextPage = idx < flat.length - 1 ? flat[idx + 1] : null;
@@ -169,14 +189,19 @@ function mountCopyButtons(copyIcon: string, checkIcon: string): void {
     btn.addEventListener("click", () => {
       const code = block.querySelector("code");
       if (!code) return;
-      navigator.clipboard.writeText(code.textContent ?? "").then(() => {
-        btn.classList.add("codeblock-copy-done");
-        btn.innerHTML = `<span class="size-3.5 [&>svg]:size-full">${checkIcon}</span>`;
-        setTimeout(() => {
-          btn.classList.remove("codeblock-copy-done");
-          btn.innerHTML = `<span class="size-3.5 [&>svg]:size-full">${copyIcon}</span>`;
-        }, 1600);
-      });
+      navigator.clipboard
+        .writeText(code.textContent ?? "")
+        .then(() => {
+          btn.classList.add("codeblock-copy-done");
+          btn.innerHTML = `<span class="size-3.5 [&>svg]:size-full">${checkIcon}</span>`;
+          setTimeout(() => {
+            btn.classList.remove("codeblock-copy-done");
+            btn.innerHTML = `<span class="size-3.5 [&>svg]:size-full">${copyIcon}</span>`;
+          }, 1600);
+        })
+        .catch(() => {
+          // clipboard unavailable
+        });
     });
     actions.appendChild(btn);
     block.appendChild(actions);
@@ -230,26 +255,41 @@ export function createDocsLayoutView(
     });
 
     // Global keyboard shortcuts: ⌘K / Ctrl+K toggles search, "/" opens.
-    useEffect(() => {
-      const onKey = (e: KeyboardEvent) => {
-        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
-          e.preventDefault();
-          State.set({ searchOpen: !State.get("searchOpen") }).digest();
-          return;
-        }
-        if (e.key === "/" && !isTypingTarget(e.target)) {
-          e.preventDefault();
-          State.set({ searchOpen: true }).digest();
-        }
-      };
-      document.addEventListener("keydown", onKey);
-      return () => document.removeEventListener("keydown", onKey);
-    });
+    // Only registered when search is enabled (config is injected into
+    // State before boot, so it is readable at setup time).
+    const setupSearchEnabled =
+      (parseDocsConfig(State.get("docsConfig")) ?? FALLBACK_CONFIG).search ??
+      true;
+    if (setupSearchEnabled) {
+      useEffect(() => {
+        const onKey = (e: KeyboardEvent) => {
+          if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+            e.preventDefault();
+            State.set({ searchOpen: !State.get("searchOpen") }).digest();
+            return;
+          }
+          if (e.key === "/" && !isTypingTarget(e.target)) {
+            e.preventDefault();
+            State.set({ searchOpen: true }).digest();
+          }
+        };
+        document.addEventListener("keydown", onKey);
+        return () => document.removeEventListener("keydown", onKey);
+      });
+    }
 
     function isTypingTarget(target: EventTarget | null): boolean {
       if (!(target instanceof HTMLElement)) return false;
       const tag = target.tagName;
       return tag === "INPUT" || tag === "TEXTAREA" || target.isContentEditable;
+    }
+
+    // `inert` removes the closed drawer from the tab order — it is only
+    // translated off-screen, so without it keyboard focus could enter an
+    // aria-hidden subtree. Applied imperatively after each digest because
+    // the DOM diff strips attributes that are not in the template output.
+    function syncDrawerInert(open: boolean): void {
+      document.getElementById("docs-drawer")?.toggleAttribute("inert", !open);
     }
 
     function syncDrawerSideEffects(open: boolean): void {
@@ -324,6 +364,7 @@ export function createDocsLayoutView(
       if (path === lastPath) {
         ctx.updater.set({ drawerOpen });
         ctx.updater.digest();
+        syncDrawerInert(drawerOpen);
         syncDrawerSideEffects(drawerOpen);
         return;
       }
@@ -336,6 +377,7 @@ export function createDocsLayoutView(
       // Show skeleton while loading.
       ctx.updater.set({ loading: true, drawerOpen: false });
       ctx.updater.digest();
+      syncDrawerInert(false);
 
       const sig = ctx.signature.value;
       let content: LoadedContent | null = null;
@@ -349,6 +391,19 @@ export function createDocsLayoutView(
         console.warn("[@lark.js/docs] Failed to load content for", path, err);
       }
       if (ctx.signature.value !== sig) return;
+
+      // Root redirect: "/" or the bare baseUrl has no content of its own —
+      // land on the first internal nav link instead of a 404.
+      if (!content) {
+        const base = stripTrailingSlash(cfg.baseUrl ?? "/");
+        if (path === "/" || path === base) {
+          const landing = landingLink(cfg);
+          if (stripTrailingSlash(landing) !== path) {
+            Router.to(landing, {}, true);
+            return;
+          }
+        }
+      }
 
       lastPath = path;
 
@@ -364,13 +419,15 @@ export function createDocsLayoutView(
 
       const { prevPage, nextPage } = computePrevNext(cfg.sidebar, path);
 
-      // Nav items with active state (prefix match).
+      // Nav items with active state (prefix match). External links render
+      // as real anchors with target="_blank" in the template.
       const navItems = (cfg.nav ?? []).map((item) => {
         const external = /^https?:\/\//.test(item.link);
         const target = item.link.replace(/\/+$/, "") || "/";
         return {
           text: item.text,
           link: item.link,
+          external,
           active:
             !external && (path === target || path.startsWith(target + "/")),
         };
@@ -388,6 +445,7 @@ export function createDocsLayoutView(
         nextPage,
       });
       ctx.updater.digest();
+      syncDrawerInert(false);
 
       // Post-render enhancements.
       setTimeout(() => {
@@ -415,13 +473,58 @@ export function createDocsLayoutView(
           }
         },
         "navigateHome<click>": () => {
-          const cfg = parseDocsConfig(State.get("docsConfig"));
-          Router.to(cfg?.baseUrl ?? "/docs/");
+          Router.to(landingLink(parseDocsConfig(State.get("docsConfig"))));
         },
         "navigateHomeDrawer<click>": () => {
           State.set({ drawerOpen: false }).digest();
-          const cfg = parseDocsConfig(State.get("docsConfig"));
-          Router.to(cfg?.baseUrl ?? "/docs/");
+          Router.to(landingLink(parseDocsConfig(State.get("docsConfig"))));
+        },
+        // Delegated clicks inside the rendered markdown article.
+        "onContentClick<click>": (e: Event) => {
+          const target = e.target;
+          if (!(target instanceof Element)) return;
+          const anchor = target.closest("a");
+          if (!anchor) return;
+          const href = anchor.getAttribute("href") ?? "";
+
+          // In-page hash links get smooth scrolling with a deduped
+          // pushState entry (copyable deep link + back-button entry
+          // without the browser's instant jump).
+          if (href.startsWith("#")) {
+            e.preventDefault();
+            let slug = href.slice(1);
+            try {
+              slug = decodeURIComponent(slug);
+            } catch {
+              // keep the raw fragment
+            }
+            const el = document.getElementById(slug);
+            if (!el) return;
+            if (decodedLocationHash() !== `#${slug}`) {
+              history.pushState(null, "", href);
+            }
+            el.scrollIntoView({ behavior: "smooth", block: "start" });
+            return;
+          }
+
+          // Same-origin internal links navigate through the SPA router.
+          // Modified/middle clicks and explicit targets keep the browser
+          // default; external links are never intercepted.
+          if (href.startsWith("/")) {
+            if (
+              e instanceof MouseEvent &&
+              (e.button !== 0 ||
+                e.metaKey ||
+                e.ctrlKey ||
+                e.shiftKey ||
+                e.altKey)
+            ) {
+              return;
+            }
+            if (anchor.target && anchor.target !== "_self") return;
+            e.preventDefault();
+            Router.to(href);
+          }
         },
         "openSearch<click>": () => {
           State.set({ searchOpen: true }).digest();

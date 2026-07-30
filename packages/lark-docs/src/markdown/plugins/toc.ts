@@ -44,7 +44,11 @@ export function tocPlugin(md: MarkdownIt): void {
     return true;
   });
 
+  // The placeholder is injected via contentHtml, which never passes through
+  // the lark-mvc template compiler — so the `*prop` shorthand would not be
+  // rewritten. Emit the runtime attribute `p-lark-inline` directly, which
+  // mountZone reads when constructing the TocView's props.
   md.renderer.rules["toc_placeholder"] = () => {
-    return '<div v-lark="theme/toc" *inline="true"></div>';
+    return '<div v-lark="theme/toc" p-lark-inline="true"></div>';
   };
 }

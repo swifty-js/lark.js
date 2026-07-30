@@ -2,10 +2,6 @@
 
 A lightweight TypeScript Next frontend framework for single-page applications and micro-frontend scenarios.
 
-Version: 0.0.19
-License: MIT
-Package: @lark.js/mvc
-
 ## Overview
 
 lark-mvc is a functional-first framework that provides a complete application architecture with zero runtime dependencies. It features a real-DOM diff engine (with optional VDOM mode), compile-time template transformation, two-phase route confirmation, zustand-aligned state management, and built-in HMR support across Vite, Webpack, and Rspack.

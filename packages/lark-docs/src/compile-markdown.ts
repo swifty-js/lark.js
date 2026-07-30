@@ -39,13 +39,8 @@ import { extractFrontmatter } from "./markdown/frontmatter";
 import { createParser } from "./markdown/parser";
 import { renderToLarkTemplate } from "./markdown/renderer";
 import { getHighlighter, highlightCode } from "./markdown/highlighter";
-import type { CompileMarkdownOptions } from "./types";
-import { deriveTitleFromPath } from "./utils/derive-title";
-import {
-  extractExcerpt,
-  extractFirstHeading,
-  extractHeadings,
-} from "./utils/heading-extraction";
+import type { CompileMarkdownOptions, PageData } from "./types";
+import { buildPageData } from "./utils/page-data";
 import { isAbsolute, relative, resolve } from "node:path";
 
 /**
@@ -103,30 +98,7 @@ export async function compileMarkdown(
     "/",
   );
 
-  const title =
-    (frontmatter["title"] as string) ||
-    extractFirstHeading(content) ||
-    deriveTitleFromPath(relativeFilePath);
-
-  const headings = extractHeadings(content);
-
-  // Description defaults to the derived title (filename or directory name)
-  // when frontmatter description is missing.
-  const description =
-    (frontmatter["description"] as string) ||
-    deriveTitleFromPath(relativeFilePath);
-
-  const excerpt = extractExcerpt(content);
-
-  const pageData = {
-    title,
-    description,
-    excerpt,
-    sidebarPosition: frontmatter["sidebar_position"] as number | undefined,
-    sidebarLabel: (frontmatter["sidebar_label"] as string) || undefined,
-    headings,
-    relativePath: relativeFilePath,
-  };
+  const pageData = buildPageData(frontmatter, content, relativeFilePath);
 
   // 6. Generate JS module
   return generateModule(htmlBody, pageData, options);
@@ -134,7 +106,7 @@ export async function compileMarkdown(
 
 function generateModule(
   htmlBody: string,
-  pageData: Record<string, unknown>,
+  pageData: PageData,
   options: CompileMarkdownOptions,
 ): string {
   const pageDataJson = JSON.stringify(pageData, null, 2);

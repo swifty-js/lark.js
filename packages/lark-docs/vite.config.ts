@@ -66,6 +66,7 @@ const EXTERNAL_PKGS = [
   "node:path",
   "node:process",
   "node:url",
+  "node:crypto",
 ];
 
 /**

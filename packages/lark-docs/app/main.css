@@ -20,13 +20,9 @@
  * SOFTWARE.
  */
 
-@import "tailwindcss";
+/* client.css already imports tailwindcss, the typography plugin, and
+   @source-scans ../src/theme. */
 @import "../src/client.css";
 
-/* Scan theme templates for Tailwind class names.
-   For consumer projects, use:
-   @source "../node_modules/@lark.js/docs/theme.js" */
-@source "../src/theme/*.html";
-@source "../src/theme/*.ts";
-
-@plugin "@tailwindcss/typography";
+/* !!! For your project, the packaged theme must be scanned explicitly: */
+/* @source "../node_modules/@lark.js/docs/theme.js" */

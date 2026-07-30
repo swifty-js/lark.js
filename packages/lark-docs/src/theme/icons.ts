@@ -58,9 +58,6 @@ import clock9 from "lucide-static/icons/clock-9.svg?raw";
 import clock10 from "lucide-static/icons/clock-10.svg?raw";
 import clock11 from "lucide-static/icons/clock-11.svg?raw";
 import clock12 from "lucide-static/icons/clock-12.svg?raw";
-import info from "lucide-static/icons/info.svg?raw";
-import triangleAlert from "lucide-static/icons/triangle-alert.svg?raw";
-import octagonAlert from "lucide-static/icons/octagon-alert.svg?raw";
 
 export const icons = {
   search,
@@ -77,9 +74,6 @@ export const icons = {
   arrowLeft,
   arrowRight,
   compass,
-  info,
-  triangleAlert,
-  octagonAlert,
 };
 
 export const clockIcons = [

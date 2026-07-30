@@ -32,7 +32,7 @@ import { State, Router, defineView, useEffect } from "@lark.js/mvc";
 import type { VDomTemplate, ViewSetup, ViewTemplate } from "@lark.js/mvc";
 import { z } from "zod";
 import { icons } from "./icons";
-import type { SearchEntry } from "../types";
+import { escapeHtml } from "../utils/escape-html";
 
 const SearchEntrySchema = z.object({
   title: z.string(),
@@ -63,6 +63,7 @@ export function createSearchView(
       query: "",
       activeIndex: 0,
       isOpen: false,
+      indexSize: 0,
     });
     ctx.observeState("searchOpen");
 
@@ -107,8 +108,18 @@ export function createSearchView(
       return () => document.removeEventListener("keydown", onKey);
     });
 
-    async function ensureMiniSearch(): Promise<MiniSearch | null> {
-      if (mini) return mini;
+    let pendingBuild: Promise<MiniSearch | null> | null = null;
+
+    function ensureMiniSearch(): Promise<MiniSearch | null> {
+      if (mini) return Promise.resolve(mini);
+      if (pendingBuild) return pendingBuild;
+      pendingBuild = buildMiniSearch().finally(() => {
+        pendingBuild = null;
+      });
+      return pendingBuild;
+    }
+
+    async function buildMiniSearch(): Promise<MiniSearch | null> {
       const fnParse = GetSearchIndexSchema.safeParse(
         State.get("getSearchIndex"),
       );
@@ -140,6 +151,7 @@ export function createSearchView(
         },
       });
       mini.addAll(docs);
+      ctx.updater.set({ indexSize: index.length }).digest();
       return mini;
     }
 
@@ -228,7 +240,7 @@ export function createSearchView(
           const m = await ensureMiniSearch();
           if (mySeq !== seq) return; // stale — a newer query superseded us
 
-          let raw: (SearchResult & Partial<SearchEntry>)[] = [];
+          let raw: (SearchResult & Partial<RuntimeSearchEntry>)[] = [];
           if (m) {
             try {
               raw = m.search(query).slice(0, MAX_RESULTS);
@@ -293,14 +305,6 @@ function highlightSegments(text: string, query: string): string {
       i % 2 === 1 ? `<mark>${escapeHtml(part)}</mark>` : escapeHtml(part),
     )
     .join("");
-}
-
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
 }
 
 function escapeRegExp(s: string): string {

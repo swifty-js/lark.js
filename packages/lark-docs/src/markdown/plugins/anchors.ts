@@ -29,6 +29,7 @@
  */
 import type MarkdownIt from "markdown-it";
 import { createSlugger } from "../../utils/slugify";
+import { inlineText } from "../../utils/heading-extraction";
 import type { StateCore } from "markdown-it/index.js";
 
 export interface AnchorOptions {
@@ -48,18 +49,14 @@ export function anchorPlugin(md: MarkdownIt, options?: AnchorOptions): void {
 
       const level = parseInt(token.tag.slice(1), 10);
       const nextToken = state.tokens[i + 1];
-      const text =
-        nextToken?.children
-          ?.filter((t) => t.type === "text" || t.type === "code_inline")
-          .map((t) => t.content)
-          .join("") ?? "";
+      const text = inlineText(nextToken);
 
       const slug = slugger(text);
       token.attrSet("id", slug);
 
       if (addPermalink && level <= 3 && nextToken?.children) {
         const anchorToken = new state.Token("html_inline", "", 0);
-        anchorToken.content = ` <a class="header-anchor" href="#${slug}" aria-label="Link to this section">#</a>`;
+        anchorToken.content = `<a class="header-anchor" href="#${slug}" aria-label="Link to this section">#</a>`;
         nextToken.children.push(anchorToken);
       }
     }

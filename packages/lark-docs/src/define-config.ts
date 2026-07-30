@@ -93,7 +93,6 @@ function prefixNavItems(baseUrl: string, items: NavItem[]): NavItem[] {
   return items.map((item) => ({
     ...item,
     link: joinBase(baseUrl, item.link),
-    ...(item.items ? { items: prefixNavItems(baseUrl, item.items) } : {}),
   }));
 }
 
@@ -156,26 +155,28 @@ function generateRoutesFile(config: DocsConfig, projectRoot: string): void {
     })
     .join("\n");
 
-  // Canonical paths of real content routes (excluding virtual index routes).
-  // Used by getSearchIndex() to avoid duplicate search entries.
+  // Canonical paths of real content routes (excluding virtual index routes
+  // and password-protected pages, which must not enter the search index).
+  // Used by getSearchIndex() to avoid duplicate/leaking search entries.
   const searchablePaths = routes
-    .filter((r) => !r.isDirectoryIndex)
+    .filter((r) => !r.isDirectoryIndex && !r.isProtected)
     .map((r) => r.path);
 
   // Compose runtime docsConfig. Nav links are prefixed with baseUrl so
   // active-state matching works at runtime (current path includes baseUrl).
   const runtimeConfig: Omit<DocsConfig, "docs"> = {
     title: config.title,
-    description: config.description || "",
     baseUrl: config.baseUrl,
     nav: prefixNavItems(config.baseUrl, config.nav || []),
     sidebar,
+    // Forward explicitly (false must survive — it disables search).
     ...(config.search !== undefined ? { search: config.search } : {}),
   };
 
-  // Render the runtime JS module from the EJS template.
+  // Render the runtime JS module from the EJS template. No timestamp is
+  // embedded so unchanged content yields byte-identical output (stable for
+  // caching and clean git status).
   const fileContent = ejs.render(fileContentTemplate, {
-    generatedAt: new Date().toISOString(),
     loaderEntries,
     searchablePathsJson: JSON.stringify(searchablePaths),
     docsConfigJson: JSON.stringify(runtimeConfig, null, 2),

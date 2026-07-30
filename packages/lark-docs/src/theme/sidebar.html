@@ -62,7 +62,7 @@
             <a
               data-href="{{=row.link}}"
               @click="navigateTo()"
-              aria-current="{{if row.isActive}}page{{/if}}"
+              {{if row.isActive}}aria-current="page"{{/if}}
               class="relative -ml-px block border-l-2 py-1.5 pr-2 text-[13px] leading-snug transition-[color,background-color,border-color] duration-200 {{if row.isActive}}border-primary bg-primary/8 text-primary font-medium{{else}}hover:border-border hover:bg-accent/50 hover:text-foreground border-transparent text-muted-foreground{{/if}}"
               style="padding-left: {{=row.padPx}}px"
             >

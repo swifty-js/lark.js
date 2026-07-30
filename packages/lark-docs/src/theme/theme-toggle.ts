@@ -31,9 +31,13 @@ function systemPrefersDark(): boolean {
 }
 
 function isDark(): boolean {
-  const stored = localStorage.getItem(STORAGE_KEY);
-  if (stored === "dark") return true;
-  if (stored === "light") return false;
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored === "dark") return true;
+    if (stored === "light") return false;
+  } catch {
+    // storage unavailable
+  }
   return systemPrefersDark();
 }
 
@@ -64,7 +68,11 @@ export function createThemeToggleView(
           const next = !getDark();
           setDark(next);
           document.documentElement.classList.toggle("dark", next);
-          localStorage.setItem(STORAGE_KEY, next ? "dark" : "light");
+          try {
+            localStorage.setItem(STORAGE_KEY, next ? "dark" : "light");
+          } catch {
+            // storage unavailable
+          }
         },
       },
     };

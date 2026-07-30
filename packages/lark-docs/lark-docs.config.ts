@@ -27,7 +27,6 @@ export default defineConfig({
   docs: "docs",
   baseUrl: "/",
   title: "Lark Docs",
-  description: "@lark.js/docs -- Documentation site generator",
   nav: [
     { text: "Lark Next", link: "/lark-mvc/" },
     { text: "Lark Docs", link: "/lark-docs/" },

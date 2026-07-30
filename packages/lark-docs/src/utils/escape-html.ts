@@ -21,10 +21,18 @@
  */
 
 /**
- * Browser-safe runtime utilities for @lark.js/docs.
+ * Shared HTML escaping for string-emitting markdown plugins.
  *
- * Re-exports slugify for consumers building custom theme views. Kept free
- * of build-time dependencies (node:fs, markdown-it, etc.) so it can be
- * imported in browser bundles without pulling in Node-only code.
+ * All build-time HTML interpolation must go through this single helper so
+ * the escaping rules cannot drift between emit sites. Escapes `&`, `<`,
+ * `>`, `"` — sufficient because emitted attributes are always
+ * double-quoted; if a single-quoted attribute is ever introduced, add `'`
+ * here first.
  */
-export { slugify, createSlugger } from "./utils/slugify";
+export function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}

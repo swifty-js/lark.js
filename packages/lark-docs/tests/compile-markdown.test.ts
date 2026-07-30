@@ -246,4 +246,50 @@ Content here.
     expect(result).toContain('"title": "Real Title"');
     expect(result).not.toContain('"title": "npm install"');
   });
+
+  it("renders fallback code blocks as a single line (no <pre> whitespace pollution)", async () => {
+    const source = "```js\nconst a = 1;\n```\n";
+    const result = await compileMarkdown(source, {
+      config: baseConfig, // no highlight config → fallback path
+      filePath: "docs/test.md",
+    });
+
+    // <pre> preserves whitespace: the emitted markup must not contain
+    // template indentation or newlines around the code content.
+    expect(result).toContain(
+      String.raw`<pre class=\"codeblock-plain\"><code class=\"language-js\">const a = 1;`,
+    );
+  });
+
+  it("deduplicates slugs for identical headings and keeps TOC in sync with anchor ids", async () => {
+    const source = "# Title\n\n## 中文\n\ntext\n\n## 中文\n\ntext";
+    const result = await compileMarkdown(source, {
+      config: baseConfig,
+      filePath: "docs/test.md",
+    });
+
+    expect(result).toContain(String.raw`id=\"中文\"`);
+    expect(result).toContain(String.raw`id=\"中文-1\"`);
+    expect(result).not.toContain(String.raw`id=\"中文-2\"`);
+    expect(result).toContain('"slug": "中文"');
+    expect(result).toContain('"slug": "中文-1"');
+    expect(result).not.toContain('"slug": "中文-2"');
+  });
+
+  it("dedup counters stay aligned when h1 shares text with h2/h3", async () => {
+    const source = "# Setup\n\n## Setup\n\ntext\n\n## Setup\n\ntext";
+    const result = await compileMarkdown(source, {
+      config: baseConfig,
+      filePath: "docs/test.md",
+    });
+
+    // h1 takes "setup"; the two h2s must get "setup-1" and "setup-2"
+    // in both anchor ids and TOC slugs.
+    expect(result).toContain(String.raw`id=\"setup\"`);
+    expect(result).toContain(String.raw`id=\"setup-1\"`);
+    expect(result).toContain(String.raw`id=\"setup-2\"`);
+    expect(result).not.toContain(String.raw`id=\"setup-3\"`);
+    expect(result).toContain('"slug": "setup-1"');
+    expect(result).toContain('"slug": "setup-2"');
+  });
 });

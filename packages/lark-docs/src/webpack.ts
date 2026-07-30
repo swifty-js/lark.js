@@ -49,8 +49,6 @@ export type { DocsConfig, SidebarConfig } from "./types";
 export interface LarkDocsWebpackOptions {
   /** Full docs config. */
   config: DocsConfig;
-  /** Enable debug mode. */
-  debug?: boolean;
   /** Test regex. Default: /\.md$/ */
   test?: RegExp;
   /** Exclude regex. Default: /node_modules/ */
@@ -78,7 +76,6 @@ export function larkDocsLoader(
   compileMarkdown(source, {
     config: options.config,
     filePath: this.resourcePath,
-    debug: options.debug,
   })
     .then((result) => callback(null, result))
     .catch((err: unknown) =>

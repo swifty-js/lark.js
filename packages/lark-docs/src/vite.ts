@@ -41,9 +41,12 @@
  */
 import fs from "node:fs";
 import { isAbsolute, resolve, dirname } from "node:path";
+import { z } from "zod";
 import type { DocsConfig } from "./types";
 import { compileMarkdown } from "./compile-markdown";
+import { extractFrontmatter } from "./markdown/frontmatter";
 import type { Plugin } from "vite";
+import { createCipheriv, pbkdf2Sync, randomBytes } from "node:crypto";
 import {
   larkNextPlugin,
   type LarkNextVitePluginOptions,
@@ -135,7 +138,6 @@ export function larkDocsPlugin(options: LarkDocsVitePluginOptions): Plugin[] {
       return await compileMarkdown(source, {
         config,
         filePath,
-        debug,
       });
     },
   };
@@ -145,4 +147,131 @@ export function larkDocsPlugin(options: LarkDocsVitePluginOptions): Plugin[] {
   const plugin = larkNextPlugin({ debug, vdom });
 
   return [docsPlugin, plugin as Plugin];
+}
+
+function isProtectedMarkdown(id: string): string | null {
+  if (!id.includes(MD_SUFFIX)) return null;
+  const filePath = id.split("?")[0].replace(/^\/@fs/, "");
+  let raw: string;
+  try {
+    raw = fs.readFileSync(filePath, "utf-8");
+  } catch {
+    return null;
+  }
+  // Use the same YAML parse as the scanner so every `protected` spelling
+  // YAML treats as true (True, yes, on) is caught — a regex-only check
+  // would let such pages ship unencrypted while the scanner still marks
+  // them protected.
+  const { data } = extractFrontmatter(raw);
+  return data["protected"] === true ? filePath : null;
+}
+
+/**
+ * Build-time page encryption for pages marked `protected: true` in their
+ * frontmatter. Requires the DOCS_PASSWORD environment variable; without it
+ * the plugin degrades to a warn-only no-op so protected pages are never
+ * silently published unencrypted.
+ *
+ * Pair with `createContentGuard()` on the client to prompt for the
+ * password and decrypt at view time.
+ */
+export function docsGuardPlugin(): Plugin {
+  const password = process.env["DOCS_PASSWORD"];
+  if (!password) {
+    return {
+      name: "docs-guard",
+      enforce: "post",
+      transform(_code, id) {
+        const filePath = isProtectedMarkdown(id);
+        if (filePath) {
+          console.warn(
+            `[@lark.js/docs] ${filePath} has "protected: true" but ` +
+              `DOCS_PASSWORD is not set — the page will be published UNENCRYPTED.`,
+          );
+        }
+        return null;
+      },
+    };
+  }
+
+  return {
+    name: "docs-guard",
+    enforce: "post",
+
+    transform(code, id) {
+      const filePath = isProtectedMarkdown(id);
+      if (!filePath) return null;
+
+      const htmlMatch = code.match(
+        /export const contentHtml = ("(?:[^"\\]|\\.)*");?\s*$/m,
+      );
+      if (!htmlMatch) {
+        this.warn(
+          `[@lark.js/docs] could not locate contentHtml in ${filePath} — ` +
+            `page left UNENCRYPTED.`,
+        );
+        return null;
+      }
+
+      // The regex above matched a JSON string literal, but validate rather
+      // than assert — encrypting garbage would brick the page silently.
+      const html = z.string().parse(JSON.parse(htmlMatch[1]));
+
+      // pageData ships in plaintext and feeds the search index; the
+      // body-derived fields (excerpt/description/headings) are stripped so
+      // protected content cannot be read through search results. Headings
+      // are encrypted alongside the HTML so the Toc can be restored after
+      // unlock. The title stays — it is already visible in the sidebar.
+      const pdMatch = code.match(/export const pageData = (\{[\s\S]*?\n\});/);
+      let pd: Record<string, unknown> | null = null;
+      if (pdMatch) {
+        try {
+          pd = z.record(z.string(), z.unknown()).parse(JSON.parse(pdMatch[1]));
+        } catch {
+          this.warn(
+            `[@lark.js/docs] could not sanitize pageData in ${filePath} — protected excerpt/headings may leak into the search index.`,
+          );
+        }
+      }
+
+      const plaintext = JSON.stringify({
+        html,
+        headings: Array.isArray(pd?.["headings"]) ? pd["headings"] : [],
+      });
+
+      const salt = randomBytes(16);
+      const iv = randomBytes(12);
+      const key = pbkdf2Sync(password, salt, 100_000, 32, "sha256");
+      const cipher = createCipheriv("aes-256-gcm", key, iv);
+      const encrypted = Buffer.concat([
+        cipher.update(plaintext, "utf-8"),
+        cipher.final(),
+      ]);
+      const authTag = cipher.getAuthTag();
+
+      const payload = JSON.stringify({
+        encrypted: encrypted.toString("base64"),
+        authTag: authTag.toString("base64"),
+        salt: salt.toString("base64"),
+        iv: iv.toString("base64"),
+      });
+
+      let out = code.replace(
+        htmlMatch[0],
+        `export const contentHtml = ${JSON.stringify(payload)};`,
+      );
+
+      if (pd && pdMatch) {
+        pd["description"] = undefined;
+        pd["excerpt"] = "";
+        pd["headings"] = [];
+        out = out.replace(
+          pdMatch[0],
+          `export const pageData = ${JSON.stringify(pd, null, 2)};`,
+        );
+      }
+
+      return { code: out, map: null };
+    },
+  };
 }

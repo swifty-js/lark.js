@@ -39,7 +39,6 @@ const SidebarItemSchema: z.ZodType<SidebarItem> = z.object({
   link: z.string().optional(),
   collapsed: z.boolean().optional(),
   items: z.lazy(() => z.array(SidebarItemSchema)).optional(),
-  isActive: z.boolean().optional(),
 });
 const SidebarConfigSchema = z.union([
   z.literal("auto"),

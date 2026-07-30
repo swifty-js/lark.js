@@ -217,3 +217,4 @@ dist-docs
 **/.swiftx/
 .larky/
 **/.larky/
+packages/lark-docs/docs

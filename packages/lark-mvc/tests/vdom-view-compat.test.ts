@@ -31,13 +31,8 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { vdomCreate, vdomSetChildNodes, createVDomRef, vdomCreateNode } from "../src/vdom";
 import { LARK_VIEW, LARK_PROP_PREFIX } from "../src/common";
-import {
-  Frame,
-  createFrame,
-  registerViewClass,
-  invalidateViewClass,
-  getViewClassRegistry,
-} from "../src/frame";
+import { Frame, createFrame, registerViewClass, invalidateViewClass } from "../src/frame";
+import { getViewClassRegistry } from "../src/view-registry";
 import { defineView } from "../src/view";
 import type { VDomNode, FrameObj } from "../src/types";
 

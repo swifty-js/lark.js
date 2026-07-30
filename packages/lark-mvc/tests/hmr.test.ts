@@ -21,20 +21,15 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { hotSwapView, hotSwapFrames, hotSwapByTemplate, hotSwapByView } from "../src/hmr";
+import { hotSwapView, hotSwapByTemplate, hotSwapByView } from "../src/hmr";
 import {
   injectTemplateHmrSnippet,
   injectViewHmrSnippet,
   importsHtmlTemplate,
 } from "../src/hmr-inject";
 import { defineView } from "../src/view";
-import {
-  Frame,
-  createFrame,
-  registerViewClass,
-  invalidateViewClass,
-  getViewClassRegistry,
-} from "../src/frame";
+import { Frame, createFrame, registerViewClass, invalidateViewClass } from "../src/frame";
+import { getViewClassRegistry } from "../src/view-registry";
 import type { FrameObj } from "../src/types";
 
 /** Simple template factory for testing. */
@@ -112,33 +107,6 @@ describe("HMR", () => {
       expect(spy).toHaveBeenCalledWith("test/fallback");
       spy.mockRestore();
       cleanupFrame(frame);
-    });
-  });
-
-  // ============================================================
-  // hotSwapFrames
-  // ============================================================
-  describe("hotSwapFrames", () => {
-    it("hot-swaps all frames matching the viewPath", async () => {
-      const OldView = defineView(() => ({ template: makeTemplate("old") }));
-      registerViewClass("test/batch", OldView);
-
-      const f1 = createTestFrame("b1");
-      const f2 = createTestFrame("b2");
-      f1.mountView("test/batch");
-      f2.mountView("test/batch");
-      await flushMicrotasks();
-
-      f1.view!.updater.set({ count: 100 }).digest();
-      f2.view!.updater.set({ count: 200 }).digest();
-
-      const NewView = defineView(() => ({ template: makeTemplate("new") }));
-      hotSwapFrames("test/batch", NewView);
-
-      expect(f1.view!.updater.get<number>("count")).toBe(100);
-      expect(f2.view!.updater.get<number>("count")).toBe(200);
-      cleanupFrame(f1);
-      cleanupFrame(f2);
     });
   });
 

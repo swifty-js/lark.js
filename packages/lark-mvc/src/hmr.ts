@@ -33,8 +33,7 @@
  *    reference, replaces it, and force-renders.
  *
  * 2. **View setup layer** (`.ts` changes): `hotSwapByView(old, new)` updates
- *    the view-registry and calls `hotSwapFrames(viewPath, newSetup)` which
- *    runs `hotSwapView` on every matching frame.
+ *    the view-registry and runs `hotSwapView` on every matching frame.
  *
  * ## State preservation strategy
  *
@@ -99,42 +98,6 @@ export function hotSwapView(frame: FrameObj, newSetup: ViewSetup): void {
     oldView.fire("render");
     destroyAllResources(oldView, false);
     oldView.updater.forceDigest();
-  }
-}
-
-/**
- * Find all mounted frames whose view path matches `viewPath`.
- *
- * @param viewPath - The view path (without query params) to match
- * @returns Array of `{ frame, fullPath }` for each matching frame
- */
-function findFramesByViewPath(viewPath: string): Array<{ frame: FrameObj; fullPath: string }> {
-  const result: Array<{ frame: FrameObj; fullPath: string }> = [];
-  for (const [, frame] of Frame.getAll()) {
-    const vp = frame.getViewPath();
-    if (vp) {
-      const parsed = parseUri(vp);
-      if (parsed.path === viewPath) {
-        result.push({ frame, fullPath: vp });
-      }
-    }
-  }
-  return result;
-}
-
-/**
- * Batch hot-swap every frame matching `viewPath` with `newSetup`.
- *
- * Convenience wrapper around {@link hotSwapView} — finds all matching frames
- * via {@link findFramesByViewPath} and applies the new setup to each.
- *
- * @param viewPath - The view path to match against mounted frames
- * @param newSetup - The new view setup function to apply
- */
-export function hotSwapFrames(viewPath: string, newSetup: ViewSetup): void {
-  const targets = findFramesByViewPath(viewPath);
-  for (const { frame } of targets) {
-    hotSwapView(frame, newSetup);
   }
 }
 

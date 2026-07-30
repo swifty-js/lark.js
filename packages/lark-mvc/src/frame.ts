@@ -701,4 +701,4 @@ function translateQuery(pId: string, src: string, params: Record<string, string>
 // View setup registration (re-exported)
 // ============================================================
 
-export { registerViewClass, invalidateViewClass, getViewClassRegistry } from "./view-registry";
+export { registerViewClass, invalidateViewClass } from "./view-registry";

@@ -22,13 +22,8 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { defineView } from "../src/view";
-import {
-  Frame,
-  createFrame,
-  registerViewClass,
-  invalidateViewClass,
-  getViewClassRegistry,
-} from "../src/frame";
+import { Frame, createFrame, registerViewClass, invalidateViewClass } from "../src/frame";
+import { getViewClassRegistry } from "../src/view-registry";
 import { refFn } from "../src/common";
 import type { FrameObj, ViewTemplate } from "../src/types";
 

@@ -1007,7 +1007,7 @@ HMR hot-swaps view code without a full page reload, preserving view-local state.
 
 1. Template layer (`.html` changes): `hotSwapByTemplate(old, new)` finds every mounted view whose template matches the old reference, replaces it, and force-renders.
 
-2. View setup layer (`.ts` changes): `hotSwapByView(old, new)` updates the view-registry and calls `hotSwapFrames(viewPath, newSetup)` which runs `hotSwapView` on every matching frame.
+2. View setup layer (`.ts` changes): `hotSwapByView(old, new)` updates the view-registry and runs `hotSwapView` on every matching frame.
 
 ### State Preservation
 

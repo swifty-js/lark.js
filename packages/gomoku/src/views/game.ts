@@ -46,7 +46,7 @@ const STAR_POINTS = new Set([
 const COL_LABELS = Array.from({ length: BOARD_SIZE }, (_, i) => String.fromCharCode(65 + i));
 const ROW_LABELS = Array.from({ length: BOARD_SIZE }, (_, i) => String(BOARD_SIZE - i));
 
-/** AI 回应的最短展示时长，避免"思考中"状态一闪而过 */
+/** Minimum display duration for AI response to avoid the "thinking" state flashing by */
 const MIN_THINK_MS = 300;
 
 function computeWinLine(board: BoardState): Set<number> {
@@ -80,17 +80,17 @@ function buildCells(board: BoardState, lastMove: number): CellData[] {
 }
 
 function statusText(board: BoardState, aiPlayer: Player, thinking: boolean): string {
-  if (thinking) return "AI 思考中";
+  if (thinking) return "AI is thinking";
   const human = opponent(aiPlayer);
   switch (board.status) {
     case GameStatus.BlackWin:
-      return aiPlayer === Player.Black ? "AI 获胜（黑）" : "你赢了！（黑）";
+      return aiPlayer === Player.Black ? "AI wins (Black)" : "You win! (Black)";
     case GameStatus.WhiteWin:
-      return aiPlayer === Player.White ? "AI 获胜（白）" : "你赢了！（白）";
+      return aiPlayer === Player.White ? "AI wins (White)" : "You win! (White)";
     case GameStatus.Draw:
-      return "平局";
+      return "Draw";
     default:
-      return currentPlayer(board) === human ? "轮到你落子" : "等待 AI";
+      return currentPlayer(board) === human ? "Your turn" : "Waiting for AI";
   }
 }
 
@@ -186,7 +186,7 @@ export default defineView((ctx) => {
   worker.onmessage = (event: MessageEvent<AiResponse>) => {
     if (destroyed) return;
     const res = event.data;
-    if (res.requestId !== requestSeq) return; // 悔棋/新对局后丢弃过期结果
+    if (res.requestId !== requestSeq) return; // Discard stale results after undo/new game
     const elapsed = performance.now() - requestSentAt;
     const delay = Math.max(0, MIN_THINK_MS - elapsed);
     if (delay > 0) {
@@ -220,7 +220,7 @@ export default defineView((ctx) => {
     moveList = [];
     thinking = false;
     lastStats = null;
-    requestSeq++; // 使在途的 AI 结果失效
+    requestSeq++; // Invalidate in-flight AI results
   }
 
   ctx.updater.set(buildData());

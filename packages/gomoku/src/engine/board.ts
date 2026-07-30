@@ -111,7 +111,7 @@ export function checkWin(board: BoardState, index: number, player: Player): bool
   return false;
 }
 
-/** 获取经过 index 的胜利连线（至少五连）所含格子，无则返回空数组 */
+/** Returns the cells of the winning line (at least five in a row) through index, or an empty array if none */
 export function getWinLine(board: BoardState, index: number, player: Player): number[] {
   const row = toRow(index);
   const col = toCol(index);

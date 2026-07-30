@@ -2,7 +2,7 @@ import { createBoard, currentPlayer, makeMove } from "./board";
 import { findBestMove } from "./search";
 import type { AiRequest, AiResponse } from "./protocol";
 
-/** 在 Worker 线程中执行搜索，避免深层迭代加深阻塞 UI 主线程 */
+/** Run the search in a Worker thread to avoid blocking the UI main thread during deep iterative deepening */
 onmessage = (event: MessageEvent<AiRequest>) => {
   const req = event.data;
 

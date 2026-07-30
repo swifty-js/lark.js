@@ -1,7 +1,7 @@
 <div
   class="relative min-h-screen bg-slate-950 flex items-center justify-center p-4 overflow-hidden font-sans"
 >
-  <!-- 氛围背景光斑 -->
+  <!-- Ambient background glow -->
   <div
     class="absolute -top-32 -left-32 w-md h-112 rounded-full bg-amber-500/10 blur-3xl pointer-events-none"
   ></div>
@@ -13,11 +13,11 @@
   ></div>
 
   <div class="relative flex flex-col lg:flex-row gap-8 items-center lg:items-start">
-    <!-- 棋盘区 -->
+    <!-- Board area -->
     <div
       class="rounded-3xl bg-linear-to-br from-amber-200 via-amber-300 to-amber-400 p-4 shadow-2xl shadow-black/60 ring-1 ring-amber-100/40"
     >
-      <!-- 列坐标 A-O -->
+      <!-- Column labels A-O -->
       <div class="flex pl-6 pr-1">
         {{forOf colLabels as label}}
         <div
@@ -29,7 +29,7 @@
       </div>
 
       <div class="flex">
-        <!-- 行坐标 15-1 -->
+        <!-- Row labels 15-1 -->
         <div class="w-5 flex flex-col pr-1">
           {{forOf rowLabels as label}}
           <div
@@ -40,7 +40,7 @@
           {{/forOf}}
         </div>
 
-        <!-- 15x15 棋盘 -->
+        <!-- 15x15 board grid -->
         <div
           class="grid grid-cols-[repeat(15,1fr)] w-[min(88vw,34rem)] rounded-lg overflow-hidden ring-2 ring-amber-900/25 shadow-inner shadow-amber-900/20"
         >
@@ -49,25 +49,25 @@
             class="relative aspect-square flex items-center justify-center cursor-pointer group"
             @click="placeStone({index: {{=cell.index}}})"
           >
-            <!-- 网格线 -->
+            <!-- Grid lines -->
             <div class="absolute inset-0">
               <div class="absolute top-1/2 left-0 right-0 h-px bg-amber-900/40"></div>
               <div class="absolute left-1/2 top-0 bottom-0 w-px bg-amber-900/40"></div>
             </div>
 
-            <!-- 星位 -->
+            <!-- Star points -->
             {{if cell.isStar && cell.player === 0}}
             <div class="absolute w-1.5 h-1.5 rounded-full bg-amber-900/60 z-10"></div>
             {{/if}}
 
-            <!-- 悬停预览 -->
+            <!-- Hover preview -->
             {{if cell.player === 0 && !gameOver && !isThinking}}
             <div
               class="absolute w-[78%] h-[78%] rounded-full bg-slate-900/15 ring-2 ring-slate-900/20 opacity-0 group-hover:opacity-100 transition-opacity duration-150 z-10"
             ></div>
             {{/if}}
 
-            <!-- 黑子 -->
+            <!-- Black stone -->
             {{if cell.player === 1}}
             <div
               class="relative w-[84%] h-[84%] rounded-full bg-linear-to-br from-slate-500 via-slate-800 to-black shadow-md shadow-black/50 z-20 {{if cell.isWin}}ring-2 ring-emerald-400 shadow-lg shadow-emerald-500/50 animate-pulse{{/if}}"
@@ -83,7 +83,7 @@
             </div>
             {{/if}}
 
-            <!-- 白子 -->
+            <!-- White stone -->
             {{if cell.player === 2}}
             <div
               class="relative w-[84%] h-[84%] rounded-full bg-linear-to-br from-white via-slate-100 to-slate-300 shadow-md shadow-black/40 border border-slate-300/60 z-20 {{if cell.isWin}}ring-2 ring-emerald-500 shadow-lg shadow-emerald-500/50 animate-pulse{{/if}}"
@@ -104,18 +104,18 @@
       </div>
     </div>
 
-    <!-- 侧边面板 -->
+    <!-- Side panel -->
     <div class="w-[min(88vw,20rem)] flex flex-col gap-4">
-      <!-- 标题 -->
+      <!-- Title -->
       <div class="text-center lg:text-left">
         <h1
           class="font-serif text-4xl font-bold tracking-[0.3em] bg-linear-to-r from-amber-200 via-amber-300 to-amber-500 bg-clip-text text-transparent"
         >
-          五子棋
+          Gomoku
         </h1>
       </div>
 
-      <!-- 对局状态 -->
+      <!-- Game status -->
       <div
         class="rounded-2xl px-5 py-4 border backdrop-blur {{if gameOver}}{{if humanWin}}bg-emerald-500/10 border-emerald-500/40{{else}}bg-rose-500/10 border-rose-500/40{{/if}}{{else}}bg-slate-900/70 border-slate-700/50{{/if}}"
       >
@@ -136,7 +136,7 @@
         </p>
       </div>
 
-      <!-- 对局双方 -->
+      <!-- Players -->
       <div class="grid grid-cols-2 gap-3">
         <div
           class="rounded-2xl bg-slate-900/70 border border-slate-700/50 backdrop-blur px-4 py-3 flex items-center gap-3"
@@ -145,9 +145,9 @@
             class="w-7 h-7 rounded-full bg-linear-to-br from-slate-500 via-slate-800 to-black shadow shadow-black/50 shrink-0"
           ></div>
           <div class="min-w-0">
-            <p class="text-slate-200 text-sm font-medium">黑棋</p>
+            <p class="text-slate-200 text-sm font-medium">Black</p>
             <p class="text-slate-500 text-xs">
-              {{if humanIsBlack}}你 · 先手{{else}}AI · 先手{{/if}}
+              {{if humanIsBlack}}You · First{{else}}AI · First{{/if}}
             </p>
           </div>
         </div>
@@ -158,15 +158,15 @@
             class="w-7 h-7 rounded-full bg-linear-to-br from-white via-slate-100 to-slate-300 border border-slate-300/60 shrink-0"
           ></div>
           <div class="min-w-0">
-            <p class="text-slate-200 text-sm font-medium">白棋</p>
+            <p class="text-slate-200 text-sm font-medium">White</p>
             <p class="text-slate-500 text-xs">
-              {{if humanIsBlack}}AI · 后手{{else}}你 · 后手{{/if}}
+              {{if humanIsBlack}}AI · Second{{else}}You · Second{{/if}}
             </p>
           </div>
         </div>
       </div>
 
-      <!-- 操作 -->
+      <!-- Actions -->
       <div
         class="rounded-2xl bg-slate-900/70 border border-slate-700/50 backdrop-blur p-4 flex flex-col gap-2.5"
       >
@@ -187,7 +187,7 @@
               <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
               <path d="M3 3v5h5" />
             </svg>
-            新对局
+            New Game
           </button>
           <button
             @click="undo()"
@@ -205,7 +205,7 @@
               <path d="M9 14 4 9l5-5" />
               <path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11" />
             </svg>
-            悔棋
+            Undo
           </button>
         </div>
         <button
@@ -226,14 +226,14 @@
             <path d="m8 21-4-4 4-4" />
             <path d="M4 17h16" />
           </svg>
-          切换先后手
+          Switch Side
         </button>
       </div>
 
-      <!-- 难度 -->
+      <!-- Difficulty -->
       <div class="rounded-2xl bg-slate-900/70 border border-slate-700/50 backdrop-blur p-4">
         <p class="text-[11px] text-slate-500 uppercase tracking-[0.2em] mb-2.5 font-semibold">
-          AI 难度
+          AI Difficulty
         </p>
         <div class="flex gap-2">
           {{forOf difficulties as label idx}}
@@ -247,39 +247,39 @@
         </div>
       </div>
 
-      <!-- AI 搜索统计 -->
+      <!-- AI search statistics -->
       {{if stats}}
       <div class="rounded-2xl bg-slate-900/70 border border-slate-700/50 backdrop-blur px-4 py-3">
         <p class="text-[11px] text-slate-500 uppercase tracking-[0.2em] mb-2 font-semibold">
-          上一手搜索
+          Last Search
         </p>
         <div class="grid grid-cols-3 gap-2 text-center">
           <div>
             <p class="text-amber-300 text-base font-bold tabular-nums">{{=stats.depth}}</p>
-            <p class="text-slate-500 text-[11px] mt-0.5">深度</p>
+            <p class="text-slate-500 text-[11px] mt-0.5">Depth</p>
           </div>
           <div>
             <p class="text-amber-300 text-base font-bold tabular-nums">{{=stats.nodes}}</p>
-            <p class="text-slate-500 text-[11px] mt-0.5">节点</p>
+            <p class="text-slate-500 text-[11px] mt-0.5">Nodes</p>
           </div>
           <div>
             <p class="text-amber-300 text-base font-bold tabular-nums">
               {{=stats.timeMs}}<span class="text-xs font-normal">ms</span>
             </p>
-            <p class="text-slate-500 text-[11px] mt-0.5">耗时</p>
+            <p class="text-slate-500 text-[11px] mt-0.5">Time</p>
           </div>
         </div>
       </div>
       {{/if}}
 
-      <!-- 落子记录 -->
+      <!-- Move history -->
       <div class="rounded-2xl bg-slate-900/70 border border-slate-700/50 backdrop-blur p-4">
         <p class="text-[11px] text-slate-500 uppercase tracking-[0.2em] mb-2 font-semibold">
-          落子记录
+          Move History
         </p>
         <div class="max-h-40 overflow-y-auto space-y-1 pr-1">
           {{if moves.length === 0}}
-          <p class="text-slate-600 text-sm text-center py-3">暂无落子</p>
+          <p class="text-slate-600 text-sm text-center py-3">No moves yet</p>
           {{/if}} {{forOf moves as move idx}}
           <div class="flex items-center gap-2.5 text-sm">
             <span class="text-slate-600 w-6 text-right tabular-nums">{{=moves.length - idx}}</span>
@@ -289,10 +289,10 @@
         </div>
       </div>
 
-      <!-- 引擎说明 -->
+      <!-- Engine description -->
       <p class="text-center lg:text-left text-[11px] leading-relaxed text-slate-600">
-        引擎：迭代加深 · PVS · Alpha-Beta · 置换表(Zobrist) · VCF 连续冲四 · 静态延伸 ·
-        杀手/历史启发
+        Engine: Iterative Deepening · PVS · Alpha-Beta · Transposition Table (Zobrist) · VCF ·
+        Quiescence · Killer/History Heuristic
       </p>
     </div>
   </div>

@@ -1,9 +1,9 @@
-/** AI Worker 消息协议：主线程与搜索 Worker 之间的类型约定 */
+/** AI Worker message protocol: type contract between the main thread and the search worker */
 
 export interface AiRequest {
-  /** 递增请求号，用于丢弃过期结果（悔棋/新对局后） */
+  /** Monotonically increasing request ID, used to discard stale results (after undo/new game) */
   requestId: number;
-  /** 从空棋盘按顺序重放的落子序列 */
+  /** Move sequence replayed from an empty board in order */
   moves: number[];
   maxDepth: number;
   timeLimitMs: number;

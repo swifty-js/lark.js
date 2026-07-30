@@ -61,14 +61,14 @@ export function findBestMove(
     return { bestMove: moves[0], score: 0, depth: 1, nodes: 1 };
   }
 
-  // 1. 一手成五直接取胜
+  // 1. Immediate five-in-a-row wins outright
   for (const move of moves) {
     if (hasImmediateWin(board, move, aiPlayer)) {
       return { bestMove: move, score: WIN_SCORE, depth: 1, nodes: 1 };
     }
   }
 
-  // 2. 挡住对方的成五点（双四则尽力挡其一）
+  // 2. Block opponent's winning point (block one if double-four)
   const opp = opponent(aiPlayer);
   for (const move of moves) {
     if (hasImmediateWin(board, move, opp)) {
@@ -76,13 +76,13 @@ export function findBestMove(
     }
   }
 
-  // 3. VCF 连续冲四强制取胜
+  // 3. VCF (Victory by Continuous Fours) forced win
   const vcfMove = vcfSearch(board, aiPlayer, VCF_DEPTH);
   if (vcfMove >= 0) {
     return { bestMove: vcfMove, score: WIN_SCORE, depth: 1, nodes: 1 };
   }
 
-  // 4. 迭代加深 + 根节点 PVS + Aspiration Window
+  // 4. Iterative deepening + root PVS + Aspiration Window
   let bestMove = moves[0];
   let bestScore = 0;
   let completedDepth = 0;
@@ -147,7 +147,7 @@ function rootSearch(
     );
     if (state.aborted) return result;
 
-    // Aspiration 窗口失败时退回全窗口重搜
+    // Fall back to full window re-search on aspiration window failure
     if (result.score <= alpha) {
       alpha = -INF;
     } else if (result.score >= beta) {
@@ -203,7 +203,7 @@ function rootPass(
         timeLimitMs,
       );
     } else {
-      // PVS：非主变着法先用零窗口验证
+      // PVS: verify non-principal-variation moves with a null window first
       score = -negamax(
         board,
         state,
@@ -313,7 +313,7 @@ function negamax(
     state.historyTable,
   ).slice(0, BRANCH_LIMIT);
 
-  // Futility Pruning：浅层且静态评估远低于 alpha 时直接截断
+  // Futility Pruning: prune at shallow depth when static eval is far below alpha
   if (depth <= 3 && ply > 0) {
     const staticEval = evaluateBoard(board, aiPlayer) * (current === aiPlayer ? 1 : -1);
     if (staticEval + FUTILITY_MARGIN * depth <= alpha) {
@@ -344,7 +344,7 @@ function negamax(
         timeLimitMs,
       );
     } else {
-      // Late Move Reductions：排序靠后的非威胁着法降低深度试探
+      // Late Move Reductions: search lower-ranked non-threat moves at reduced depth
       let reduction = 0;
       if (
         depth >= LMR_REDUCTION_LIMIT &&
@@ -413,7 +413,7 @@ function negamax(
     }
 
     if (alpha >= beta) {
-      // History Heuristic + Killer Move 记录截断着法
+      // History Heuristic + Killer Move: record the cutoff move
       state.historyTable[move] += depth * depth;
       if (state.historyTable[move] > 1_000_000) {
         for (let i = 0; i < CELL_COUNT; i++) {

@@ -9,9 +9,9 @@ export interface Difficulty {
 }
 
 export const DIFFICULTIES: Difficulty[] = [
-  { label: "简单", maxDepth: 4, timeLimitMs: 800 },
-  { label: "中等", maxDepth: 8, timeLimitMs: 2500 },
-  { label: "困难", maxDepth: 12, timeLimitMs: 6000 },
+  { label: "Easy", maxDepth: 4, timeLimitMs: 800 },
+  { label: "Medium", maxDepth: 8, timeLimitMs: 2500 },
+  { label: "Hard", maxDepth: 12, timeLimitMs: 6000 },
 ];
 
 export function computeAIMove(

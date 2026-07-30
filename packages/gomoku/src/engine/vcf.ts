@@ -6,11 +6,13 @@ import { generateMoves } from "./moves";
 const VCF_MAX_DEPTH = 20;
 
 /**
- * VCF（连续冲四取胜）搜索：进攻方只走"冲四/成五"强制着法，
- * 防守方每步都被迫挡四，若最终形成双四/活四（两个成五点）则进攻方必胜。
- * 返回取胜的第一手落点，无解返回 -1。
+ * VCF (Victory by Continuous Fours) search: the attacker plays only forcing
+ * moves (fours/fives), the defender is forced to block each four. If the
+ * attacker eventually creates a double-four or open-four (two winning points),
+ * the attack succeeds. Returns the first winning move, or -1 if no solution.
  *
- * 调用前提：当前轮到 attacker 落子（makeMove 依赖手数奇偶决定执子方）。
+ * Precondition: it is currently the attacker's turn (makeMove relies on move
+ * count parity to determine the side to move).
  */
 export function vcfSearch(
   board: BoardState,
@@ -20,7 +22,7 @@ export function vcfSearch(
   return vcfAttack(board, attacker, depth);
 }
 
-/** 收集 player 落一子即成五的所有点位（不修改棋盘） */
+/** Collect all points where player can complete five in one move (does not mutate the board) */
 function collectFivePoints(board: BoardState, player: Player, moves: readonly number[]): number[] {
   const points: number[] = [];
   for (const move of moves) {
@@ -34,7 +36,7 @@ function collectFivePoints(board: BoardState, player: Player, moves: readonly nu
 function vcfAttack(board: BoardState, attacker: Player, depth: number): number {
   const moves = generateMoves(board);
 
-  // 直接成五
+  // Immediate five-in-a-row
   for (const move of moves) {
     if (hasImmediateWin(board, move, attacker)) return move;
   }
@@ -44,7 +46,7 @@ function vcfAttack(board: BoardState, attacker: Player, depth: number): number {
   const defender = opponent(attacker);
 
   for (const move of moves) {
-    // 只延伸冲四强制着法
+    // Only extend forcing four-threat moves
     if (!createsFour(board, move, attacker)) continue;
 
     makeMove(board, move);
@@ -52,15 +54,15 @@ function vcfAttack(board: BoardState, attacker: Player, depth: number): number {
     const replyMoves = generateMoves(board);
     let win = false;
 
-    // 轮到防守方：若防守方自己有成五点，他直接取胜，本线失败
+    // Defender's turn: if the defender has an immediate five, this line fails
     const defenderFives = collectFivePoints(board, defender, replyMoves);
     if (defenderFives.length === 0) {
       const attackerFives = collectFivePoints(board, attacker, replyMoves);
       if (attackerFives.length >= 2) {
-        // 双四/活四：防守方无法同时挡两个成五点
+        // Double-four/open-four: defender cannot block both winning points
         win = true;
       } else if (attackerFives.length === 1) {
-        // 防守方唯一挡点被迫应手，继续连续冲四
+        // Defender forced to block the single winning point; continue the attack
         makeMove(board, attackerFives[0]);
         win = vcfAttack(board, attacker, depth - 2) >= 0;
         unmakeMove(board);

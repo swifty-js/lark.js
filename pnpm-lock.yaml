@@ -156,7 +156,7 @@ importers:
         specifier: ^2.1.6
         version: 2.1.7
       '@types/node':
-        specifier: ^24.13.3
+        specifier: 24.13.3
         version: 24.13.3
       '@vitest/coverage-v8':
         specifier: 4.1.6

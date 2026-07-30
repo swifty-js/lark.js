@@ -7,6 +7,7 @@
     // "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": false,
     "isolatedModules": true,
+    "noEmit": true,
     // For nodejs:
     "lib": ["esnext", "DOM", "DOM.Iterable"],
     // Environment Settings
@@ -25,7 +26,7 @@
     "paths": {
       "@/*": ["./src/*"]
     },
-    // "allowJs": true,
+    "allowJs": true,
     // File Layout
     "rootDir": "./",
     "skipLibCheck": true,
@@ -39,10 +40,10 @@
     "verbatimModuleSyntax": true
   },
   "include": [
-    "./src/**/*.ts",
-    "./tests/**/*.test.ts",
-    "./rollup.config.mjs",
-    "./tsup.config.ts",
-    "./vitest.config.ts"
+    "src/**/*.ts",
+    "tests/**/*.test.ts",
+    "rollup.config.mjs",
+    "tsup.config.ts",
+    "vitest.config.ts"
   ]
 }

@@ -85,11 +85,11 @@ function cjsShims() {
     name: "cjs-shims",
     /**
      * @param {string} code
-     * @param {import("rollup").RenderedChunk} chunk
+     * @param {import("rollup").RenderedChunk} _chunk
      * @param {import("rollup").NormalizedOutputOptions} outputOptions
      * @returns {string | null}
      */
-    renderChunk(code, chunk, outputOptions) {
+    renderChunk(code, _chunk, outputOptions) {
       if (outputOptions.format !== "es") return null;
       return shims + code;
     },

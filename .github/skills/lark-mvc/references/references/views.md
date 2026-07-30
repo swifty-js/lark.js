@@ -111,7 +111,10 @@ The handler receives the DOM event extended with:
 
 - `e.eventTarget` — the original hit element
 - `e.params` — object parsed from the template call, e.g.
-  `@click="del({id: item.id})"` → `e.params.id`
+  `@click="del({id: {{=item.id}}})"` → `e.params.id` (all values arrive as
+  strings). Dynamic values **must** use `{{=expr}}` interpolation — a bare
+  `{id: item.id}` is kept as the literal text `"item.id"` (see templates.md,
+  "Event attributes").
 
 ```ts
 "navigateTo<click>": (e: Record<string, unknown>) => {

@@ -75,7 +75,7 @@ the template must exist on `updater.data`.
 
 ```html
 <button @click="save()">Save</button>
-<button @click="del({id: item.id, mode: 'soft'})">Delete</button>
+<button @click="del({id: {{=item.id}}, mode: 'soft'})">Delete</button>
 <!-- → e.params -->
 ```
 
@@ -83,6 +83,16 @@ the template must exist on `updater.data`.
   attribute to `\x1f\x1ehandler(key=value&...)` — `\x1f` becomes the viewId at
   render time, object-literal args become URL-style params delivered as
   `e.params` (values are stringified).
+- **CRITICAL — dynamic argument values require `{{=expr}}` interpolation.**
+  The rewrite (`processViewEvents` → `jsObjectToUrlParams`) is a purely
+  textual transform performed on the attribute string; it does **not**
+  evaluate JavaScript. `@click="del({id: item.id})"` therefore compiles to
+  the literal `del(id=item.id)` and `e.params.id === "item.id"` at runtime —
+  a silent logic bug (no compile-time or console error). Because art-syntax
+  conversion (Phase 2) runs before event processing (Phase 3), writing
+  `@click="del({id: {{=item.id}}})"` renders the real value into the
+  attribute (e.g. `del(id=42)`). Only static literals such as
+  `{mode: 'soft'}` work without interpolation.
 - Each template attribute binds exactly **one** event name (`@click`,
   `@change`, ...). Multi-event (`"h<click,mousedown>"`) and modifier
   (`"h<click><ctrl>"`) forms are declared on the **events-map key** in the

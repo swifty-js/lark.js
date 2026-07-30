@@ -145,26 +145,38 @@ boilerplate by hand.
    `"name<click><ctrl>"`. Template side uses `@click="handler()"` — parens
    required for view-event handlers; `@event="name"` (no parens) on a
    `v-lark` element is a child→parent event binding instead.
-3. **`vdom` must match in two places**: `FrameworkConfig.vdom` and the bundler
+3. **Dynamic event-handler arguments MUST be interpolated with `{{=expr}}`** —
+   the compiler's `@event` rewrite (`processViewEvents` → `jsObjectToUrlParams`)
+   is a purely **textual** transform that never evaluates identifiers. A bare
+   expression such as `@click="pick({index: cell.index})"` compiles to the
+   literal `pick(index=cell.index)`, so at runtime `e.params.index` is the
+   string `"cell.index"` (`Number(...)` → `NaN`) and the handler silently
+   misbehaves — no compile error, no console error. Write
+   `@click="pick({index: {{=cell.index}}})"` instead: art-syntax conversion
+   (Phase 2) runs **before** event processing (Phase 3), so the value is
+   rendered into the attribute (e.g. `pick(index=112)`) and delivered via
+   `e.params` (stringified). Only static literals (`{mode: 'soft'}`) may be
+   written without interpolation.
+4. **`vdom` must match in two places**: `FrameworkConfig.vdom` and the bundler
    plugin option (`larkMvcPlugin({ vdom })`). Mismatch = broken rendering.
-4. **Hooks only inside setup** — they read a module-level `currentCtx`; calling
+5. **Hooks only inside setup** — they read a module-level `currentCtx`; calling
    them in event handlers or async callbacks throws.
-5. **Setup runs once** — no re-execution on render. Put per-render data logic
+6. **Setup runs once** — no re-execution on render. Put per-render data logic
    in the optional `assign()` (pattern: `updater.snapshot()` → `set(...)` →
    `return updater.altered()`), and call it once manually for the first render.
-6. **Pass objects to children with `{{@expr}}`** (ref token), strings with
+7. **Pass objects to children with `{{@expr}}`** (ref token), strings with
    `{{=expr}}`. Child receives them in `params`; later parent renders push
    updated props via `mountZone` automatically.
-7. **Guard async work** with `ctx.wrapAsync(fn)` (signature-guarded; stale
+8. **Guard async work** with `ctx.wrapAsync(fn)` (signature-guarded; stale
    callbacks after re-render/destroy are dropped) or check inside `useEffect`
    cleanup flags. `useEffect` runs synchronously during setup — the DOM does
    not exist yet; defer DOM access with `setTimeout(..., 0)`.
-8. **State needs digest too**: `State.set({...}); State.digest();` and views
+9. **State needs digest too**: `State.set({...}); State.digest();` and views
    only react if they declared `ctx.observeState("key1,key2")`. Use
    `State.clean("keys")(ctx)` for reference-counted cleanup.
-9. View paths are extension-less and relative to the app source root
-   (`"components/counter-store"`), used consistently in `routes`, `v-lark`,
-   `registerViewClass`, and the `require` loader.
+10. View paths are extension-less and relative to the app source root
+    (`"components/counter-store"`), used consistently in `routes`, `v-lark`,
+    `registerViewClass`, and the `require` loader.
 
 ## Reference files — read on demand
 

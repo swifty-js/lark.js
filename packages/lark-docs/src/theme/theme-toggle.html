@@ -1,0 +1,16 @@
+<button
+  class="hover:bg-accent/60 text-muted-foreground hover:text-foreground relative grid size-8 place-items-center rounded-md transition-colors duration-200"
+  @click="toggle()"
+  aria-label="Toggle dark mode"
+>
+  <span
+    class="absolute size-4.5 transition-[opacity,transform] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] [&>svg]:size-full {{if dark}}rotate-0 opacity-100{{else}}-rotate-90 scale-50 opacity-0{{/if}}"
+  >
+    {{!icons.moon}}
+  </span>
+  <span
+    class="absolute size-4.5 transition-[opacity,transform] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] [&>svg]:size-full {{if dark}}rotate-90 scale-50 opacity-0{{else}}rotate-0 opacity-100{{/if}}"
+  >
+    {{!icons.sun}}
+  </span>
+</button>

@@ -1,0 +1,10 @@
+@import "tailwindcss";
+@import "../src/client.css";
+
+/* Scan theme templates for Tailwind class names.
+   For consumer projects, use:
+   @source "../node_modules/@lark.js/docs/theme.js" */
+@source "../src/theme/*.html";
+@source "../src/theme/*.ts";
+
+@plugin "@tailwindcss/typography";

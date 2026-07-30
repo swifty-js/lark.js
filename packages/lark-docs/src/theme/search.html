@@ -1,0 +1,123 @@
+{{if isOpen}}
+<div
+  class="animate-overlay-in fixed inset-0 z-50 overflow-y-auto"
+  id="docs-search-overlay"
+  @click="onOverlayClick()"
+>
+  <div
+    class="bg-foreground/25 fixed inset-0 backdrop-blur-[2px] dark:bg-black/50"
+  ></div>
+
+  <div class="flex min-h-full items-start justify-center p-4 pt-[10vh]">
+    <div
+      id="docs-search-dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Search documentation"
+      class="animate-dialog-in border-border bg-card relative w-full max-w-xl overflow-hidden rounded-xl border shadow-[0_16px_48px_-16px_rgb(0_0_0/0.25)]"
+      @click.stop="noop()"
+      @keydown="onDialogKey()"
+    >
+      <!-- Input row -->
+      <div class="border-border flex items-center gap-2.5 border-b px-4">
+        <span
+          class="text-muted-foreground size-4 shrink-0 opacity-70 [&>svg]:size-full"
+        >
+          {{!icons.search}}
+        </span>
+        <input
+          type="text"
+          id="docs-search-input"
+          class="placeholder:text-muted-foreground/60 h-12 min-w-0 flex-1 bg-transparent text-sm outline-none"
+          placeholder="Search documentation…"
+          autocomplete="off"
+          spellcheck="false"
+          @input="onSearchInput()"
+        />
+        {{if query}}
+        <button
+          class="text-muted-foreground hover:text-foreground grid size-6 place-items-center rounded transition-colors duration-150"
+          @click="clearQuery()"
+          aria-label="Clear search"
+        >
+          <span class="size-3.5 [&>svg]:size-full">{{!icons.x}}</span>
+        </button>
+        {{/if}}
+        <kbd
+          class="text-muted-foreground border-border bg-background/80 hidden rounded border px-1.5 py-0.5 font-mono text-[10px] font-medium sm:block"
+          >esc</kbd
+        >
+      </div>
+
+      <!-- Results -->
+      <div class="max-h-[50vh] overflow-y-auto overscroll-contain p-2">
+        {{if results.length > 0}}
+        <ul class="flex flex-col gap-0.5">
+          {{forOf results as result idx}}
+          <li>
+            <a
+              data-href="{{=result.link}}"
+              data-index="{{=idx}}"
+              @click="goToResult()"
+              @mouseover="onResultHover()"
+              class="flex flex-col gap-0.5 rounded-lg px-3 py-2.5 transition-colors duration-100 {{if idx === activeIndex}}bg-accent/70{{else}}hover:bg-accent/40{{/if}}"
+            >
+              <p class="text-foreground text-[13px] leading-snug font-medium">
+                {{!result.highlightedTitle}}
+              </p>
+              {{if result.excerpt}}
+              <p
+                class="text-muted-foreground line-clamp-2 text-xs leading-relaxed"
+              >
+                {{!result.highlightedExcerpt}}
+              </p>
+              {{/if}}
+            </a>
+          </li>
+          {{/forOf}}
+        </ul>
+        {{else if hasSearched}}
+        <div
+          class="flex flex-col items-center justify-center gap-1.5 py-10 text-center"
+        >
+          <span class="text-muted-foreground/50 size-8 [&>svg]:size-full"
+            >{{!icons.search}}</span
+          >
+          <p class="text-muted-foreground text-xs">
+            No results for “<span class="text-foreground font-medium"
+              >{{=query}}</span
+            >”
+          </p>
+        </div>
+        {{else}}
+        <div
+          class="flex flex-col items-center justify-center py-10 text-center"
+        >
+          <p class="text-muted-foreground/60 text-xs">Type to search…</p>
+        </div>
+        {{/if}}
+      </div>
+
+      <!-- Footer -->
+      <div
+        class="border-border text-muted-foreground flex items-center gap-3 border-t px-4 py-2.5 font-mono text-[10px]"
+      >
+        <span class="flex items-center gap-1"
+          ><kbd class="border-border rounded border px-1 py-px">↑</kbd
+          ><kbd class="border-border rounded border px-1 py-px">↓</kbd>
+          navigate</span
+        >
+        <span class="flex items-center gap-1"
+          ><kbd class="border-border rounded border px-1 py-px">↵</kbd>
+          open</span
+        >
+        <span class="flex items-center gap-1"
+          ><kbd class="border-border rounded border px-1 py-px">esc</kbd>
+          close</span
+        >
+        <span class="ml-auto opacity-60">miniSearch</span>
+      </div>
+    </div>
+  </div>
+</div>
+{{/if}}

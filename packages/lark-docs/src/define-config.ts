@@ -1,0 +1,165 @@
+/**
+ * Type-safe configuration helper with automatic route generation.
+ *
+ * Scans the docs directory, generates sidebar, and writes a runtime module
+ * to `.lark-docs/generated/` so that `boot.ts` can import routes and site
+ * data via the `@lark-docs/generated` alias.
+ *
+ * The generated file is a plain `.js` runtime module. Type declarations for
+ * `@lark-docs/generated` are provided by `src/client.d.ts` (ambient module
+ * declaration), so IDE type-checking works without a generated `.d.ts` file.
+ *
+ * Usage:
+ * ```ts
+ * import { defineConfig } from "@lark.js/docs/vite";
+ *
+ * export default defineConfig({
+ *   docs: "docs",
+ *   baseUrl: "/docs/",
+ *   title: "My Library",
+ * });
+ * ```
+ *
+ * The optional second argument `projectRoot` controls path resolution
+ * for the `docs` directory and the generated output. Defaults to
+ * `process.cwd()`, which is the project root in most Vite/Webpack/Rspack
+ * setups.
+ */
+import type { DocsConfig, NavItem, SidebarConfig, SidebarItem } from "./types";
+import { scanDocsDir } from "./scanner";
+import { generateSidebar } from "./sidebar-generator";
+import { dirname, isAbsolute, relative, resolve } from "node:path";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import ejs from "ejs";
+
+const _filename = fileURLToPath(import.meta.url);
+const _dirname = dirname(_filename);
+
+const fileContentTemplate = readFileSync(
+  resolve(_dirname, "file-content.ejs"),
+  "utf-8",
+);
+
+export function defineConfig(
+  config: DocsConfig,
+  projectRoot: string = process.cwd(),
+): DocsConfig {
+  generateRoutesFile(config, projectRoot);
+  return config;
+}
+
+/**
+ * Prefix an internal link with the site baseUrl.
+ *
+ * Idempotent and conservative: external URLs, protocol-relative URLs,
+ * hash links, and links already carrying the baseUrl prefix are returned
+ * unchanged. Relative paths are made absolute.
+ */
+function joinBase(baseUrl: string, link: string): string {
+  if (!link) return link;
+  if (/^[a-z][a-z0-9+.-]*:/i.test(link)) return link;
+  if (link.startsWith("//") || link.startsWith("#")) return link;
+  const abs = link.startsWith("/") ? link : "/" + link;
+  const base = baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl;
+  if (base === "" || base === "/") return abs;
+  if (abs === base || abs.startsWith(base + "/")) return abs;
+  return base + abs;
+}
+
+function prefixNavItems(baseUrl: string, items: NavItem[]): NavItem[] {
+  return items.map((item) => ({
+    ...item,
+    link: joinBase(baseUrl, item.link),
+    ...(item.items ? { items: prefixNavItems(baseUrl, item.items) } : {}),
+  }));
+}
+
+function prefixSidebarItems(
+  baseUrl: string,
+  items: SidebarItem[],
+): SidebarItem[] {
+  return items.map((item) => ({
+    ...item,
+    ...(item.link ? { link: joinBase(baseUrl, item.link) } : {}),
+    ...(item.items ? { items: prefixSidebarItems(baseUrl, item.items) } : {}),
+  }));
+}
+
+/**
+ * Generate a runtime module into `{projectRoot}/.lark-docs/generated/`.
+ *
+ * Outputs `index.js` — runtime code (loaders, loadContent, routes, docsConfig,
+ * getSearchIndex) rendered from `file-content.ejs`.
+ *
+ * Written to `.lark-docs/` (a dot directory at project root, similar to
+ * `.vitepress/` or `.docusaurus/`) so it can be gitignored. Consumers import
+ * it via a Vite resolve alias `@lark-docs/generated`.
+ */
+function generateRoutesFile(config: DocsConfig, projectRoot: string): void {
+  const docsDir = isAbsolute(config.docs)
+    ? config.docs
+    : resolve(projectRoot, config.docs);
+
+  const routes = scanDocsDir(docsDir, config.baseUrl);
+
+  // Build sidebar. "auto" prefixes are matched against generated routes
+  // (which include baseUrl), manual items get baseUrl prepended to links.
+  const sidebar: Record<string, SidebarConfig> = {};
+  if (config.sidebar) {
+    for (const [prefix, sidebarConfig] of Object.entries(config.sidebar)) {
+      if (sidebarConfig === "auto") {
+        sidebar[prefix] = generateSidebar(
+          routes,
+          joinBase(config.baseUrl, prefix),
+        );
+      } else {
+        sidebar[prefix] = prefixSidebarItems(config.baseUrl, sidebarConfig);
+      }
+    }
+  }
+
+  const generatedDir = resolve(projectRoot, ".lark-docs/generated");
+
+  // Generate dynamic-import loaders: route path -> () => import(filePath).
+  // Each .md is compiled by the bundler plugin (larkDocsPlugin) into a module
+  // exporting { pageData, contentHtml }. The layout view calls loadContent()
+  // on navigation to fetch the matching page.
+  // Use relative paths so the generated file is portable across machines.
+  const loaderEntries = routes
+    .map((r) => {
+      const rel = relative(generatedDir, r.filePath).replace(/\\/g, "/");
+      const specifier = rel.startsWith(".") ? rel : "./" + rel;
+      return `${JSON.stringify(r.path)}: () => import(${JSON.stringify(specifier)}),`;
+    })
+    .join("\n");
+
+  // Canonical paths of real content routes (excluding virtual index routes).
+  // Used by getSearchIndex() to avoid duplicate search entries.
+  const searchablePaths = routes
+    .filter((r) => !r.isDirectoryIndex)
+    .map((r) => r.path);
+
+  // Compose runtime docsConfig. Nav links are prefixed with baseUrl so
+  // active-state matching works at runtime (current path includes baseUrl).
+  const runtimeConfig: Omit<DocsConfig, "docs"> = {
+    title: config.title,
+    description: config.description || "",
+    baseUrl: config.baseUrl,
+    nav: prefixNavItems(config.baseUrl, config.nav || []),
+    sidebar,
+    ...(config.search !== undefined ? { search: config.search } : {}),
+  };
+
+  // Render the runtime JS module from the EJS template.
+  const fileContent = ejs.render(fileContentTemplate, {
+    generatedAt: new Date().toISOString(),
+    loaderEntries,
+    searchablePathsJson: JSON.stringify(searchablePaths),
+    docsConfigJson: JSON.stringify(runtimeConfig, null, 2),
+  });
+
+  // Write generated module to .lark-docs/generated/
+  mkdirSync(generatedDir, { recursive: true });
+  writeFileSync(resolve(generatedDir, "index.js"), fileContent, "utf-8");
+}

@@ -1,0 +1,37 @@
+<div
+  class="{{if inline}}not-prose border-border/80 bg-muted/30 my-6 rounded-xl border p-4{{/if}}"
+>
+  <p
+    class="text-muted-foreground flex items-center gap-1.5 font-mono text-[11px] font-semibold tracking-[0.14em] uppercase"
+  >
+    <span class="size-3.5 [&>svg]:size-full">{{!icons.list}}</span>
+    On this page
+  </p>
+  {{if headings.length > 0}}
+  <div class="relative mt-3">
+    <span
+      aria-hidden="true"
+      class="bg-border/80 absolute inset-y-0 left-0 w-px"
+    ></span>
+    <span
+      aria-hidden="true"
+      class="bg-primary absolute left-0 w-px rounded-full transition-[top,height,opacity] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] {{if markerShow}}{{else}}opacity-0{{/if}}"
+      style="top: {{=markerTop}}px; height: {{=markerHeight}}px"
+    ></span>
+    <ul class="space-y-px pl-3">
+      {{forOf headings as heading}}
+      <li class="relative">
+        <a
+          href="#{{=heading.slug}}"
+          data-slug="{{=heading.slug}}"
+          @click="scrollToHeading()"
+          class="block py-1 text-xs leading-snug transition-colors duration-200 {{if heading.level >= 3}}pl-3{{/if}} {{if heading.isActive}}text-primary font-medium{{else}}text-muted-foreground hover:text-foreground{{/if}}"
+        >
+          {{=heading.text}}
+        </a>
+      </li>
+      {{/forOf}}
+    </ul>
+  </div>
+  {{/if}}
+</div>

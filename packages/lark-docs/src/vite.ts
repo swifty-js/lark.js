@@ -1,0 +1,126 @@
+/**
+ * Vite plugin for @lark.js/docs.
+ *
+ * A single plugin that handles BOTH:
+ * 1. .md file compilation (frontmatter, markdown-it, Shiki)
+ * 2. .html template compilation (lark-mvc template engine)
+ *
+ * Consumers only need this one plugin — no separate larkNextPlugin7() required.
+ *
+ * Usage:
+ * ```ts
+ * import { larkDocsPlugin } from "@lark.js/docs/vite";
+ *
+ * export default defineConfig({
+ *   // larkDocsPlugin returns an array — spread it or nest it.
+ *   plugins: [larkDocsPlugin({ config: docsConfig })],
+ * });
+ * ```
+ */
+import fs from "node:fs";
+import { isAbsolute, resolve, dirname } from "node:path";
+import type { DocsConfig } from "./types";
+import { compileMarkdown } from "./compile-markdown";
+import type { Plugin } from "vite";
+import {
+  larkNextPlugin,
+  type LarkNextVitePluginOptions,
+} from "@lark.js/mvc/vite";
+
+// Re-export build-time utilities for use in vite.config
+// (avoids importing from main entry which pulls in lucide-static SVG ?raw imports)
+export { defineConfig } from "./define-config";
+export { scanDocsDir } from "./scanner";
+export { generateSidebar } from "./sidebar-generator";
+export type { DocsConfig, SidebarConfig } from "./types";
+
+export interface LarkDocsVitePluginOptions extends LarkNextVitePluginOptions {
+  /** Full docs config. */
+  config: DocsConfig;
+}
+
+// Suffix used to mark compiled .md files in the module graph
+const MD_SUFFIX = "?lark-docs";
+
+/**
+ * Create a Vite plugin array that handles both .md and .html compilation.
+ *
+ * Returns an array of two plugins:
+ * 1. lark-docs: compiles .md files to JS modules
+ * 2. lark-template (from @lark.js/mvc): compiles .html templates
+ *
+ * `vdom` is read from this function's own options (default false) and
+ * forwarded to the lark-mvc plugin — `DocsConfig` has no `vdom` field.
+ */
+export function larkDocsPlugin(options: LarkDocsVitePluginOptions): Plugin[] {
+  const { config, debug = false, vdom = false } = options;
+
+  const docsPlugin: Plugin = {
+    name: "lark-docs",
+    enforce: "pre",
+
+    resolveId(source: string, importer?: string) {
+      // Strip query params (Vite 8 may add ?import, ?url, etc.)
+      const cleanSource = source.split("?")[0];
+      if (!cleanSource.endsWith(".md")) return null;
+      // Don't intercept markdown from node_modules — third-party packages
+      // may import their own README/changelog and those should not be
+      // compiled through the lark-docs pipeline.
+      if (cleanSource.includes("node_modules")) return null;
+      // Resolve to an absolute path so Vite can locate the file regardless
+      // of the importer location. Returning a relative id here caused Vite
+      // to normalize it against an unexpected root, producing
+      // "/docs/index.md" (ENOENT).
+      const abs = isAbsolute(cleanSource)
+        ? cleanSource
+        : importer
+          ? resolve(dirname(importer), cleanSource)
+          : resolve(process.cwd(), cleanSource);
+      // Strip Vite's /@fs prefix so we return a real filesystem path.
+      // Vite will re-add /@fs if the file is outside root. Without this,
+      // returning "/@fs/.../docs/index.md?lark-docs" confused downstream
+      // id normalization.
+      const real = abs.startsWith("/@fs") ? abs.slice("/@fs".length) : abs;
+      if (debug) {
+        console.log(
+          `[@lark.js/docs] resolveId: ${source} -> ${real}${MD_SUFFIX} (importer=${importer ?? "none"})`,
+        );
+      }
+      return real + MD_SUFFIX;
+    },
+
+    async load(id: string) {
+      // Vite may add extra query params (e.g. ?import&lark-docs),
+      // so check if lark-docs is in the query, not just endsWith.
+      const qIdx = id.indexOf("?");
+      const query = qIdx >= 0 ? id.slice(qIdx + 1) : "";
+      if (!query.split("&").includes("lark-docs")) return null;
+
+      // Extract file path: strip query params
+      let filePath = qIdx >= 0 ? id.slice(0, qIdx) : id;
+
+      // Strip Vite's @fs prefix (used for files outside the root)
+      if (filePath.startsWith("/@fs")) {
+        filePath = filePath.slice("/@fs".length); // "/@fs/path" → "/path"
+      }
+
+      if (debug) {
+        console.log(`[@lark.js/docs] load: id=${id} filePath=${filePath}`);
+      }
+
+      const source = fs.readFileSync(filePath, "utf-8");
+
+      return await compileMarkdown(source, {
+        config,
+        filePath,
+        debug,
+      });
+    },
+  };
+
+  // The lark-mvc template plugin handles .html template compilation.
+  // We integrate it internally so consumers don't need to configure it separately.
+  const plugin = larkNextPlugin({ debug, vdom });
+
+  return [docsPlugin, plugin as Plugin];
+}

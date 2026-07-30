@@ -1,0 +1,26 @@
+/**
+ * Custom markdown-it renderer entry point.
+ *
+ * The rendered HTML is embedded verbatim into the compiled .md module as a
+ * `contentHtml` string. External links open in a new tab (see parser.ts),
+ * and code blocks are highlighted at build time.
+ */
+import type MarkdownIt from "markdown-it";
+import type { Token } from "markdown-it/index.js";
+
+/**
+ * Render markdown-it tokens to an HTML string.
+ *
+ * The output is static HTML that the compiler emits as the module's
+ * `contentHtml` export. No template variables are needed for the markdown
+ * body itself because all content comes from the .md file at build time.
+ *
+ * Dynamic data (page title, TOC headings, sidebar state) flows separately
+ * through the layout view's updater and the global State.
+ */
+export function renderToLarkTemplate(tokens: Token[], md: MarkdownIt): string {
+  // Use the default renderer (which has our plugin overrides applied).
+  // The plugins handle link interception, heading anchors, containers,
+  // and code blocks through their render rule overrides.
+  return md.renderer.render(tokens, md.options, {});
+}

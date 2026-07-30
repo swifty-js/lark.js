@@ -1,0 +1,97 @@
+/**
+ * Webpack loader and plugin for @lark.js/docs.
+ *
+ * The loader transforms .md files into JS modules exporting `pageData` and
+ * `contentHtml`. The plugin auto-registers the loader rule for .md files.
+ * Note that .html templates are NOT handled here — configure the
+ * @lark.js/mvc webpack integration separately for those.
+ *
+ * Usage:
+ * ```ts
+ * import { LarkDocsPlugin } from "@lark.js/docs/webpack";
+ *
+ * export default {
+ *   plugins: [new LarkDocsPlugin({ config: docsConfig })],
+ * };
+ * ```
+ */
+import type { DocsConfig } from "./types";
+import { compileMarkdown } from "./compile-markdown";
+
+// Re-export build-time utilities for use in webpack.config
+// (avoids importing from main entry which pulls in lucide-static SVG ?raw imports)
+export { scanDocsDir } from "./scanner";
+export { generateSidebar } from "./sidebar-generator";
+export type { DocsConfig, SidebarConfig } from "./types";
+
+export interface LarkDocsWebpackOptions {
+  /** Full docs config. */
+  config: DocsConfig;
+  /** Enable debug mode. */
+  debug?: boolean;
+  /** Test regex. Default: /\.md$/ */
+  test?: RegExp;
+  /** Exclude regex. Default: /node_modules/ */
+  exclude?: RegExp;
+}
+
+interface WebpackLoaderContext {
+  callback: (err: Error | null, result?: string) => void;
+  getOptions: () => LarkDocsWebpackOptions;
+  resourcePath: string;
+}
+
+/**
+ * Webpack loader function.
+ * Uses this.callback() for async delivery (standard webpack 5 pattern).
+ * compileMarkdown is async (Shiki init), so we chain .then/.catch.
+ */
+export function larkDocsLoader(
+  this: WebpackLoaderContext,
+  source: string,
+): void {
+  const callback = this.callback;
+  const options = this.getOptions();
+
+  compileMarkdown(source, {
+    config: options.config,
+    filePath: this.resourcePath,
+    debug: options.debug,
+  })
+    .then((result) => callback(null, result))
+    .catch((err: unknown) =>
+      callback(err instanceof Error ? err : new Error(String(err))),
+    );
+}
+
+/**
+ * Webpack plugin that auto-registers the .md loader rule.
+ */
+export class LarkDocsPlugin {
+  private options: LarkDocsWebpackOptions;
+
+  constructor(options: LarkDocsWebpackOptions) {
+    this.options = options;
+  }
+
+  apply(compiler: {
+    options: { module: { rules: Array<Record<string, unknown>> } };
+  }): void {
+    const test = this.options.test || /\.md$/;
+    const exclude = this.options.exclude || /node_modules/;
+
+    // __filename is injected by the CJS_SHIMS banner (see vite.config.ts)
+    // for chunks that reference __filename/__dirname. Webpack resolves the
+    // loader via this absolute path to the compiled .cjs output.
+    compiler.options.module.rules.push({
+      test,
+      exclude,
+      use: [
+        {
+          loader: __filename,
+          options: this.options,
+        },
+      ],
+    });
+  }
+}

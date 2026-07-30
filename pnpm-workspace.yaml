@@ -1,0 +1,9 @@
+
+packages:
+  - packages/*
+
+allowBuilds:
+  '@vscode/vsce-sign': true
+  esbuild: true
+  keytar: true
+  playwright-chromium: true

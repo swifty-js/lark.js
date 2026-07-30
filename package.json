@@ -1,0 +1,36 @@
+{
+  "devDependencies": {
+    "concurrently": "^10.0.4",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.2.0",
+    "prettier": "^3.9.6"
+  },
+  "scripts": {
+    "prepare": "husky && pnpm build",
+    "format:mvc": "pnpm --filter @lark.js/mvc format",
+    "test:mvc": "pnpm --filter @lark-mvc test",
+    "build:mvc": "pnpm --filter @lark.js/mvc build",
+    "format:docs": "pnpm --filter @lark.js/docs format",
+    "test:docs": "pnpm --filter @lark.js/docs test",
+    "build:docs": "pnpm --filter @lark.js/docs build",
+    "format:assets": "prettier -w ./.github ./README.md",
+    "format": "concurrently \"pnpm format:mvc\" \"pnpm format:docs\" \"pnpm format:assets\"",
+    "test": "concurrently \"pnpm test:mvc\" \"pnpm test:docs\"",
+    "build": "pnpm build:mvc && pnpm build:docs",
+    "git:commit": "git add -A && git commit -m \"feat: Introduce new features\"",
+    "git:commit:n": "git add -A && git commit -m \"feat: Introduce new features\" --no-verify",
+    "git:push": "pnpm git:commit && git push origin main",
+    "git:push:n": "pnpm git:commit:n && git push origin main"
+  },
+  "lint-staged": {
+    "packages/**/*.{js,jsx,ejs,ts,tsx,html,css,scss,md,mdx,json,jsonc,jsonl,yml,yaml,toml}": [
+      "pnpm test",
+      "pnpm format"
+    ]
+  },
+  "pnpm": {
+    "overrides": {
+      "rollup": "npm:@rollup/wasm-node@^4.62.3"
+    }
+  }
+}

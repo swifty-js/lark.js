@@ -1,0 +1,19 @@
+{
+  "name": "@lark.js/sentry",
+  "version": "0.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "packageManager": "pnpm@10.33.1",
+  "devDependencies": {
+    "@lark.js/mvc": "workspace:^",
+    "@swifty.js/sentry": "^0.0.2"
+  },
+  "peerDependencies": {
+    "@swifty.js/sentry": "^0.0.2"
+  }
+}

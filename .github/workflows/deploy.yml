@@ -1,4 +1,4 @@
-name: Deploy Gomoku to GitHub Pages
+name: Deploy https://tianchenghang.github.io/lark.js
 
 on:
   push:

@@ -218,3 +218,4 @@ dist-docs
 .larky/
 **/.larky/
 packages/lark-docs/docs
+sentry

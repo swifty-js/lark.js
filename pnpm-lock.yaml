@@ -156,7 +156,7 @@ importers:
         specifier: ^2.1.6
         version: 2.1.7
       '@types/node':
-        specifier: 24.13.3
+        specifier: ^24.13.3
         version: 24.13.3
       '@vitest/coverage-v8':
         specifier: 4.1.6
@@ -189,8 +189,8 @@ importers:
         specifier: workspace:^
         version: link:../lark-mvc
       '@swifty.js/sentry':
-        specifier: ^0.0.2
-        version: 0.0.2(vite@8.1.5(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.49.0)(yaml@2.9.0))
+        specifier: file:../../../swifty-sentry/sentry
+        version: file:../swifty-sentry/sentry(vite@8.1.5(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.49.0)(yaml@2.9.0))
 
 packages:
 
@@ -1435,8 +1435,8 @@ packages:
   '@standard-schema/spec@1.1.0':
     resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
 
-  '@swifty.js/sentry@0.0.2':
-    resolution: {integrity: sha512-r01ADlPrsWnvM1sp+kJ7HWNnIYRJrMMO0jZgU33G0n68t5plbg85Qbt2tdopIkZwiELwGkkKHEcGWX4C6sdX8w==}
+  '@swifty.js/sentry@file:../swifty-sentry/sentry':
+    resolution: {directory: ../swifty-sentry/sentry, type: directory}
     peerDependencies:
       preact: ^10.0.0
       react: ^19.0.0
@@ -4816,11 +4816,12 @@ snapshots:
 
   '@standard-schema/spec@1.1.0': {}
 
-  '@swifty.js/sentry@0.0.2(vite@8.1.5(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.49.0)(yaml@2.9.0))':
+  '@swifty.js/sentry@file:../swifty-sentry/sentry(vite@8.1.5(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.49.0)(yaml@2.9.0))':
     dependencies:
       '@fingerprintjs/fingerprintjs': 5.2.0
       '@rrweb/record': 2.1.0
       pako: 2.2.0
+      source-map: 0.8.0
       ua-parser-js: 2.0.10
       web-vitals: 5.3.0
       zod: 4.4.3

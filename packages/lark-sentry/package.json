@@ -3,6 +3,7 @@
   "version": "0.0.0",
   "description": "",
   "main": "index.js",
+  "type": "module",
   "scripts": {
   },
   "keywords": [],
@@ -11,7 +12,7 @@
   "packageManager": "pnpm@10.33.1",
   "devDependencies": {
     "@lark.js/mvc": "workspace:^",
-    "@swifty.js/sentry": "^0.0.2"
+    "@swifty.js/sentry": "file:../../../swifty-sentry/sentry"
   },
   "peerDependencies": {
     "@swifty.js/sentry": "^0.0.2"

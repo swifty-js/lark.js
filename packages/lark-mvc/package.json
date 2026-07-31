@@ -1,13 +1,19 @@
 {
   "name": "@lark.js/mvc",
-  "version": "0.0.22",
+  "version": "0.0.23",
   "description": "@lark.js/mvc - TypeScript framework",
   "keywords": [
     "framework",
-    "lark"
+    "lark.js",
+    "mvc",
+    "swifty.js"
   ],
   "license": "MIT",
   "author": "https://github.com/hangtiancheng",
+  "repository": {
+    "url": "https://github.com/tianchenghang/lark.js",
+    "directory": "packages/lark-mvc"
+  },
   "files": [
     "dist",
     "README.md"
@@ -124,11 +130,6 @@
   },
   "peerDependencies": {
     "vite": "^8.0.14"
-  },
-  "lint-staged": {
-    "*.{json,jsonc,js,cjs,mjs,jsx,ts,cts,mts,tsx,html,vue,css,scss,md,mdx}": [
-      "pnpm format"
-    ]
   },
   "packageManager": "pnpm@10.33.0"
 }

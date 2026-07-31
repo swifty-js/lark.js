@@ -78,7 +78,7 @@ export function larkMvcPlugin(options: LarkMvcVitePluginOptions = {}): Plugin {
       root = config.root;
     },
 
-    resolveId(source, importer) {
+    resolveId(source, importer, options) {
       // Skip Vite's internal HTML proxy modules. When an entry is an HTML file,
       // Vite's html plugin emits imports like
       // `./iframe.html?html-proxy&inline-css&index=0.css` for its inline
@@ -107,6 +107,11 @@ export function larkMvcPlugin(options: LarkMvcVitePluginOptions = {}): Plugin {
             resolved = rootResolved;
           }
         }
+        // During Vite's dependency scan (options.scan), do NOT append the
+        // suffix. The scan runs a separate Rolldown instance whose HTML load
+        // hook filters by /\.html$/ — appending ?lark-template makes the ID
+        // unmatchable, causing UNLOADABLE_DEPENDENCY on the first cold start.
+        if ((options as { scan?: boolean })?.scan) return resolved;
         return resolved + LARK_TEMPLATE_SUFFIX;
       }
       return undefined;

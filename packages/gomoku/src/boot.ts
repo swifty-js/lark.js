@@ -25,10 +25,22 @@ import {
   registerViewClass,
   type FrameworkConfig,
 } from "@lark.js/mvc";
+import { initLarkSentry, instrumentView } from "@lark.js/sentry";
+import { enablePlugin } from "@swifty.js/sentry";
+import {
+  PerformancePlugin,
+  ScreenRecordPlugin,
+  ExposurePlugin,
+} from "@swifty.js/sentry/plugins";
 import gameView from "./views/game";
 import "./main.css";
 
-registerViewClass("views/game", gameView);
+// Views registered synchronously bypass the `require` loader, so they must
+// be instrumented explicitly.
+registerViewClass(
+  "views/game",
+  instrumentView(gameView, { viewPath: "views/game" }),
+);
 
 const config: FrameworkConfig = {
   rootId: "app",
@@ -40,3 +52,23 @@ const config: FrameworkConfig = {
 };
 
 Framework.boot(config);
+
+// Must run after Framework.boot so the instrumentation wraps the final
+// framework configuration. In dev the dsn is served by the sentry Vite
+// mock plugin (see vite.config.ts), which writes reports to logs/.
+initLarkSentry({
+  dsn: "/api/log",
+  projectId: "gomoku",
+  debug: import.meta.env.DEV,
+  beforePushEventList(eventList) {
+    if (!import.meta.env.DEV) {
+      console.log("@swifty.js/sentry App:", eventList);
+      return false;
+    }
+    return eventList;
+  },
+});
+
+enablePlugin(new PerformancePlugin());
+enablePlugin(new ScreenRecordPlugin());
+enablePlugin(new ExposurePlugin());

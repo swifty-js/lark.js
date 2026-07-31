@@ -22,6 +22,7 @@
 
 import { defineConfig } from "vite";
 import { larkMvcPlugin } from "@lark.js/mvc/vite";
+import { sentryPlugin } from "@swifty.js/sentry/vite";
 import tailwindcss from "@tailwindcss/vite";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -29,7 +30,13 @@ import { fileURLToPath } from "node:url";
 export default defineConfig(({ command }) => ({
   base: command === "build" ? "/lark.js/" : "/",
   root: resolve(dirname(fileURLToPath(import.meta.url)), "src"),
-  plugins: [larkMvcPlugin({ vdom: false, debug: true }), tailwindcss()],
+  plugins: [
+    larkMvcPlugin({ vdom: false, debug: true }),
+    tailwindcss(),
+    // Dev-only mock report endpoint: intercepts POST /api/log (the dsn used
+    // in boot.ts) and writes reported events to logs/ instead of a server.
+    sentryPlugin({ dsn: "/api/log" }),
+  ],
   resolve: {
     alias: {
       "@": resolve(dirname(fileURLToPath(import.meta.url)), "src"),

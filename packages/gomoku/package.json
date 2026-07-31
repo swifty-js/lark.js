@@ -11,6 +11,8 @@
   },
   "dependencies": {
     "@lark.js/mvc": "workspace:^",
+    "@lark.js/sentry": "workspace:^",
+    "@swifty.js/sentry": "^0.0.3",
     "lucide-static": "^1.27.0"
   },
   "devDependencies": {

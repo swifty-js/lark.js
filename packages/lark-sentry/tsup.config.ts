@@ -20,26 +20,14 @@
  * SOFTWARE.
  */
 
-/**
- * `@lark.js/sentry` — `@swifty.js/sentry` framework-level integration for
- * the Lark Mvc frontend framework (`@lark.js/mvc`).
- *
- * Lark Mvc swallows most user-code exceptions internally (delegated DOM
- * event handlers, emitter listeners, dispatcher-triggered renders), so the
- * SDK's global `window.onerror` capture never sees them. This package wraps
- * the framework's public seams to report those errors as `OtherFrameworks`
- * events with structured lifecycle context, without altering framework
- * behavior.
- */
+import { defineConfig } from "tsup";
 
-export { instrumentView } from "./instrument-view.js";
-export { installLarkInstrumentation, initLarkSentry } from "./install.js";
-export type { LarkSentryOptions } from "./install.js";
-export { reportLarkError, setLarkErrorSink } from "./report.js";
-export type {
-  InstrumentViewOptions,
-  LarkErrorContext,
-  LarkErrorPhase,
-  LarkErrorSink,
-  LarkIntegrationOptions,
-} from "./types.js";
+export default defineConfig({
+  entry: ["src/index.ts"],
+  clean: true,
+  dts: true,
+  format: ["esm", "cjs"],
+  minify: false,
+  sourcemap: false,
+  tsconfig: "./tsconfig.build.json",
+});

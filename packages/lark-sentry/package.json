@@ -1,20 +1,57 @@
 {
   "name": "@lark.js/sentry",
-  "version": "0.0.0",
-  "description": "",
-  "main": "index.js",
-  "type": "module",
-  "scripts": {
-  },
-  "keywords": [],
-  "author": "",
+  "version": "0.0.1",
+  "description": "@swifty.js/sentry framework-level integration for lark framework (@lark.js/mvc)",
+  "keywords": [
+    "error-tracking",
+    "lark.js",
+    "monitoring",
+    "mvc",
+    "sentry",
+    "swifty.js"
+  ],
   "license": "MIT",
-  "packageManager": "pnpm@10.33.1",
+  "author": "https://github.com/hangtiancheng",
+  "repository": {
+    "url": "https://github.com/tianchenghang/lark.js",
+    "directory": "packages/lark-sentry"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "type": "module",
+  "main": "dist/index.cjs",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    }
+  },
+  "scripts": {
+    "prepublish": "pnpm build",
+    "build": "tsup",
+    "format": "oxfmt --write ./",
+    "typecheck": "tsc -p tsconfig.build.json --noEmit"
+  },
   "devDependencies": {
     "@lark.js/mvc": "workspace:^",
-    "@swifty.js/sentry": "file:../../../swifty-sentry/sentry"
+    "@swifty.js/sentry": "file:../../../swifty-sentry/sentry",
+    "oxfmt": "^0.61.0",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3"
   },
   "peerDependencies": {
-    "@swifty.js/sentry": "^0.0.2"
-  }
+    "@lark.js/mvc": ">=0.0.23",
+    "@swifty.js/sentry": ">=0.0.3"
+  },
+  "packageManager": "pnpm@10.33.1"
 }

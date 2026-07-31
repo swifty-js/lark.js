@@ -378,6 +378,9 @@ export function createDocsLayoutView(
       ctx.updater.set({ loading: true, drawerOpen: false });
       ctx.updater.digest();
       syncDrawerInert(false);
+      // The cheap path is skipped on full navigation, so the scroll lock
+      // applied while the drawer was open must be released here too.
+      syncDrawerSideEffects(false);
 
       const sig = ctx.signature.value;
       let content: LoadedContent | null = null;

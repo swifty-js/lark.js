@@ -2,11 +2,15 @@
   "folders": [
     {
       "name": "lark.js",
-      "path": "./"
+      "path": "."
     },
     {
       "name": "swifty.js",
       "path": "../swifty.js"
+    },
+    {
+      "name": "homepage",
+      "path": "../h"
     }
   ]
 }

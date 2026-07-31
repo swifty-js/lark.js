@@ -60,8 +60,22 @@ const EXTERNAL_IDS = [
   ...Object.keys(pkg.peerDependencies ?? {}),
 ];
 
+/**
+ * Vite-special import queries, exactly as declared in vite/client.d.ts:
+ * `*?raw`, `*?url`, `*?inline`, `*?no-inline`, `*?url&inline`,
+ * `*?url&no-inline`, `*?worker`, `*?worker&inline`, `*?worker&url`,
+ * `*?sharedworker`, `*?sharedworker&inline`, `*?sharedworker&url`, and
+ * `*.wasm?init` (init is only valid on .wasm files). Modules carrying these
+ * only exist inside a Vite build — Node cannot load them, so they must be
+ * bundled (inlined) rather than externalized, or dist entries crash with
+ * ERR_UNKNOWN_FILE_EXTENSION when Node evaluates them during config load.
+ */
+const VITE_QUERY_RE =
+  /(?:\.wasm\?init|\?(?:raw|inline|no-inline|url(?:&(?:inline|no-inline))?|(?:shared)?worker(?:&(?:inline|url))?))$/;
+
 function isExternal(id: string): boolean {
   if (id.startsWith("node:")) return true;
+  if (VITE_QUERY_RE.test(id)) return false;
   return EXTERNAL_IDS.some((e) => id === e || id.startsWith(e + "/"));
 }
 
@@ -328,10 +342,17 @@ function libConfig(): UserConfig {
   // including docs-guard.ts and the compiled virtual template modules) are
   // forced into a single stable chunk so Tailwind can scan exactly one
   // file: the @source "./theme-chunk.js" baked into dist/client.css.
-  const themeChunk = (id: string): string | undefined =>
-    id.includes("/src/theme/") || id.includes("virtual:lark-docs/")
-      ? "theme-chunk"
-      : undefined;
+  const themeChunk = (id: string): string | undefined => {
+    if (id.includes("/src/theme/") || id.includes("virtual:lark-docs/")) {
+      return "theme-chunk";
+    }
+    // Shared helpers (escape-html, guard) must never be hoisted into
+    // theme-chunk: Node-side entries (vite, compiler) import them via
+    // compile-markdown, and pulling in theme-chunk would evaluate
+    // @lark.js/mvc, which touches `document` at module top level.
+    if (id.includes("/src/utils/")) return "utils";
+    return undefined;
+  };
 
   const sharedOutput = {
     exports: "named" as const,

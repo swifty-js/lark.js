@@ -16,18 +16,13 @@
     "format:sentry": "pnpm --filter @lark.js/sentry format",
     "test:sentry": "pnpm --filter @lark.js/sentry test",
     "build:sentry": "pnpm --filter @lark.js/sentry build",
-    "format:gomoku": "pnpm --filter gomoku format",
-    "build:gomoku": "pnpm --filter gomoku build",
-    "format:assets": "prettier -w ./.github ./README.md",
-    "format": "concurrently \"pnpm format:mvc\" \"pnpm format:docs\" \"pnpm format:sentry\" \"pnpm format:gomoku\" \"pnpm format:assets\"",
+    "format": "concurrently \"pnpm format:mvc\" \"pnpm format:docs\" \"pnpm format:sentry\"",
     "test": "concurrently \"pnpm test:mvc\" \"pnpm test:docs\" \"pnpm test:sentry\"",
     "build": "pnpm build:mvc && concurrently \"pnpm build:docs\" \"pnpm build:sentry\"",
     "git:commit": "git add -A && git commit -m \"feat: Introduce new features\"",
     "git:commit:n": "git add -A && git commit -m \"feat: Introduce new features\" --no-verify",
-    "git:commit:ci": "git add -A && git commit -m \"ci: Deploy gomoku\"",
     "git:push": "pnpm git:commit && git push origin main",
-    "git:push:n": "pnpm git:commit:n && git push origin main",
-    "git:push:ci": "pnpm git:commit:ci && git push origin main"
+    "git:push:n": "pnpm git:commit:n && git push origin main"
   },
   "lint-staged": {
     "packages/**/*.{js,jsx,ejs,ts,tsx,html,css,scss,md,mdx,json,jsonc,jsonl,yml,yaml,toml}": [

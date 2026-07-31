@@ -69,15 +69,8 @@ export function createTocView(
     ctx.observeState("currentPageHeadings");
 
     let activeSlug = "";
-    let observer: IntersectionObserver | null = null;
-
-    // Disconnect the scroll-spy observer when the view is destroyed.
-    useResource("tocScrollSpy", {
-      destroy: () => {
-        observer?.disconnect();
-        observer = null;
-      },
-    });
+    let raf = 0;
+    let ro: ResizeObserver | null = null;
 
     const readHeadings = (): TocHeading[] => {
       const r = TocHeadingsSchema.safeParse(State.get("currentPageHeadings"));
@@ -122,44 +115,76 @@ export function createTocView(
       }
     };
 
-    const observeHeadings = (): void => {
-      if (typeof IntersectionObserver === "undefined") return;
-      if (observer) observer.disconnect();
+    /**
+     * Scroll-spy: the last heading whose top sits at or above the 96px
+     * line (navbar + breathing room) is active; at the very bottom of
+     * the page the last heading wins, since trailing sections may be
+     * too short to ever reach that line. Recomputes on scroll/resize
+     * (rAF-throttled) instead of IntersectionObserver: IO only fires
+     * when a heading crosses its rootMargin band edges, which rarely
+     * coincides with the 96px line — the highlight went stale between
+     * crossings.
+     */
+    const compute = (): void => {
+      raf = 0;
       const headings = readHeadings();
       if (headings.length === 0) return;
-
-      observer = new IntersectionObserver(
-        () => {
-          let current = "";
-          for (const h of headings) {
-            const el = document.getElementById(h.slug);
-            if (!el) continue;
-            if (el.getBoundingClientRect().top <= 96) {
-              current = h.slug;
-            }
+      const doc = document.documentElement;
+      const atBottom =
+        window.innerHeight + window.scrollY >= doc.scrollHeight - 1;
+      let current = "";
+      if (atBottom) {
+        for (let i = headings.length - 1; i >= 0; i--) {
+          const h = headings[i];
+          if (h && document.getElementById(h.slug)) {
+            current = h.slug;
+            break;
           }
-          if (current === activeSlug) return;
-          activeSlug = current;
-          ctx.updater.set({ headings: buildHeadings() });
-          ctx.updater.digest();
-          setTimeout(syncMarker, 0);
-        },
-        { rootMargin: "0px 0px -70% 0px", threshold: 0 },
-      );
-
-      setTimeout(() => {
-        if (!observer) return;
+        }
+      } else {
         for (const h of headings) {
           const el = document.getElementById(h.slug);
-          if (el) observer.observe(el);
+          // +1 tolerates subpixel rounding after smooth scrollIntoView.
+          if (el && el.getBoundingClientRect().top <= 97) {
+            current = h.slug;
+          }
         }
-      }, 0);
+      }
+      if (current === activeSlug) return;
+      activeSlug = current;
+      ctx.updater.set({ headings: buildHeadings() });
+      ctx.updater.digest();
+      setTimeout(syncMarker, 0);
     };
+
+    const schedule = (): void => {
+      if (!raf) raf = requestAnimationFrame(compute);
+    };
+
+    window.addEventListener("scroll", schedule, { passive: true });
+    window.addEventListener("resize", schedule);
+    // Late layout shifts (images, fonts) move the headings without a
+    // scroll event — watch the document size too.
+    if (typeof ResizeObserver !== "undefined") {
+      ro = new ResizeObserver(schedule);
+      ro.observe(document.documentElement);
+    }
+
+    useResource("tocScrollSpy", {
+      destroy: () => {
+        if (raf) cancelAnimationFrame(raf);
+        raf = 0;
+        window.removeEventListener("scroll", schedule);
+        window.removeEventListener("resize", schedule);
+        ro?.disconnect();
+        ro = null;
+      },
+    });
 
     ctx.renderMethod = () => {
       assign();
       ctx.updater.digest();
-      observeHeadings();
+      schedule();
       setTimeout(syncMarker, 0);
     };
 

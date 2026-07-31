@@ -39,17 +39,26 @@ const uninstall = initLarkSentry({
 
 ## What Gets Captured
 
-| Seam                         | Phase         | Notes                                                                                                |
-| ---------------------------- | ------------- | ---------------------------------------------------------------------------------------------------- |
-| View setup functions         | `"setup"`     | Errors thrown while running `defineView` setups.                                                     |
-| Compiled template rendering  | `"template"`  | Errors thrown during `updater.digest()`.                                                             |
-| Delegated DOM event handlers | `"event"`     | Includes the event map key (e.g. `"increment<click>"`). Lark Mvc swallows these silently by default. |
-| View `assign()` functions    | `"assign"`    | Per-render data assignment errors.                                                                   |
-| `FrameworkConfig.error`      | `"framework"` | Framework-reported errors such as lazy view-loading failures.                                        |
+| Seam                          | Phase         | Notes                                                                                                |
+| ----------------------------- | ------------- | ---------------------------------------------------------------------------------------------------- |
+| View setup functions          | `"setup"`     | Errors thrown while running `defineView` setups.                                                     |
+| Compiled template rendering   | `"template"`  | Errors thrown during `updater.digest()`. Disable per view with `wrapTemplate: false` (see below).    |
+| Delegated DOM event handlers  | `"event"`     | Includes the event map key (e.g. `"increment<click>"`). Lark Mvc swallows these silently by default. |
+| Emitter listeners             | `"listener"`  | Listeners registered via `ctx.on` / `useEvent`; includes the fired event name (e.g. `"destroy"`).    |
+| `useEffect` cleanup functions | `"cleanup"`   | Errors thrown during unmount. Lark Mvc swallows these silently by default.                           |
+| View `assign()` functions     | `"assign"`    | Per-render data assignment errors.                                                                   |
+| `FrameworkConfig.error`       | `"framework"` | Framework-reported errors such as lazy view-loading failures.                                        |
 
-Every report carries a `LarkErrorContext` (`phase`, `viewId`, `viewPath`, `eventKey`) in the event's `extra.context` field, alongside `framework: "lark-mvc"`.
+Every report carries a `LarkErrorContext` (`phase`, `viewId`, `viewPath`, `eventKey`, `eventName`) in the event's `extra.context` field, alongside `framework: "lark-mvc"`.
 
 Browser-level capture (runtime errors, unhandled rejections, XHR/fetch, PV and dwell time, white screen, performance plugins, declarative `s-swifty-*` click tracking in `.html` templates) is provided by the `@swifty.js/sentry` core and works with Lark Mvc out of the box.
+
+## Limitations
+
+- **Template HMR (dev)** — Lark Mvc's hot-swap-by-template matches the mounted template **by reference** against the template module export. Wrapping the template breaks that identity, so `.html` edits do not hot-update instrumented views. Pass `wrapTemplate: false` (on `initLarkSentry` / `installLarkInstrumentation` / `instrumentView`) during development to keep template HMR working; template render errors are then not captured.
+- **Dynamic `import()` fallback** — when no `FrameworkConfig.require` loader is configured, the framework loads views through an internal dynamic `import()` that cannot be wrapped from the outside. Such views are **not** instrumented automatically (loading failures are still captured with phase `"framework"`); wrap them manually with `instrumentView`.
+- **`registerViewClass`** — synchronously registered views bypass the `require` loader; wrap them manually with `instrumentView`.
+- **Not covered** — listeners registered directly on `ctx.emitter` (bypassing `ctx.on`), and lifecycle `on<Event>` methods placed on framework objects.
 
 ## API
 
@@ -59,7 +68,7 @@ One-call integration: `init(options)` from `@swifty.js/sentry` plus `installLark
 
 ### `installLarkInstrumentation(options?: LarkIntegrationOptions): () => void`
 
-Installs the framework instrumentation only (use when the app initializes the SDK itself). Wraps `FrameworkConfig.error` and `FrameworkConfig.require` so every lazily loaded view setup is instrumented automatically. Idempotent: a second call returns the existing uninstaller. The returned function restores the previous configuration.
+Installs the framework instrumentation only (use when the app initializes the SDK itself). Wraps `FrameworkConfig.error` and `FrameworkConfig.require` so every lazily loaded view setup is instrumented automatically. Idempotent: a second call returns the existing uninstaller (updating the error sink when a new `onError` is provided). The returned function restores the previous configuration.
 
 ### `instrumentView<T>(setup: ViewSetup<T>, options?: InstrumentViewOptions): ViewSetup<T>`
 
@@ -83,24 +92,28 @@ Manually report an error through the active (or given) sink. Sink failures are s
 ## Types
 
 ```ts
-type LarkErrorPhase = "setup" | "template" | "event" | "assign" | "framework";
+type LarkErrorPhase =
+  "setup" | "template" | "event" | "listener" | "cleanup" | "assign" | "framework";
 
 interface LarkErrorContext {
   readonly phase: LarkErrorPhase;
   readonly viewId?: string;
   readonly viewPath?: string;
   readonly eventKey?: string;
+  readonly eventName?: string;
 }
 
 type LarkErrorSink = (error: unknown, context: LarkErrorContext) => void;
 
 interface LarkIntegrationOptions {
   readonly onError?: LarkErrorSink;
+  readonly wrapTemplate?: boolean; // default true; see Limitations (template HMR)
 }
 
 interface InstrumentViewOptions {
   readonly viewPath?: string;
   readonly onError?: LarkErrorSink;
+  readonly wrapTemplate?: boolean; // default true; see Limitations (template HMR)
 }
 ```
 

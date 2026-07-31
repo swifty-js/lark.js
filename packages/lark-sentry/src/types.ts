@@ -35,11 +35,22 @@
  * - `"template"`— thrown while rendering a compiled template during digest.
  * - `"event"`   — thrown by a delegated DOM event handler from the view
  *                 `events` map (Lark Mvc silently swallows these by default).
+ * - `"listener"`— thrown by an emitter listener registered via `ctx.on` or
+ *                 `useEvent` (Lark Mvc silently swallows these by default).
+ * - `"cleanup"` — thrown by a `useEffect` cleanup function during unmount
+ *                 (Lark Mvc silently swallows these by default).
  * - `"assign"`  — thrown by the optional `assign()` function of a view.
  * - `"framework"`— routed through `FrameworkConfig.error` (for example a
  *                 lazy view-loading failure).
  */
-export type LarkErrorPhase = "setup" | "template" | "event" | "assign" | "framework";
+export type LarkErrorPhase =
+  | "setup"
+  | "template"
+  | "event"
+  | "listener"
+  | "cleanup"
+  | "assign"
+  | "framework";
 
 /**
  * Structured context attached to every reported Lark Mvc error.
@@ -53,6 +64,8 @@ export interface LarkErrorContext {
   readonly viewPath?: string;
   /** Event map key (e.g. `"increment<click>"`) for `"event"` phase errors. */
   readonly eventKey?: string;
+  /** Emitter event name (e.g. `"destroy"`) for `"listener"` phase errors. */
+  readonly eventName?: string;
 }
 
 /**
@@ -72,6 +85,16 @@ export interface InstrumentViewOptions {
   readonly viewPath?: string;
   /** Overrides the active error sink for this view only. */
   readonly onError?: LarkErrorSink;
+  /**
+   * Wrap the compiled template to capture render errors (default `true`).
+   *
+   * Template hot-swap HMR matches the mounted template **by reference**
+   * against the template module export; the wrapper breaks that identity, so
+   * `.html` edits no longer hot-update instrumented views. Set to `false`
+   * during development to keep template HMR working (render errors are then
+   * not captured for this view).
+   */
+  readonly wrapTemplate?: boolean;
 }
 
 /**
@@ -81,4 +104,9 @@ export interface InstrumentViewOptions {
 export interface LarkIntegrationOptions {
   /** Replaces the default error sink for all captured framework errors. */
   readonly onError?: LarkErrorSink;
+  /**
+   * Wrap compiled templates of lazily loaded views (default `true`).
+   * See {@link InstrumentViewOptions.wrapTemplate} for the HMR caveat.
+   */
+  readonly wrapTemplate?: boolean;
 }

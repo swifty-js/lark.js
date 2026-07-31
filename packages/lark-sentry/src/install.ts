@@ -62,16 +62,24 @@ let activeUninstall: (() => void) | undefined;
  *    path that was requested.
  *
  * Views registered synchronously through `registerViewClass` bypass the
- * `require` loader; wrap those with {@link instrumentView} manually.
+ * `require` loader; wrap those with {@link instrumentView} manually. The same
+ * applies when no `require` loader is configured at all: the framework then
+ * falls back to an internal dynamic `import()` that cannot be wrapped from
+ * the outside, so lazily loaded views are not instrumented automatically
+ * (loading failures are still captured via `FrameworkConfig.error`).
  *
- * Calling this function while a previous installation is active is a no-op
- * that returns the existing uninstaller.
+ * Calling this function while a previous installation is active updates the
+ * error sink (when `options.onError` is provided) and returns the existing
+ * uninstaller without re-patching the configuration.
  *
- * @param options - Optional custom error sink.
+ * @param options - Optional custom error sink and template wrapping toggle.
  * @returns An uninstall function restoring the previous configuration.
  */
 export function installLarkInstrumentation(options: LarkIntegrationOptions = {}): () => void {
-  if (activeUninstall) return activeUninstall;
+  if (activeUninstall) {
+    if (options.onError) setLarkErrorSink(options.onError);
+    return activeUninstall;
+  }
 
   // Only replace the sink when a custom one is provided, so a sink
   // previously configured via `setLarkErrorSink` survives installation.
@@ -102,7 +110,9 @@ export function installLarkInstrumentation(options: LarkIntegrationOptions = {})
       if (!loading) return loading;
       return loading.then((modules) =>
         modules.map((module, index) =>
-          isViewSetup(module) ? instrumentView(module, { viewPath: names[index] }) : module,
+          isViewSetup(module)
+            ? instrumentView(module, { viewPath: names[index], wrapTemplate: options.wrapTemplate })
+            : module,
         ),
       );
     };
@@ -159,7 +169,8 @@ export type LarkSentryOptions = InitOptions & LarkIntegrationOptions;
  *   `destroy()` from `@swifty.js/sentry`.
  */
 export function initLarkSentry(options: LarkSentryOptions): () => void {
-  const { onError, ...initOptions } = options;
+  const { onError, wrapTemplate, ...initOptions } = options;
   init(initOptions);
-  return installLarkInstrumentation(onError ? { onError } : {});
+  const integrationOptions: LarkIntegrationOptions = { onError, wrapTemplate };
+  return installLarkInstrumentation(integrationOptions);
 }

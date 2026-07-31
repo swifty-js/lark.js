@@ -1,6 +1,6 @@
 {
   "name": "@lark.js/sentry",
-  "version": "0.0.11",
+  "version": "0.0.12",
   "description": "@swifty.js/sentry framework-level integration for lark framework (@lark.js/mvc)",
   "keywords": [
     "error-tracking",
@@ -40,14 +40,19 @@
     "prepublish": "pnpm build",
     "build": "tsup",
     "format": "oxfmt --write ./",
-    "typecheck": "tsc -p tsconfig.build.json --noEmit"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -p tsconfig.build.json --noEmit",
+    "prepublishOnly": "pnpm build"
   },
   "devDependencies": {
     "@lark.js/mvc": "workspace:^",
     "@swifty.js/sentry": "^0.0.3",
+    "jsdom": "^29.1.1",
     "oxfmt": "^0.61.0",
     "tsup": "^8.5.1",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.10"
   },
   "peerDependencies": {
     "@lark.js/mvc": ">=0.0.23",

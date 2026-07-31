@@ -180,14 +180,16 @@ export function createSearchView(
       assign,
       events: {
         "onOverlayClick<click>": (e: Event & { eventTarget?: EventTarget }) => {
+          // The click lands on the backdrop or the centering wrapper, never
+          // on the overlay element itself — close on anything outside the
+          // dialog box.
           if (
             e.eventTarget instanceof HTMLElement &&
-            e.eventTarget.id === "docs-search-overlay"
+            !e.eventTarget.closest("#docs-search-dialog")
           ) {
             State.set({ searchOpen: false }).digest();
           }
         },
-        "noop<click>": () => {},
         "onDialogKey<keydown>": (e: KeyboardEvent) => {
           if (e.isComposing) return;
           const len = ((ctx.updater.get("results") as unknown[]) ?? []).length;

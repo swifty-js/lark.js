@@ -1,0 +1,12 @@
+{
+  "folders": [
+    {
+      "name": "lark.js",
+      "path": "./"
+    },
+    {
+      "name": "swifty.js",
+      "path": "../swifty.js"
+    }
+  ]
+}

@@ -6,6 +6,7 @@
     "devframes",
     "ehandler",
     "esbuild",
+    "FOUC",
     "frontends",
     "frontmatter",
     "gomoku",

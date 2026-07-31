@@ -116,10 +116,10 @@ function copyAssetsPlugin(): Rollup.Plugin {
         if (!existsSync(src)) continue;
         if (file === "client.css") {
           // In src/ the @source lines point at the theme sources; in the
-          // published package the utility classes live in the bundled
-          // theme.js chunk.
+          // published package all utility classes live in the stable
+          // theme-chunk.js produced by manualChunks.
           const css = readFileSync(src, "utf-8")
-            .replace('@source "./theme/*.html";', '@source "./theme.js";')
+            .replace('@source "./theme/*.html";', '@source "./theme-chunk.js";')
             .replace(/@source "\.\/theme\/\*\.ts";\n?/, "");
           writeFileSync(dest, css, "utf-8");
         } else {
@@ -324,6 +324,20 @@ function themeDualMode(): PluginOption {
 }
 
 function libConfig(): UserConfig {
+  // All theme modules (the only code containing Tailwind utility classes,
+  // including docs-guard.ts and the compiled virtual template modules) are
+  // forced into a single stable chunk so Tailwind can scan exactly one
+  // file: the @source "./theme-chunk.js" baked into dist/client.css.
+  const themeChunk = (id: string): string | undefined =>
+    id.includes("/src/theme/") || id.includes("virtual:lark-docs/")
+      ? "theme-chunk"
+      : undefined;
+
+  const sharedOutput = {
+    exports: "named" as const,
+    manualChunks: themeChunk,
+  };
+
   return {
     build: {
       lib: {
@@ -343,6 +357,26 @@ function libConfig(): UserConfig {
       },
       rollupOptions: {
         external: isExternal,
+        output: [
+          {
+            ...sharedOutput,
+            format: "es",
+            entryFileNames: "[name].js",
+            chunkFileNames: (chunk) =>
+              chunk.name === "theme-chunk"
+                ? "theme-chunk.js"
+                : "chunks/[name]-[hash].js",
+          },
+          {
+            ...sharedOutput,
+            format: "cjs",
+            entryFileNames: "[name].cjs",
+            chunkFileNames: (chunk) =>
+              chunk.name === "theme-chunk"
+                ? "theme-chunk.cjs"
+                : "chunks/[name]-[hash].cjs",
+          },
+        ],
       },
       outDir: "dist",
       emptyOutDir: true,

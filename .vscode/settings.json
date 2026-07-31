@@ -1,6 +1,7 @@
 {
   "cSpell.words": [
     "agnostically",
+    "dedup",
     "devframes",
     "ehandler",
     "esbuild",
@@ -13,6 +14,7 @@
     "keytar",
     "lark",
     "minisearch",
+    "mousedown",
     "navigations",
     "negamax",
     "Nunito",
@@ -37,6 +39,7 @@
     "vite",
     "vitepress",
     "vnode",
-    "Zobrist"
+    "Zobrist",
+    "zustand"
   ]
 }

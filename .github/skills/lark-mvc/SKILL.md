@@ -56,14 +56,14 @@ re-renders until you call `.digest()` (or a hook/store does it for you).
 ```
 Framework.boot(config)          // creates root Frame, binds Router + State
         │
-Router/State "changed" ──► dispatcher walks Frame tree ──► re-render observers
+Router/State "changed" ──> dispatcher walks Frame tree ──> re-render observers
         │
-frame.mountView(path) ──► setup runs ONCE ──► { template, events, assign? }
+frame.mountView(path) ──> setup runs ONCE ──> { template, events, assign? }
         │
-ctx.updater.set(data).digest() ──► template(data) ──► DOM diff ──► endUpdate
+ctx.updater.set(data).digest() ──> template(data) ──> DOM diff ──> endUpdate
         │                                                       │
         │                                    mountZone scans [v-lark] elements
-        │                                    ──► mounts child views with props
+        │                                    ──> mounts child views with props
 events: delegated once to document.body (capture phase, ref-counted)
 ```
 

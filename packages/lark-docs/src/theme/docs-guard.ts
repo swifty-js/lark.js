@@ -40,30 +40,18 @@
  * touch `document`.
  */
 import { z } from "zod";
+import lockSvg from "lucide-static/icons/lock.svg?raw";
+import xSvg from "lucide-static/icons/x.svg?raw";
 import { decryptContent, type EncryptedPayload } from "../utils/guard";
 
 const SESSION_KEY = "docs-guard-pwd";
-
-// Inline lucide SVGs (lock / x) so this module has no icon dependency.
-const LOCK_SVG =
-  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" ' +
-  'stroke="currentColor" stroke-width="1.5" stroke-linecap="round" ' +
-  'stroke-linejoin="round" aria-hidden="true">' +
-  '<rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect>' +
-  '<path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>';
-
-const X_SVG =
-  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" ' +
-  'stroke="currentColor" stroke-width="2" stroke-linecap="round" ' +
-  'stroke-linejoin="round" aria-hidden="true">' +
-  '<path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>';
 
 // Rendered in place of the page body when the visitor cancels the prompt.
 // Visual parity with the Preact version (centered lock + Access Denied).
 const DENIED_HTML =
   '<div class="flex min-h-[45vh] flex-col items-center justify-center gap-4 text-center">' +
-  '<div class="text-foreground opacity-35 [&>svg]:size-13 [&>svg]:stroke-[1.2]">' +
-  LOCK_SVG +
+  '<div aria-hidden="true" class="text-foreground opacity-35 [&>svg]:size-13 [&>svg]:stroke-[1.2]">' +
+  lockSvg +
   "</div>" +
   "<div>" +
   '<p class="mb-1.5 text-lg font-bold">Access Denied</p>' +
@@ -172,11 +160,11 @@ function openPasswordDialog(
   card.setAttribute("aria-label", "Password Required");
   card.innerHTML =
     '<form class="flex flex-col">' +
-    '<button type="button" aria-label="Close" data-guard-close class="text-muted-foreground hover:bg-muted absolute top-3 right-3 flex size-7 items-center justify-center rounded-md opacity-60 transition-all duration-150 hover:opacity-100"><span class="size-3.75 [&>svg]:size-full">' +
-    X_SVG +
+    '<button type="button" aria-label="Close" data-guard-close class="text-muted-foreground hover:bg-muted absolute top-3 right-3 flex size-7 items-center justify-center rounded-md opacity-60 transition-all duration-150 hover:opacity-100"><span aria-hidden="true" class="size-3.75 [&>svg]:size-full">' +
+    xSvg +
     "</span></button>" +
-    '<div class="border-border bg-accent text-primary mb-5 flex size-12 items-center justify-center rounded-lg border"><span class="size-6 [&>svg]:size-full">' +
-    LOCK_SVG +
+    '<div class="border-border bg-accent text-primary mb-5 flex size-12 items-center justify-center rounded-lg border"><span aria-hidden="true" class="size-6 [&>svg]:size-full [&>svg]:stroke-[1.5]">' +
+    lockSvg +
     "</span></div>" +
     '<h2 class="text-[1.05rem] font-bold tracking-tight">Password Required</h2>' +
     '<p class="text-muted-foreground mt-1 mb-5 text-[0.82rem]">This page is protected. Enter the password to view its content.</p>' +

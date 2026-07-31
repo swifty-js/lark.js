@@ -59,6 +59,8 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Build lark-mvc
         run: pnpm build:mvc
+      - name: Build lark-sentry
+        run: pnpm build:sentry
       - name: Build gomoku
         run: pnpm build:gomoku
       - name: Upload artifact

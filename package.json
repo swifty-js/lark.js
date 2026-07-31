@@ -6,7 +6,7 @@
     "prettier": "^3.9.6"
   },
   "scripts": {
-    "prepare": "husky && pnpm build",
+    "prepare": "husky",
     "format:mvc": "pnpm --filter @lark.js/mvc format",
     "test:mvc": "pnpm --filter @lark-mvc test",
     "build:mvc": "pnpm --filter @lark.js/mvc build",

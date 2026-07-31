@@ -1,6 +1,6 @@
 {
   "name": "@lark.js/docs",
-  "version": "0.0.9",
+  "version": "0.0.10",
   "description": "Documentation site generator for @lark.js/mvc",
   "keywords": [
     "@lark.js",
@@ -133,7 +133,7 @@
     "publish:dev": "npm publish --access public --registry=https://registry.npmjs.org/ --tag dev"
   },
   "dependencies": {
-    "@lark.js/mvc": "workspace:^",
+    "@lark.js/mvc": "^0.0.23",
     "ejs": "^3.1.10",
     "js-yaml": "^5.2.2",
     "lucide-static": "^1.27.0",

@@ -25,6 +25,7 @@ import type { VDomTemplate, ViewSetup, ViewTemplate } from "@lark.js/mvc";
 import { z } from "zod";
 import { icons as defaultIcons, clockIcons } from "./icons";
 import { findDataHref } from "../utils/dom";
+import { OnContentUpdateSchema } from "./hot-update";
 
 interface NavLink {
   link: string;
@@ -244,6 +245,50 @@ export function createDocsLayoutView(
     let lastPath = "";
     let drawerSideEffectsActive = false;
     let drawerReturnFocus: HTMLElement | null = null;
+
+    // Dev-only md hot reload. The generated module is the HMR accept
+    // boundary and notifies subscribers with the changed route paths; we
+    // re-fetch through the State-injected loadContent (guard-wrapped in the
+    // consumer boot, so protected pages decrypt with the cached password).
+    // Patch the updater directly instead of re-entering renderMethod: the
+    // cheap path (path === lastPath) never touches contentHtml, and a forced
+    // full render would replay the skeleton and the scroll-to-top logic.
+    function applyHotContent(path: string, content: LoadedContent): void {
+      if (path !== lastPath) return;
+      const cfg = parseDocsConfig(State.get("docsConfig")) ?? FALLBACK_CONFIG;
+      State.set({
+        currentPageHeadings: content.pageData.headings,
+        currentPageTitle: content.pageData.title,
+      }).digest();
+      document.title = `${content.pageData.title} · ${cfg.title}`;
+      ctx.updater.set({ contentHtml: content.contentHtml });
+      ctx.updater.digest();
+      // Same post-render enhancements as a full navigation, minus the
+      // page-in animation replay and the scroll-to-top/hash logic.
+      setTimeout(() => {
+        if (path !== lastPath) return;
+        mountCopyButtons(defaultIcons.copy, defaultIcons.check);
+      }, 0);
+    }
+
+    useEffect(() => {
+      const sub = OnContentUpdateSchema.safeParse(State.get("onContentUpdate"));
+      if (!sub.success) return;
+      return sub.data((routes) => {
+        if (!routes.includes(lastPath)) return;
+        const path = lastPath;
+        const loadContent = parseLoadContent(State.get("loadContent"));
+        if (!loadContent) return;
+        loadContent(path)
+          .then((result) => {
+            const parsed = LoadedContentSchema.safeParse(result);
+            if (parsed.success) applyHotContent(path, parsed.data);
+          })
+          .catch(() => {
+            // Keep the current content on a failed hot fetch.
+          });
+      });
+    });
 
     // Navbar scroll-aware styling — direct classList toggle (cheap path,
     // bypasses the updater to avoid full template re-eval on every scroll).

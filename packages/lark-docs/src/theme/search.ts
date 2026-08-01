@@ -33,6 +33,7 @@ import type { VDomTemplate, ViewSetup, ViewTemplate } from "@lark.js/mvc";
 import { z } from "zod";
 import { icons } from "./icons";
 import { escapeHtml } from "../utils/escape-html";
+import { OnContentUpdateSchema } from "./hot-update";
 
 const SearchEntrySchema = z.object({
   title: z.string(),
@@ -109,6 +110,21 @@ export function createSearchView(
     });
 
     let pendingBuild: Promise<MiniSearch | null> | null = null;
+    // Bumped when md content hot-updates; an in-flight build from an older
+    // generation must not install its (stale) MiniSearch instance.
+    let indexGeneration = 0;
+
+    // Dev-only md hot reload: drop the cached MiniSearch so the next search
+    // rebuilds from the refreshed getSearchIndex().
+    useEffect(() => {
+      const sub = OnContentUpdateSchema.safeParse(State.get("onContentUpdate"));
+      if (!sub.success) return;
+      return sub.data(() => {
+        indexGeneration++;
+        mini = null;
+        pendingBuild = null;
+      });
+    });
 
     function ensureMiniSearch(): Promise<MiniSearch | null> {
       if (mini) return Promise.resolve(mini);
@@ -120,6 +136,7 @@ export function createSearchView(
     }
 
     async function buildMiniSearch(): Promise<MiniSearch | null> {
+      const gen = indexGeneration;
       const fnParse = GetSearchIndexSchema.safeParse(
         State.get("getSearchIndex"),
       );
@@ -130,6 +147,7 @@ export function createSearchView(
         return null;
       }
       const rawIndex = await fnParse.data();
+      if (gen !== indexGeneration) return null;
       const indexParse = z.array(SearchEntrySchema).safeParse(rawIndex);
       if (!indexParse.success) {
         console.warn(

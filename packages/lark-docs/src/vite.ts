@@ -84,6 +84,40 @@ export function larkDocsPlugin(options: LarkDocsVitePluginOptions): Plugin[] {
     name: "lark-docs",
     enforce: "pre",
 
+    configureServer(server) {
+      // The docs dir often lives outside the Vite root (e.g. root is app/
+      // while docs/ sits at the package root) — without this the watcher
+      // never reports .md edits at all.
+      const docsDir = isAbsolute(config.docs)
+        ? config.docs
+        : resolve(process.cwd(), config.docs);
+      server.watcher.add(docsDir);
+
+      // Routes/sidebar/search index are generated once at config-load time
+      // (defineConfig side effect), so added/removed pages need a restart.
+      // A full reload at least surfaces the change instead of silence.
+      const onFileListChange = (file: string) => {
+        if (!file.endsWith(".md") || !file.startsWith(docsDir)) return;
+        console.log(
+          `[@lark.js/docs] ${file} added/removed — restart the dev server to regenerate routes and sidebar.`,
+        );
+        server.ws.send({ type: "full-reload" });
+      };
+      server.watcher.on("add", onFileListChange);
+      server.watcher.on("unlink", onFileListChange);
+    },
+
+    handleHotUpdate({ file, modules }) {
+      if (!file.endsWith(".md")) return;
+      // The generated @lark-docs/generated module lists every compiled
+      // ?lark-docs module as an HMR accept dep, so the update terminates
+      // there without a page reload.
+      if (modules.length > 0) return modules;
+      // Not in the module graph (md outside the docs pipeline) — a full
+      // reload would be pointless.
+      return [];
+    },
+
     resolveId(source: string, importer?: string) {
       // Strip query params (Vite 8 may add ?import, ?url, etc.)
       const cleanSource = source.split("?")[0];

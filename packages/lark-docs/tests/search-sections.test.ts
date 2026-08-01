@@ -77,6 +77,22 @@ describe("splitContentSections", () => {
     expect(sections[0].text).toBe(`x <tag> "q" 's'`);
   });
 
+  it("does not double-decode escaped entity literals", () => {
+    // Authored literal "&lt;" compiles to "&amp;lt;" — it must decode to
+    // the text "&lt;", not all the way to "<".
+    const html = h(2, "d", "D") + "<p>use &amp;lt; and &amp;#39; verbatim</p>";
+    const sections = splitContentSections(html);
+    expect(sections[0].text).toBe("use &lt; and &#39; verbatim");
+  });
+
+  it("decodes decimal and hex numeric entities", () => {
+    const html =
+      h(2, "n", "N&#252;m") + "<p>caf&#233; &#x4E2D;&#x6587; &#x1F600;</p>";
+    const sections = splitContentSections(html);
+    expect(sections[0].title).toBe("Nüm");
+    expect(sections[0].text).toBe("café 中文 😀");
+  });
+
   it("keeps code text but not mermaid attribute payloads", () => {
     const html =
       h(2, "c", "Code") +

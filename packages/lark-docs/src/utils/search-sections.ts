@@ -45,14 +45,21 @@ export interface ContentSection {
 const HEADING_REGEXP = /<h([1-3])\b[^>]*\bid="([^"]*)"[^>]*>([\s\S]*?)<\/h\1>/g;
 const HEADER_ANCHOR_REGEXP = /<a\b[^>]*\bclass="header-anchor"[\s\S]*?<\/a>/g;
 
+function decodeNumericEntity(_m: string, dec?: string, hex?: string): string {
+  const code = dec ? parseInt(dec, 10) : parseInt(hex ?? "", 16);
+  return Number.isFinite(code) ? String.fromCodePoint(code) : "";
+}
+
 function htmlToText(html: string): string {
+  // &amp; must decode LAST: authored literal "&lt;" arrives here as
+  // "&amp;lt;" and decoding &amp; first would double-decode it to "<".
   return html
     .replace(/<[^>]+>/g, " ")
-    .replace(/&amp;/g, "&")
+    .replace(/&#(\d+);|&#x([0-9a-fA-F]+);/g, decodeNumericEntity)
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, "&")
     .replace(/\s+/g, " ")
     .trim();
 }

@@ -38,7 +38,7 @@ import {
   buildSectionDocs,
   type SectionSearchDoc,
 } from "../utils/search-sections";
-import { cjkTokenize, makeSnippet } from "../utils/search-text";
+import { cjkTokenize, makeSnippet, capPerPage } from "../utils/search-text";
 
 const SearchEntrySchema = z.object({
   title: z.string(),
@@ -314,16 +314,10 @@ export function createSearchView(
               const all = m.search(query) as (SearchResult &
                 Partial<SectionSearchDoc>)[];
               // Per-page cap, then the global cap.
-              const perPage = new Map<string, number>();
-              raw = [];
-              for (const r of all) {
-                const page = (r.link || "").split("#")[0];
-                const n = perPage.get(page) ?? 0;
-                if (n >= MAX_RESULTS_PER_PAGE) continue;
-                perPage.set(page, n + 1);
-                raw.push(r);
-                if (raw.length >= MAX_RESULTS) break;
-              }
+              raw = capPerPage(
+                all.map((r) => ({ ...r, link: r.link || "" })),
+                MAX_RESULTS_PER_PAGE,
+              ).slice(0, MAX_RESULTS);
             } catch {
               raw = [];
             }

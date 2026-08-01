@@ -72,3 +72,23 @@ export function makeSnippet(text: string, query: string, span = 90): string {
     (end < text.length ? "…" : "")
   );
 }
+
+/**
+ * Limit hits per page (link without the #hash) while preserving ranking
+ * order — one section-rich page must not flood the result list.
+ */
+export function capPerPage<T extends { link: string }>(
+  hits: T[],
+  max: number,
+): T[] {
+  const perPage = new Map<string, number>();
+  const out: T[] = [];
+  for (const hit of hits) {
+    const page = hit.link.split("#")[0];
+    const n = perPage.get(page) ?? 0;
+    if (n >= max) continue;
+    perPage.set(page, n + 1);
+    out.push(hit);
+  }
+  return out;
+}

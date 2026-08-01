@@ -21,7 +21,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { cjkTokenize, makeSnippet } from "../src/utils/search-text";
+import { cjkTokenize, makeSnippet, capPerPage } from "../src/utils/search-text";
 
 describe("cjkTokenize", () => {
   it("splits latin text into word tokens", () => {

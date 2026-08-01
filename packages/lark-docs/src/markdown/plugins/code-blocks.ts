@@ -37,6 +37,14 @@ export function codeBlockPlugin(md: MarkdownIt): void {
     const lang = token.info.trim().split(/\s+/)[0] || "";
     const code = token.content;
 
+    // Mermaid diagrams are rendered client-side (theme-aware SVG), so emit
+    // a placeholder instead of a highlighted code block. Intercept before
+    // the highlighter — Shiki has a mermaid grammar and would otherwise
+    // render it as code. encodeURIComponent output is attribute-safe.
+    if (lang === "mermaid") {
+      return `<div class="mermaid-block" data-mermaid="${escapeHtml(encodeURIComponent(code))}"></div>\n`;
+    }
+
     let inner: string;
     if (mdOptions.highlight) {
       // Shiki produces a fully styled <pre class="shiki"> with either

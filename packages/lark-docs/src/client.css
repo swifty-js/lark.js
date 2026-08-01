@@ -444,6 +444,22 @@
 }
 
 /* ------------------------------------------------------------------ */
+/* Mermaid diagrams (client-rendered from .mermaid-block placeholders) */
+/* ------------------------------------------------------------------ */
+
+.mermaid-block {
+  @apply my-[1.4rem] flex min-h-8 scrollbar-thin justify-center overflow-x-auto;
+}
+
+.mermaid-block svg {
+  @apply h-auto max-w-full;
+}
+
+.mermaid-error {
+  @apply border-destructive/40 text-destructive w-full overflow-x-auto rounded-[10px] border p-4 font-mono text-xs leading-[1.6] whitespace-pre-wrap;
+}
+
+/* ------------------------------------------------------------------ */
 /* Callouts (::: tip / warning / danger / details)                     */
 /* ------------------------------------------------------------------ */
 

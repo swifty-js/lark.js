@@ -490,6 +490,10 @@ function docsConfig(): UserConfig {
         },
         workbox: {
           globPatterns: ["**/*.{js,css,html,svg,png,woff2}"],
+          // Pure-vendor lazy chunks (mermaid and its diagram sub-bundles,
+          // ~3.4 MB) live under assets/lazy/ (see chunkFileNames below) and
+          // are fetched on demand + runtime-cached instead of precached.
+          globIgnores: ["**/assets/lazy/**"],
           // The Storybook and Slidev sites are copied into dist/storybook and
           // dist/slidev AFTER this build (see main.sh), so they are never
           // precached — but the generated service worker has scope "/" and a
@@ -499,6 +503,20 @@ function docsConfig(): UserConfig {
           // slash) still gets hijacked.
           navigateFallbackDenylist: [/^\/(storybook|slidev)(\/|$)/],
           runtimeCaching: [
+            {
+              // Hash-named vendor chunks excluded from the precache
+              // (assets/lazy/) — immutable, so CacheFirst is safe.
+              urlPattern: /\/assets\/lazy\/.*\.js$/,
+              handler: "CacheFirst",
+              options: {
+                cacheName: "lazy-vendor-cache",
+                expiration: {
+                  maxEntries: 60,
+                  maxAgeSeconds: 60 * 60 * 24 * 30,
+                },
+                cacheableResponse: { statuses: [0, 200] },
+              },
+            },
             {
               urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
               handler: "CacheFirst",
@@ -537,6 +555,25 @@ function docsConfig(): UserConfig {
     build: {
       outDir: resolve(PKG_DIR, "dist-docs"),
       emptyOutDir: true,
+      rollupOptions: {
+        output: {
+          // Pure-vendor chunks (every module from node_modules or a bundler
+          // virtual module) are only reachable through dynamic imports —
+          // today that is mermaid and its diagram sub-bundles. Route them
+          // to assets/lazy/ so the PWA precache can exclude them; content
+          // and app chunks keep the default location and stay precached.
+          chunkFileNames(chunk) {
+            const vendorOnly =
+              chunk.moduleIds.length > 0 &&
+              chunk.moduleIds.every(
+                (id) => id.includes("node_modules") || id.startsWith("\0"),
+              );
+            return vendorOnly
+              ? "assets/lazy/[name]-[hash].js"
+              : "assets/[name]-[hash].js";
+          },
+        },
+      },
     },
   };
 }

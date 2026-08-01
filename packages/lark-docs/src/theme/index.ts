@@ -123,3 +123,4 @@ export { createTocView } from "./toc";
 export { createSearchView } from "./search";
 export { createThemeToggleView } from "./theme-toggle";
 export { icons } from "./icons";
+export { renderMermaidBlocks } from "./mermaid";

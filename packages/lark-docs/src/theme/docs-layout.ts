@@ -26,6 +26,7 @@ import { z } from "zod";
 import { icons as defaultIcons, clockIcons } from "./icons";
 import { findDataHref } from "../utils/dom";
 import { OnContentUpdateSchema } from "./hot-update";
+import { renderMermaidBlocks } from "./mermaid";
 
 interface NavLink {
   link: string;
@@ -268,6 +269,7 @@ export function createDocsLayoutView(
       setTimeout(() => {
         if (path !== lastPath) return;
         mountCopyButtons(defaultIcons.copy, defaultIcons.check);
+        renderMermaidBlocks();
       }, 0);
     }
 
@@ -288,6 +290,17 @@ export function createDocsLayoutView(
             // Keep the current content on a failed hot fetch.
           });
       });
+    });
+
+    // Re-render mermaid diagrams when the site theme flips (.dark on <html>
+    // is the only theme signal — same observation pattern as theme-toggle).
+    useEffect(() => {
+      const observer = new MutationObserver(() => renderMermaidBlocks());
+      observer.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ["class"],
+      });
+      return () => observer.disconnect();
     });
 
     // Navbar scroll-aware styling — direct classList toggle (cheap path,
@@ -411,6 +424,14 @@ export function createDocsLayoutView(
         ctx.updater.digest();
         syncDrawerInert(drawerOpen);
         syncDrawerSideEffects(drawerOpen);
+        // The digest re-renders the whole template, and the DOM diff
+        // reverts runtime-injected enhancements (copy buttons, mermaid
+        // SVGs) wherever the article subtree diverges — replay them.
+        setTimeout(() => {
+          if (path !== lastPath) return;
+          mountCopyButtons(defaultIcons.copy, defaultIcons.check);
+          renderMermaidBlocks();
+        }, 0);
         return;
       }
 
@@ -500,6 +521,7 @@ export function createDocsLayoutView(
         if (ctx.signature.value !== sig) return;
         replayPageIn();
         mountCopyButtons(defaultIcons.copy, defaultIcons.check);
+        renderMermaidBlocks();
 
         // Scroll: hash → element, otherwise → top.
         const hash = decodeURIComponent(window.location.hash.slice(1));

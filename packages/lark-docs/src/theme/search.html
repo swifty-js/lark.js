@@ -83,6 +83,13 @@
               @mouseover="onResultHover()"
               class="flex flex-col gap-0.5 rounded-lg px-3 py-2.5 transition-colors duration-100 {{if idx === activeIndex}}bg-accent/70{{else}}hover:bg-accent/40{{/if}}"
             >
+              {{if result.pageTitle}}
+              <p
+                class="text-muted-foreground/70 text-[11px] leading-none font-medium"
+              >
+                {{=result.pageTitle}}
+              </p>
+              {{/if}}
               <p class="text-foreground text-[13px] leading-snug font-medium">
                 {{!result.highlightedTitle}}
               </p>
@@ -115,7 +122,7 @@
           class="flex flex-col items-center justify-center py-10 text-center"
         >
           <p class="text-muted-foreground/60 text-xs">
-            {{if indexSize > 0}}Search across {{=indexSize}} pages{{else}}Type
+            {{if indexSize > 0}}Search across {{=indexSize}} sections{{else}}Type
             to search…{{/if}}
           </p>
         </div>

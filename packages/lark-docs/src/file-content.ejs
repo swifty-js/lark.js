@@ -59,6 +59,7 @@ export async function getSearchIndex() {
       link,
       headings: (pd.headings || []).map((h) => h.text || ""),
       excerpt: pd.excerpt || pd.description || "",
+      contentHtml: mod.contentHtml || "",
     };
   });
   return _searchIndex;

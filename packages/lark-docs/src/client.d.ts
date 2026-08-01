@@ -111,6 +111,8 @@ declare module "@lark-docs/generated" {
     link: string;
     headings: string[];
     excerpt: string;
+    /** Compiled page HTML — split into per-section search entries at runtime. */
+    contentHtml: string;
   }
 
   export function getSearchIndex(): Promise<SearchEntry[]>;

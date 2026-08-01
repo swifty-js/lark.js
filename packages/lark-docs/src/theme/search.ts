@@ -34,14 +34,23 @@ import { z } from "zod";
 import { icons } from "./icons";
 import { escapeHtml } from "../utils/escape-html";
 import { OnContentUpdateSchema } from "./hot-update";
+import {
+  buildSectionDocs,
+  type SectionSearchDoc,
+} from "../utils/search-sections";
+import { cjkTokenize, makeSnippet } from "../utils/search-text";
 
 const SearchEntrySchema = z.object({
   title: z.string(),
   link: z.string(),
   headings: z.array(z.string()),
   excerpt: z.string(),
+  contentHtml: z.string(),
 });
 type RuntimeSearchEntry = z.infer<typeof SearchEntrySchema>;
+
+/** Cap per page so one title-heavy page cannot flood the result list. */
+const MAX_RESULTS_PER_PAGE = 3;
 
 type GetSearchIndexFn = () => Promise<RuntimeSearchEntry[]>;
 const GetSearchIndexSchema = z.custom<GetSearchIndexFn>(
@@ -158,19 +167,59 @@ export function createSearchView(
       const index = indexParse.data;
       if (index.length === 0) return null;
 
-      const docs = index.map((entry, i) => ({ ...entry, id: i }));
+      // Section-level granularity: split each page's compiled HTML at
+      // h1–h3 boundaries so results deep-link to /path#slug, with a
+      // hierarchical breadcrumb from the section's h1/h2 ancestry.
+      const docs = buildSectionDocs(index);
+      if (docs.length === 0) return null;
+
       mini = new MiniSearch({
-        fields: ["title", "headings", "excerpt"],
-        storeFields: ["title", "link", "headings", "excerpt"],
+        fields: ["title", "pageTitle", "text"],
+        storeFields: ["title", "pageTitle", "crumb", "link", "text"],
+        tokenize: cjkTokenize,
         searchOptions: {
           prefix: true,
           fuzzy: 0.2,
-          boost: { title: 2, headings: 1.5 },
+          boost: { title: 2, pageTitle: 1.5 },
         },
       });
       mini.addAll(docs);
-      ctx.updater.set({ indexSize: index.length }).digest();
+      ctx.updater.set({ indexSize: docs.length }).digest();
       return mini;
+    }
+
+    // Router.to strips "#hash" (and no-ops on the current path), so deep
+    // links handle the hash themselves — same pattern as the layout's
+    // in-content anchor clicks and the Toc.
+    function navigateToResult(link: string): void {
+      const hashIdx = link.indexOf("#");
+      const path = (hashIdx >= 0 ? link.slice(0, hashIdx) : link) || "/";
+      const slug = hashIdx >= 0 ? link.slice(hashIdx + 1) : "";
+      const currentPath =
+        (Router.parse().path || "/").replace(/\/+$/, "") || "/";
+
+      State.set({ searchOpen: false }).digest();
+
+      if (path === currentPath) {
+        if (!slug) {
+          window.scrollTo({ top: 0, behavior: "smooth" });
+          return;
+        }
+        if (window.location.hash !== `#${slug}`) {
+          history.pushState(null, "", `#${slug}`);
+        }
+        document
+          .getElementById(slug)
+          ?.scrollIntoView({ behavior: "smooth", block: "start" });
+        return;
+      }
+
+      Router.to(path);
+      if (slug) {
+        // The layout's post-render enhancement reads window.location.hash
+        // fresh and scrolls to it — the hash just has to be on the URL.
+        history.replaceState(null, "", `${path}#${slug}`);
+      }
     }
 
     function navigateToActive(): void {
@@ -179,8 +228,7 @@ export function createSearchView(
       const idx = (ctx.updater.get("activeIndex") as number) ?? 0;
       const target = results?.[idx];
       if (target?.link) {
-        Router.to(target.link);
-        State.set({ searchOpen: false }).digest();
+        navigateToResult(target.link);
       }
     }
 
@@ -260,23 +308,41 @@ export function createSearchView(
           const m = await ensureMiniSearch();
           if (mySeq !== seq) return; // stale — a newer query superseded us
 
-          let raw: (SearchResult & Partial<RuntimeSearchEntry>)[] = [];
+          let raw: (SearchResult & Partial<SectionSearchDoc>)[] = [];
           if (m) {
             try {
-              raw = m.search(query).slice(0, MAX_RESULTS);
+              const all = m.search(query) as (SearchResult &
+                Partial<SectionSearchDoc>)[];
+              // Per-page cap, then the global cap.
+              const perPage = new Map<string, number>();
+              raw = [];
+              for (const r of all) {
+                const page = (r.link || "").split("#")[0];
+                const n = perPage.get(page) ?? 0;
+                if (n >= MAX_RESULTS_PER_PAGE) continue;
+                perPage.set(page, n + 1);
+                raw.push(r);
+                if (raw.length >= MAX_RESULTS) break;
+              }
             } catch {
               raw = [];
             }
           }
           if (mySeq !== seq) return;
 
-          const results = raw.map((r) => ({
-            title: r.title || "",
-            link: r.link || "",
-            excerpt: r.excerpt || "",
-            highlightedTitle: highlightSegments(r.title || "", query),
-            highlightedExcerpt: highlightSegments(r.excerpt || "", query),
-          }));
+          const results = raw.map((r) => {
+            const excerpt = makeSnippet(r.text || "", query);
+            return {
+              title: r.title || "",
+              link: r.link || "",
+              excerpt,
+              // Hierarchical context ("Page › H2"), already deduped
+              // against the section's own title.
+              pageTitle: r.crumb || "",
+              highlightedTitle: highlightSegments(r.title || "", query),
+              highlightedExcerpt: highlightSegments(excerpt, query),
+            };
+          });
 
           ctx.updater
             .set({ results, hasSearched: true, query, activeIndex: 0 })
@@ -298,8 +364,7 @@ export function createSearchView(
           while (el && !el.dataset["href"]) el = el.parentElement;
           const href = el ? (el.dataset["href"] ?? null) : null;
           if (href) {
-            Router.to(href);
-            State.set({ searchOpen: false }).digest();
+            navigateToResult(href);
           }
         },
       },

@@ -82,3 +82,31 @@ describe("makeSnippet", () => {
     expect(makeSnippet("", "x")).toBe("");
   });
 });
+
+describe("capPerPage", () => {
+  const hit = (link: string) => ({
+    title: "t",
+    pageTitle: "p",
+    crumb: "",
+    link,
+    text: "",
+  });
+
+  it("limits hits per page while preserving order", () => {
+    const hits = [
+      hit("/a#1"),
+      hit("/a#2"),
+      hit("/b#1"),
+      hit("/a#3"),
+      hit("/a#4"),
+      hit("/b#2"),
+    ];
+    const capped = capPerPage(hits, 2);
+    expect(capped.map((h) => h.link)).toEqual(["/a#1", "/a#2", "/b#1", "/b#2"]);
+  });
+
+  it("treats the hash-less page link as the same page", () => {
+    const hits = [hit("/a"), hit("/a#1"), hit("/a#2")];
+    expect(capPerPage(hits, 2)).toHaveLength(2);
+  });
+});

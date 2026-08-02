@@ -1,12 +1,14 @@
 {
   "name": "@lark.js/docs",
-  "version": "0.0.14",
+  "version": "0.0.15",
   "description": "Documentation site generator for @lark.js/mvc",
   "keywords": [
     "@lark.js",
-    "markdown",
     "documentation",
-    "docs"
+    "docs",
+    "hmr",
+    "markdown",
+    "mermaid"
   ],
   "repository": {
     "url": "https://github.com/tianchenghang/lark.js",

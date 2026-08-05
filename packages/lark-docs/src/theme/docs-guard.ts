@@ -154,7 +154,7 @@ function openPasswordDialog(
 
   const card = document.createElement("div");
   card.className =
-    "animate-dialog-in bg-card text-card-foreground border-border relative w-full max-w-sm rounded-xl border p-8 shadow-lg";
+    "animate-dialog-in bg-background text-foreground border-muted relative w-full max-w-sm rounded-xl border p-8 shadow-lg";
   card.setAttribute("role", "dialog");
   card.setAttribute("aria-modal", "true");
   card.setAttribute("aria-label", "Password Required");
@@ -163,12 +163,12 @@ function openPasswordDialog(
     '<button type="button" aria-label="Close" data-guard-close class="text-muted-foreground hover:bg-muted absolute top-3 right-3 flex size-7 items-center justify-center rounded-md opacity-60 transition-all duration-150 hover:opacity-100"><span aria-hidden="true" class="size-3.75 [&>svg]:size-full">' +
     xSvg +
     "</span></button>" +
-    '<div class="border-border bg-accent text-primary mb-5 flex size-12 items-center justify-center rounded-lg border"><span aria-hidden="true" class="size-6 [&>svg]:size-full [&>svg]:stroke-[1.5]">' +
+    '<div class="border-muted bg-accent text-primary mb-5 flex size-12 items-center justify-center rounded-lg border"><span aria-hidden="true" class="size-6 [&>svg]:size-full [&>svg]:stroke-[1.5]">' +
     lockSvg +
     "</span></div>" +
     '<h2 class="text-[1.05rem] font-bold tracking-tight">Password Required</h2>' +
     '<p class="text-muted-foreground mt-1 mb-5 text-[0.82rem]">This page is protected. Enter the password to view its content.</p>' +
-    '<input type="password" placeholder="Password" data-guard-input class="border-input bg-background focus-visible:border-ring w-full rounded-md border px-3 py-2.5 text-sm outline-none" />' +
+    '<input type="password" placeholder="Password" data-guard-input class="border-muted bg-background focus-visible:border-primary w-full rounded-md border px-3 py-2.5 text-sm outline-none" />' +
     '<p data-guard-error class="text-destructive mt-2 hidden text-[0.78rem] font-medium"></p>' +
     '<button type="submit" data-guard-submit class="bg-primary text-primary-foreground hover:bg-primary/90 mt-5 w-full rounded-md px-4 py-2.5 text-sm font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50">Unlock</button>' +
     "</form>";

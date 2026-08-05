@@ -161,7 +161,7 @@ function computePrevMvc(
 }
 
 const NAVBAR_SCROLLED_ADD = [
-  "border-border/80",
+  "border-muted/80",
   "bg-background/80",
   "shadow-[0_1px_12px_-6px_rgb(0_0_0/0.08)]",
   "backdrop-blur-xl",

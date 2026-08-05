@@ -36,11 +36,11 @@
       role="dialog"
       aria-modal="true"
       aria-label="Search documentation"
-      class="animate-dialog-in border-border bg-card relative w-full max-w-xl overflow-hidden rounded-xl border shadow-[0_16px_48px_-16px_rgb(0_0_0/0.25)]"
+      class="animate-dialog-in border-muted bg-background relative w-full max-w-xl overflow-hidden rounded-xl border shadow-[0_16px_48px_-16px_rgb(0_0_0/0.25)]"
       @keydown="onDialogKey()"
     >
       <!-- Input row -->
-      <div class="border-border flex items-center gap-2.5 border-b px-4">
+      <div class="border-muted flex items-center gap-2.5 border-b px-4">
         <span
           class="text-muted-foreground size-4 shrink-0 opacity-70 [&>svg]:size-full"
         >
@@ -65,7 +65,7 @@
         </button>
         {{/if}}
         <kbd
-          class="text-muted-foreground border-border bg-background/80 hidden rounded border px-1.5 py-0.5 font-mono text-[10px] font-medium sm:block"
+          class="text-muted-foreground border-muted bg-background/80 hidden rounded border px-1.5 py-0.5 font-mono text-[10px] font-medium sm:block"
           >esc</kbd
         >
       </div>
@@ -131,19 +131,19 @@
 
       <!-- Footer -->
       <div
-        class="border-border text-muted-foreground flex items-center gap-3 border-t px-4 py-2.5 font-mono text-[10px]"
+        class="border-muted text-muted-foreground flex items-center gap-3 border-t px-4 py-2.5 font-mono text-[10px]"
       >
         <span class="flex items-center gap-1"
-          ><kbd class="border-border rounded border px-1 py-px">↑</kbd
-          ><kbd class="border-border rounded border px-1 py-px">↓</kbd>
+          ><kbd class="border-muted rounded border px-1 py-px">↑</kbd
+          ><kbd class="border-muted rounded border px-1 py-px">↓</kbd>
           navigate</span
         >
         <span class="flex items-center gap-1"
-          ><kbd class="border-border rounded border px-1 py-px">↵</kbd>
+          ><kbd class="border-muted rounded border px-1 py-px">↵</kbd>
           open</span
         >
         <span class="flex items-center gap-1"
-          ><kbd class="border-border rounded border px-1 py-px">esc</kbd>
+          ><kbd class="border-muted rounded border px-1 py-px">esc</kbd>
           close</span
         >
         <span class="ml-auto opacity-60">miniSearch</span>

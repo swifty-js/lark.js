@@ -107,7 +107,7 @@
         <button
           @click="openSearch()"
           aria-label="Search documentation"
-          class="group border-border/80 bg-muted/40 text-muted-foreground hover:border-primary/40 hover:bg-accent/60 hidden h-8 w-52 items-center gap-2 rounded-md border px-2.5 text-left text-xs transition-[border-color,background-color,width] duration-300 sm:flex lg:w-60"
+          class="group border-muted/80 bg-muted/40 text-muted-foreground hover:border-primary/40 hover:bg-accent/60 hidden h-8 w-52 items-center gap-2 rounded-md border px-2.5 text-left text-xs transition-[border-color,background-color,width] duration-300 sm:flex lg:w-60"
         >
           <span
             class="size-3.5 shrink-0 opacity-70 transition-transform duration-300 group-hover:scale-110 [&>svg]:size-full"
@@ -116,7 +116,7 @@
           </span>
           <span class="flex-1 truncate">Search documentation…</span>
           <kbd
-            class="text-muted-foreground border-border bg-background/80 rounded border px-1.5 py-0.5 font-mono text-[10px] font-medium"
+            class="text-muted-foreground border-muted bg-background/80 rounded border px-1.5 py-0.5 font-mono text-[10px] font-medium"
             >⌘K</kbd
           >
         </button>
@@ -167,7 +167,7 @@
         <!-- 404 -->
         <div class="animate-fade-in flex flex-col items-start gap-4 py-16">
           <span
-            class="border-border bg-muted/40 text-muted-foreground grid size-12 place-items-center rounded-xl border [&>svg]:size-6"
+            class="border-muted bg-muted/40 text-muted-foreground grid size-12 place-items-center rounded-xl border [&>svg]:size-6"
           >
             {{!icons.compass}}
           </span>
@@ -203,7 +203,7 @@
         <div class="not-prose mt-12 grid gap-3 sm:grid-cols-2">
           {{if prevPage}}
           <a
-            class="group border-border bg-card hover:border-primary/40 flex flex-col gap-1 rounded-xl border p-4 transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-[0_4px_16px_-8px_rgb(0_0_0/0.12)]"
+            class="group border-muted bg-background hover:border-primary/40 flex flex-col gap-1 rounded-xl border p-4 transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-[0_4px_16px_-8px_rgb(0_0_0/0.12)]"
             data-href="{{=prevPage.link}}"
             @click="navigateTo()"
           >
@@ -224,7 +224,7 @@
           <span class="hidden sm:block"></span>
           {{/if}} {{if nextPage}}
           <a
-            class="group border-border bg-card hover:border-primary/40 flex flex-col items-end gap-1 rounded-xl border p-4 text-right transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-[0_4px_16px_-8px_rgb(0_0_0/0.12)]"
+            class="group border-muted bg-background hover:border-primary/40 flex flex-col items-end gap-1 rounded-xl border p-4 text-right transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-[0_4px_16px_-8px_rgb(0_0_0/0.12)]"
             data-href="{{=nextPage.link}}"
             @click="navigateTo()"
           >
@@ -247,7 +247,7 @@
 
         <!-- Footer -->
         <footer
-          class="border-border/70 text-muted-foreground mt-16 flex flex-wrap items-center justify-between gap-2 border-t pt-5 pb-10 text-xs"
+          class="border-muted/70 text-muted-foreground mt-16 flex flex-wrap items-center justify-between gap-2 border-t pt-5 pb-10 text-xs"
         >
           <span>© {{=year}} {{=siteTitle}}</span>
           <span class="font-mono"
@@ -282,10 +282,10 @@
       role="dialog"
       aria-modal="true"
       aria-label="Navigation menu"
-      class="{{if drawerOpen}}translate-x-0{{else}}-translate-x-full{{/if}} border-border bg-sidebar absolute inset-y-0 left-0 flex w-72 flex-col border-r shadow-xl transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]"
+      class="{{if drawerOpen}}translate-x-0{{else}}-translate-x-full{{/if}} border-muted bg-background absolute inset-y-0 left-0 flex w-72 flex-col border-r shadow-xl transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]"
     >
       <div
-        class="border-border/70 flex h-14 shrink-0 items-center justify-between border-b px-4"
+        class="border-muted/70 flex h-14 shrink-0 items-center justify-between border-b px-4"
       >
         <a class="flex items-center gap-2" @click="navigateHomeDrawer()">
           <span class="text-primary [&>svg]:size-5">{{!clockIcon}}</span>

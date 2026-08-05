@@ -40,7 +40,7 @@
       class="grid transition-[grid-template-rows,opacity] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] {{if group.collapsed}}grid-rows-[0fr] opacity-0{{else}}grid-rows-[1fr] opacity-100{{/if}}"
     >
       <div class="overflow-hidden">
-        <ul class="border-border/70 mt-1.5 ml-2 border-l pl-px">
+        <ul class="border-muted/70 mt-1.5 ml-2 border-l pl-px">
           {{forOf group.rows as row}}
           <li>
             {{if row.isGroup}}
@@ -63,7 +63,7 @@
               data-href="{{=row.link}}"
               @click="navigateTo()"
               {{if row.isActive}}aria-current="page"{{/if}}
-              class="relative -ml-px block border-l-2 py-1.5 pr-2 text-[13px] leading-snug transition-[color,background-color,border-color] duration-200 {{if row.isActive}}border-primary bg-primary/8 text-primary font-medium{{else}}hover:border-border hover:bg-accent/50 hover:text-foreground border-transparent text-muted-foreground{{/if}}"
+              class="relative -ml-px block border-l-2 py-1.5 pr-2 text-[13px] leading-snug transition-[color,background-color,border-color] duration-200 {{if row.isActive}}border-primary bg-primary/8 text-primary font-medium{{else}}hover:border-muted hover:bg-accent/50 hover:text-foreground border-transparent text-muted-foreground{{/if}}"
               style="padding-left: {{=row.padPx}}px"
             >
               {{=row.text}}

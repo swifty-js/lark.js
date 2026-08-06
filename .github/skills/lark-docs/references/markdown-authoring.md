@@ -97,8 +97,8 @@ Collapsed content (renders as <details>/<summary>).
 Rendered as `.callout .callout-{type}` divs (`details` → `<details>`), each
 with an inlined lucide icon and a label (default = TYPE uppercased,
 overridable via `markdown.containers: { tip: { label: "提示" } }` or a custom
-title after the type). Styled by `client.css` (`--callout-warning/--callout-danger`
-tokens).
+title after the type). Styled by `client.css` — tip and warning accents use
+the `--primary` token, danger uses `--destructive`, details uses muted.
 
 ## [[toc]]
 

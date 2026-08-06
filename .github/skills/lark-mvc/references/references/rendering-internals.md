@@ -45,7 +45,9 @@ inside setup works — the actual render happens after mount wiring).
 ```ts
 const assign = (_options?: unknown): boolean | undefined => {
   ctx.updater.snapshot();
-  ctx.updater.set({/* derived data: url params, store reads, Date, ... */});
+  ctx.updater.set({
+    /* derived data: url params, store reads, Date, ... */
+  });
   return ctx.updater.altered(); // framework re-renders only if true
 };
 assign(params); // run once for the first render

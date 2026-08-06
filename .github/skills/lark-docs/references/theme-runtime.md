@@ -95,11 +95,23 @@ with zod at read time — bad shapes degrade gracefully):
   preference). The toggle view syncs across instances with a
   MutationObserver. Put the no-FOUC snippet in `index.html`.
 - `client.css` (Tailwind CSS v4, CSS-first config): shadcn-style semantic
-  tokens (`--background --foreground --card --primary --secondary --muted
---accent --destructive --border --input --ring --sidebar --code
---callout-warning --callout-danger --radius`) declared on `:root` and
+  tokens (`--background --foreground --primary --primary-foreground
+--secondary --secondary-foreground --muted --muted-foreground --accent
+--accent-foreground --destructive --radius`) declared on `:root` and
   flipped under `.dark`, mapped into Tailwind via `@theme inline` so
-  `bg-background` / `text-primary` utilities work. Includes typography-plugin
+  `bg-background` / `text-primary` utilities work. The default palette is
+  Vercel-style: zero-chroma black/white neutrals (`oklch(1 0 0)` /
+  `oklch(0.145 0 0)`) with a React-blue primary (`oklch(0.55 0.19 258)`
+  light / `oklch(0.72 0.14 255)` dark); `--radius: 0.5rem`; `--font-sans` /
+  `--font-display` default to a Geist-style sans stack, `--font-mono` to a
+  mono stack. There are **no** `--card`, `--card-foreground`, `--border`,
+  `--input`, `--ring`, `--sidebar`, `--code`, `--callout-warning`, or
+  `--callout-danger` tokens — those roles reuse the tokens above: borders
+  and code surfaces use `--muted` (`border-muted` / `bg-muted`; the base
+  `border-color` reset is `var(--muted)`), focus rings and input focus use
+  `--primary`, card/drawer/dialog surfaces use `--background`, callout tip
+  and warning accents use `--primary`, and callout danger uses
+  `--destructive`. Includes typography-plugin
   prose overrides, `.codeblock`/`.callout` chrome, `docs-grid` /
   `sidebar-scroll` / `skeleton` utilities, entry animations, and a
   `prefers-reduced-motion` guard.

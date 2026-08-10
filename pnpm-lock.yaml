@@ -161,8 +161,8 @@ importers:
         specifier: workspace:^
         version: link:../lark-mvc
       '@swifty.js/sentry':
-        specifier: ^0.0.3
-        version: 0.0.3(vite@8.1.5(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.49.0)(yaml@2.9.0))
+        specifier: ^0.0.4
+        version: 0.0.4(vite@8.1.5(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.49.0)(yaml@2.9.0))
       jsdom:
         specifier: ^29.1.1
         version: 29.1.1
@@ -1845,18 +1845,15 @@ packages:
   '@standard-schema/spec@1.1.0':
     resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
 
-  '@swifty.js/sentry@0.0.3':
-    resolution: {integrity: sha512-vfoehxliaFN3dzybEixAIo1Lr+dbJmQjckn6qm2OfBFFk1catGKcrXNEyDVCYrRXYx3RW919ytesm07Y15Zspw==}
+  '@swifty.js/sentry@0.0.4':
+    resolution: {integrity: sha512-HmXJsP+5oz+CywnQ37kuTC64P9VWCjQhN01FHQMKO1S68nrYQNYyw+IQiAbJqcoMSXqsgGaQm0aBAjMlJ4cv0Q==}
     peerDependencies:
-      preact: ^10.0.0
       react: ^19.0.0
       vite: ^7.0.0 || ^8.0.0
       vue: ^3.0.0
       webpack: ^4.0.0 || ^5.0.0
       webpack-dev-server: '*'
     peerDependenciesMeta:
-      preact:
-        optional: true
       react:
         optional: true
       vite:
@@ -5842,7 +5839,7 @@ snapshots:
 
   '@standard-schema/spec@1.1.0': {}
 
-  '@swifty.js/sentry@0.0.3(vite@8.1.5(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.49.0)(yaml@2.9.0))':
+  '@swifty.js/sentry@0.0.4(vite@8.1.5(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.49.0)(yaml@2.9.0))':
     dependencies:
       '@fingerprintjs/fingerprintjs': 5.2.0
       '@rrweb/record': 2.1.0

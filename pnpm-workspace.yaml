@@ -18,7 +18,6 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-
 packages:
   - packages/*
 
@@ -27,3 +26,6 @@ allowBuilds:
   esbuild: true
   keytar: true
   playwright-chromium: true
+
+minimumReleaseAgeExclude:
+  - '@swifty.js/sentry@0.0.4'

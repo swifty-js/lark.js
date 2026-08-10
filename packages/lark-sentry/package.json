@@ -47,7 +47,7 @@
   },
   "devDependencies": {
     "@lark.js/mvc": "workspace:^",
-    "@swifty.js/sentry": "^0.0.3",
+    "@swifty.js/sentry": "^0.0.4",
     "jsdom": "^29.1.1",
     "oxfmt": "^0.61.0",
     "tsup": "^8.5.1",
@@ -56,7 +56,7 @@
   },
   "peerDependencies": {
     "@lark.js/mvc": ">=0.0.24",
-    "@swifty.js/sentry": ">=0.0.3"
+    "@swifty.js/sentry": ">=0.0.4"
   },
   "packageManager": "pnpm@10.33.1"
 }

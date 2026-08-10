@@ -21,26 +21,83 @@
  */
 
 /**
- * `@lark.js/sentry` — `@swifty.js/sentry` framework-level integration for
- * the Lark Mvc frontend framework (`@lark.js/mvc`).
+ * `@lark.js/sentry` — `@swifty.js/sentry` integration for Lark Mvc.
  *
- * Lark Mvc swallows most user-code exceptions internally (delegated DOM
- * event handlers, emitter listeners registered via `ctx.on` / `useEvent`,
- * `useEffect` cleanups, dispatcher-triggered renders), so the SDK's global
- * `window.onerror` capture never sees them. This package wraps the
- * framework's public seams to report those errors as `OtherFrameworks`
- * events with structured lifecycle context, without altering framework
- * behavior.
+ * Lark Mvc routes every framework-internal error (event handlers, emitter
+ * listeners, render, cleanups, etc.) through `FrameworkConfig.error` via
+ * `funcWithTry`. This package hooks that single seam to report errors as
+ * `OtherFrameworks` events to `@swifty.js/sentry`.
  */
 
-export { instrumentView } from "./instrument-view.js";
-export { installLarkInstrumentation, initLarkSentry } from "./install.js";
-export type { LarkSentryOptions } from "./install.js";
-export { reportLarkError, setLarkErrorSink } from "./report.js";
-export type {
-  InstrumentViewOptions,
-  LarkErrorContext,
-  LarkErrorPhase,
-  LarkErrorSink,
-  LarkIntegrationOptions,
-} from "./types.js";
+import { Framework } from "@lark.js/mvc";
+import { EventType, init, reportFrameworkError } from "@swifty.js/sentry";
+import type { InitOptions } from "@swifty.js/sentry";
+
+/**
+ * Options accepted by {@link initLarkSentry}: the full `@swifty.js/sentry`
+ * `init` options.
+ */
+export type LarkSentryOptions = InitOptions;
+
+/**
+ * Install the `FrameworkConfig.error` hook that reports framework errors to
+ * `@swifty.js/sentry`.
+ *
+ * Call this after `Framework.boot(...)`. Any previously configured `error`
+ * handler is preserved and still runs after the report.
+ *
+ * @returns An uninstall function restoring the previous `error` handler.
+ */
+export function installLarkSentry(): () => void {
+  const config = Framework.getConfig();
+  const previousError = config.error;
+
+  Framework.setConfig({
+    error(error: Error): void {
+      try {
+        reportFrameworkError({
+          type: EventType.OtherFrameworks,
+          error,
+          context: { framework: "lark-mvc" },
+        });
+      } catch {
+        // Reporting must never disturb framework control flow.
+      }
+      if (previousError) {
+        try {
+          previousError(error);
+        } catch {
+          // Suppress rethrows from the previous handler to avoid
+          // double-reporting via unhandledrejection.
+        }
+      }
+    },
+  });
+
+  return (): void => {
+    Framework.setConfig({ error: previousError });
+  };
+}
+
+/**
+ * One-call integration: initialize `@swifty.js/sentry` and install the Lark
+ * Mvc error hook.
+ *
+ * @example
+ * ```ts
+ * import { Framework } from "@lark.js/mvc";
+ * import { initLarkSentry } from "@lark.js/sentry";
+ *
+ * Framework.boot({ rootId: "app", defaultPath: "/home", routes: { ... } });
+ *
+ * initLarkSentry({ dsn: "/api/log", projectId: "lark-app" });
+ * ```
+ *
+ * @param options - SDK init options (dsn, projectId, plugins, etc.).
+ * @returns An uninstall function; the SDK itself is torn down via `destroy()`
+ *   from `@swifty.js/sentry`.
+ */
+export function initLarkSentry(options: LarkSentryOptions): () => void {
+  init(options);
+  return installLarkSentry();
+}

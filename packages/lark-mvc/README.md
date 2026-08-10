@@ -1100,7 +1100,6 @@ All DOM events are delegated to `document.body` in the capture phase. The EventD
 | `@lark.js/mvc/rspack`   | Rspack integration (`LarkMvcPlugin`, `larkMvcLoader`)                          |
 | `@lark.js/mvc/runtime`  | Template runtime helpers (`encHtml`, `strSafe`, `encUri`, `encQuote`, `refFn`) |
 | `@lark.js/mvc/compiler` | Build-time compiler (`compileTemplate`, `extractGlobalVars`)                   |
-| `@lark.js/mvc/devtool`  | Devtool bridge (`installFrameDevtoolBridge`)                                   |
 | `@lark.js/mvc/client`   | Client-side type declarations (DOM augmentations, `*.html` module types)       |
 
 ## Configuration
@@ -1124,7 +1123,6 @@ All DOM events are delegated to `document.body` in the capture phase. The EventD
 | `skipViewRendered` | `boolean`                                   | -           | Skip view rendered check                    |
 | `projectName`      | `string`                                    | -           | Project name for micro-frontend bridge      |
 | `vdom`             | `boolean`                                   | `false`     | Enable VDOM rendering mode                  |
-| `devtool`          | `boolean`                                   | `false`     | Enable Frame Devtool Bridge                 |
 
 ### RouteViewConfig
 
@@ -1202,7 +1200,6 @@ packages/lark-mvc/
     hmr.ts                -- HMR hot-swap logic
     hmr-inject.ts         -- HMR code generation for bundlers
     runtime.ts            -- template runtime helpers
-    devtool.ts            -- Frame Devtool Bridge
     client.d.ts           -- ambient type declarations
     vite.ts               -- Vite plugin
     webpack.ts            -- Webpack loader

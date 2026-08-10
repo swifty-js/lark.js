@@ -73,7 +73,7 @@ export default defineConfig([
   {
     // Template runtime — imported by compiled `.html` modules. Kept tiny so
     // pulling in `@lark.js/mvc/runtime` doesn't drag the whole framework in.
-    entry: ["src/runtime.ts", "src/devtool.ts"],
+    entry: ["src/runtime.ts"],
     dts: true,
     format: ["esm", "cjs"],
     minify: false,

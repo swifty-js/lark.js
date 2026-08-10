@@ -282,8 +282,22 @@ export function assign<T extends object>(target: T, ...sources: Partial<T>[]): T
 // Try-execute utilities
 // ============================================================
 
+/** Module-level error sink invoked by `funcWithTry` on every caught error. */
+let frameworkErrorSink: ((e: unknown) => void) | undefined;
+
 /**
- * Execute functions in try-catch, ignoring errors.
+ * Set (or clear) the global error sink that `funcWithTry` invokes when a
+ * wrapped function throws. Called once by `Framework.boot()` to wire
+ * `FrameworkConfig.error` into every try-catch seam in the framework.
+ */
+export function setFrameworkErrorSink(sink: ((e: unknown) => void) | undefined): void {
+  frameworkErrorSink = sink;
+}
+
+/**
+ * Execute functions in try-catch.
+ * Caught errors are forwarded to the per-call handler (if provided) and to
+ * the global framework error sink (if set via `setFrameworkErrorSink`).
  * Returns the result of the last successfully executed function.
  */
 export function funcWithTry(
@@ -299,6 +313,7 @@ export function funcWithTry(
       ret = fn.apply(context, args);
     } catch (e) {
       configError?.(e);
+      frameworkErrorSink?.(e);
     }
   }
   return ret;

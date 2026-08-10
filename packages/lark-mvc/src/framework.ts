@@ -39,6 +39,7 @@ import {
   hasOwnProperty,
   funcWithTry,
   noop,
+  setFrameworkErrorSink,
   parseUri,
   toUri,
   generateId,
@@ -55,7 +56,6 @@ import type { FrameObj } from "./types";
 import { EventDelegator } from "./event-delegator";
 import { defineView } from "./view";
 import { hotSwapByTemplate, hotSwapByView } from "./hmr";
-import { installFrameDevtoolBridge } from "./devtool";
 import type { AnyFunc, FrameworkConfig, ViewCtx, ChangeEvent, FrameworkApi } from "./types";
 
 // ============================================================
@@ -427,6 +427,16 @@ export const Framework: FrameworkApi = {
       assign(config, cfg);
     }
 
+    // Wire the global error sink so every funcWithTry catch forwards to
+    // config.error. Reads config.error dynamically so later setConfig()
+    // calls (e.g. from @lark.js/sentry) are picked up without re-booting.
+    setFrameworkErrorSink((e: unknown) => {
+      const handler = config.error;
+      if (handler) {
+        handler(e instanceof Error ? e : new Error(String(e)));
+      }
+    });
+
     // Set config in Router
     Router._setConfig(config);
 
@@ -446,14 +456,6 @@ export const Framework: FrameworkApi = {
     // Mark as booted
     booted = true;
     markRouterBooted();
-
-    // Install the Frame Devtool Bridge for devtools support.
-    // This adds a lightweight postMessage listener so that the
-    // lark-devtool panel can inspect the frame tree.
-    // Skipped if devtool is explicitly set to false.
-    if (config.devtool) {
-      installFrameDevtoolBridge();
-    }
 
     // Create root frame BEFORE Router._bind(), so that when Router.diff()
     // fires CHANGED → dispatcherNotifyChange → Frame.getRoot(), the rootFrame

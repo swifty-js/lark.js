@@ -1,6 +1,6 @@
 {
   "name": "@lark.js/sentry",
-  "version": "0.0.12",
+  "version": "0.0.13",
   "description": "@swifty.js/sentry framework-level integration for lark framework (@lark.js/mvc)",
   "keywords": [
     "error-tracking",
@@ -55,7 +55,7 @@
     "vitest": "^4.1.10"
   },
   "peerDependencies": {
-    "@lark.js/mvc": ">=0.0.23",
+    "@lark.js/mvc": ">=0.0.24",
     "@swifty.js/sentry": ">=0.0.3"
   },
   "packageManager": "pnpm@10.33.1"

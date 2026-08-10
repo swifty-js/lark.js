@@ -48,7 +48,6 @@ const /** @type{({ name: string, external: boolean }[])} */ entries = [
     { name: "rspack", external: false },
     { name: "vite", external: false },
     { name: "runtime", external: true },
-    { name: "devtool", external: true },
   ];
 
 /** Externalize deps/peerDeps except @babel packages when the entry bundles them. */

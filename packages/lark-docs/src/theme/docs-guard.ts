@@ -26,7 +26,7 @@
  * `createContentGuard(loadContent)` wraps the generated `loadContent` so that
  * pages encrypted at build time by `docsGuardPlugin` (frontmatter
  * `protected: true` + `DOCS_PASSWORD` env) prompt for a password before
- * rendering. Unlike the Preact implementation, the dialog here is a plain
+ * rendering. Unlike the React implementation, the dialog here is a plain
  * imperative DOM overlay — no component to mount; just pass the wrapped
  * loader into State:
  *
@@ -47,7 +47,7 @@ import { decryptContent, type EncryptedPayload } from "../utils/guard";
 const SESSION_KEY = "docs-guard-pwd";
 
 // Rendered in place of the page body when the visitor cancels the prompt.
-// Visual parity with the Preact version (centered lock + Access Denied).
+// Visual parity with the React version (centered lock + Access Denied).
 const DENIED_HTML =
   '<div class="flex min-h-[45vh] flex-col items-center justify-center gap-4 text-center">' +
   '<div aria-hidden="true" class="text-foreground opacity-35 [&>svg]:size-13 [&>svg]:stroke-[1.2]">' +

@@ -28,10 +28,5 @@
     "packages/**/*.{js,jsx,ejs,ts,tsx,html,css,scss,md,mdx,json,jsonc,jsonl,yml,yaml,toml}": [
       "sh -c 'pnpm format'"
     ]
-  },
-  "pnpm": {
-    "overrides": {
-      "rollup": "npm:@rollup/wasm-node@^4.62.3"
-    }
   }
 }

@@ -135,7 +135,7 @@
     "publish:dev": "npm publish --access public --registry=https://registry.npmjs.org/ --tag dev"
   },
   "dependencies": {
-    "@lark.js/mvc": "^0.0.23",
+    "@lark.js/mvc": "workspace:*",
     "ejs": "^3.1.10",
     "js-yaml": "^5.2.2",
     "lucide-static": "^1.27.0",

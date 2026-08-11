@@ -23,7 +23,7 @@
 import { defineConfig } from "tsup";
 
 export default defineConfig({
-  entry: ["src/index.ts"],
+  entry: ["src/index.ts", "src/plugins.ts", "src/vite.ts", "src/webpack.ts"],
   clean: true,
   dts: true,
   format: ["esm", "cjs"],

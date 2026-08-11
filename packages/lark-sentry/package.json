@@ -1,6 +1,6 @@
 {
   "name": "@lark.js/sentry",
-  "version": "0.0.13",
+  "version": "0.0.14",
   "description": "@swifty.js/sentry framework-level integration for lark framework (@lark.js/mvc)",
   "keywords": [
     "error-tracking",
@@ -34,6 +34,36 @@
         "types": "./dist/index.d.cts",
         "default": "./dist/index.cjs"
       }
+    },
+    "./plugins": {
+      "import": {
+        "types": "./dist/plugins.d.ts",
+        "default": "./dist/plugins.js"
+      },
+      "require": {
+        "types": "./dist/plugins.d.cts",
+        "default": "./dist/plugins.cjs"
+      }
+    },
+    "./vite": {
+      "import": {
+        "types": "./dist/vite.d.ts",
+        "default": "./dist/vite.js"
+      },
+      "require": {
+        "types": "./dist/vite.d.cts",
+        "default": "./dist/vite.cjs"
+      }
+    },
+    "./webpack": {
+      "import": {
+        "types": "./dist/webpack.d.ts",
+        "default": "./dist/webpack.js"
+      },
+      "require": {
+        "types": "./dist/webpack.d.cts",
+        "default": "./dist/webpack.cjs"
+      }
     }
   },
   "scripts": {
@@ -44,6 +74,9 @@
     "test:watch": "vitest",
     "typecheck": "tsc -p tsconfig.build.json --noEmit",
     "prepublishOnly": "pnpm build"
+  },
+  "dependencies": {
+    "@swifty.js/sentry": ">=0.0.4"
   },
   "devDependencies": {
     "@lark.js/mvc": "workspace:*",
@@ -56,7 +89,16 @@
   },
   "peerDependencies": {
     "@lark.js/mvc": ">=0.0.24",
-    "@swifty.js/sentry": ">=0.0.4"
+    "vite": "^7.0.0 || ^8.0.0",
+    "webpack": "^4.0.0 || ^5.0.0"
+  },
+  "peerDependenciesMeta": {
+    "vite": {
+      "optional": true
+    },
+    "webpack": {
+      "optional": true
+    }
   },
   "packageManager": "pnpm@10.33.1"
 }

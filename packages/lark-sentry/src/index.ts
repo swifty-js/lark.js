@@ -33,11 +33,7 @@ import { Framework } from "@lark.js/mvc";
 import { EventType, init, reportFrameworkError } from "@swifty.js/sentry";
 import type { InitOptions } from "@swifty.js/sentry";
 
-/**
- * Options accepted by {@link initLarkSentry}: the full `@swifty.js/sentry`
- * `init` options.
- */
-export type LarkSentryOptions = InitOptions;
+export * from "@swifty.js/sentry";
 
 /**
  * Install the `FrameworkConfig.error` hook that reports framework errors to
@@ -50,7 +46,7 @@ export type LarkSentryOptions = InitOptions;
  */
 export function installLarkSentry(): () => void {
   const config = Framework.getConfig();
-  const previousError = config.error;
+  const oldError = config.error;
 
   Framework.setConfig({
     error(error: Error): void {
@@ -63,9 +59,9 @@ export function installLarkSentry(): () => void {
       } catch {
         // Reporting must never disturb framework control flow.
       }
-      if (previousError) {
+      if (oldError) {
         try {
-          previousError(error);
+          oldError(error);
         } catch {
           // Suppress rethrows from the previous handler to avoid
           // double-reporting via unhandledrejection.
@@ -75,7 +71,7 @@ export function installLarkSentry(): () => void {
   });
 
   return (): void => {
-    Framework.setConfig({ error: previousError });
+    Framework.setConfig({ error: oldError });
   };
 }
 
@@ -97,7 +93,7 @@ export function installLarkSentry(): () => void {
  * @returns An uninstall function; the SDK itself is torn down via `destroy()`
  *   from `@swifty.js/sentry`.
  */
-export function initLarkSentry(options: LarkSentryOptions): () => void {
+export function initLarkSentry(options: InitOptions): () => void {
   init(options);
   return installLarkSentry();
 }

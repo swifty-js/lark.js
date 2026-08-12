@@ -1,11 +1,9 @@
 {
   "name": "@lark.js/sentry",
-  "version": "0.0.14",
+  "version": "0.0.15",
   "description": "@swifty.js/sentry framework-level integration for lark framework (@lark.js/mvc)",
   "keywords": [
-    "error-tracking",
     "lark.js",
-    "monitoring",
     "mvc",
     "sentry",
     "swifty.js"

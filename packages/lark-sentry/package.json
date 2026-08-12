@@ -73,9 +73,6 @@
     "typecheck": "tsc -p tsconfig.build.json --noEmit",
     "prepublishOnly": "pnpm build"
   },
-  "dependencies": {
-    "@swifty.js/sentry": ">=0.0.4"
-  },
   "devDependencies": {
     "@lark.js/mvc": "workspace:*",
     "@swifty.js/sentry": "catalog:",
@@ -87,6 +84,7 @@
   },
   "peerDependencies": {
     "@lark.js/mvc": ">=0.0.24",
+    "@swifty.js/sentry": ">=0.0.4",
     "vite": "^7.0.0 || ^8.0.0",
     "webpack": "^4.0.0 || ^5.0.0"
   },

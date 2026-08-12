@@ -25,7 +25,7 @@ import { defineConfig } from "tsup";
 export default defineConfig({
   entry: ["src/index.ts", "src/plugins.ts", "src/vite.ts", "src/webpack.ts"],
   clean: true,
-  dts: { resolve: true },
+  dts: true,
   format: ["esm", "cjs"],
   minify: false,
   sourcemap: false,

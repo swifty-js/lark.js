@@ -21,7 +21,7 @@
  */
 
 import { State, Router, defineView, useEffect } from "@lark.js/mvc";
-import type { VDomTemplate, ViewSetup, ViewTemplate } from "@lark.js/mvc";
+import type { ViewSetup, ViewTemplate } from "@lark.js/mvc";
 import { z } from "zod";
 import { icons as defaultIcons, clockIcons } from "./icons";
 import { findDataHref } from "../utils/dom";
@@ -219,9 +219,7 @@ function replayPageIn(): void {
   article.classList.add("animate-page-in");
 }
 
-export function createDocsLayoutView(
-  template: ViewTemplate | VDomTemplate,
-): ViewSetup {
+export function createDocsLayoutView(template: ViewTemplate): ViewSetup {
   return defineView((ctx) => {
     const clockIcon = clockIcons[new Date().getHours() % 12] ?? clockIcons[0];
     ctx.updater.set({

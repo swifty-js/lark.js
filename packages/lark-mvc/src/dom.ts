@@ -23,10 +23,10 @@
 /**
  * Real-DOM Diff Engine (string-mode rendering pipeline).
  *
- * When `FrameworkConfig.vdom` is **false** (the default), the Updater uses
- * this engine: the compiled template produces an HTML string, which is
- * parsed into a temporary DOM tree via `document.implementation.createHTMLDocument`,
- * then diffed against the live DOM using keyed comparison.
+ * The Updater uses this engine: the compiled template produces an HTML string,
+ * which is parsed into a temporary DOM tree via
+ * `document.implementation.createHTMLDocument`, then diffed against the live
+ * DOM using keyed comparison.
  *
  * ## Keyed diff algorithm
  *

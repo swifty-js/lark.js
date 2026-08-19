@@ -21,7 +21,7 @@
  */
 
 import { State, defineView, useResource } from "@lark.js/mvc";
-import type { VDomTemplate, ViewSetup, ViewTemplate } from "@lark.js/mvc";
+import type { ViewSetup, ViewTemplate } from "@lark.js/mvc";
 import { z } from "zod";
 import { icons } from "./icons";
 
@@ -47,9 +47,7 @@ function decodedLocationHash(): string {
  * Renders h2/h3 headings for the current page. Supports two placements:
  * right rail (default) and inline ([[toc]] directive, params.inline).
  */
-export function createTocView(
-  template: ViewTemplate | VDomTemplate,
-): ViewSetup {
+export function createTocView(template: ViewTemplate): ViewSetup {
   return defineView((ctx, params?: unknown) => {
     const inline =
       !!params &&

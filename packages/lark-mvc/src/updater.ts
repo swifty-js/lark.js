@@ -33,8 +33,7 @@
 import { setData, hasOwnProperty, getById, EMPTY_STRING_SET } from "./utils";
 import { SPLITTER, isRefToken } from "./common";
 import { domGetNode, domSetChildNodes, applyDomOps, applyIdUpdates, createDomRef } from "./dom";
-import { vdomSetChildNodes, createVDomRef } from "./vdom";
-import type { UpdaterApi, VDomNode } from "./types";
+import type { UpdaterApi } from "./types";
 import { Frame } from "./frame";
 
 /** Callback queued via `digest()` to run after the digest cycle completes. */
@@ -74,9 +73,6 @@ export function createUpdater(viewId: string): UpdaterApi {
 
   /** Snapshot of `version` taken by `snapshot()`, used by `altered()`. */
   let snapshotVersion: number | undefined;
-
-  /** Last rendered VDOM tree (only used when vdom is enabled) */
-  let vdom: VDomNode | undefined;
 
   // Initial digest always triggers
   hasChangedFlag = 1;
@@ -177,37 +173,13 @@ export function createUpdater(viewId: string): UpdaterApi {
 
       const template = view.getTemplate();
       if (typeof template === "function") {
-        // Compiled templates import their own runtime helpers from
-        // `@lark.js/mvc/runtime`, so we only pass the 3 core args.
-        // Return type is `string | VDomNode`; narrow via typeof.
         const result = template(data, viewId, refData);
-
-        if (typeof result === "string") {
-          // ── String rendering path ──
-          const newDom = domGetNode(result, node);
-          const ref = createDomRef();
-          domSetChildNodes(node, newDom, ref, frame, keys);
-          applyIdUpdates(ref.idUpdates);
-          applyDomOps(ref.domOps);
-          // Always endUpdate after a successful digest — child v-lark elements
-          // may need prop updates even when the parent DOM didn't visibly change
-          // (e.g., refFn returns the same token for a mutated array reference)
-          view.endUpdate(viewId);
-        } else {
-          // ── VDOM rendering path ──
-          const newVDom = result;
-          const ref = createVDomRef(viewId);
-          const ready = (): void => {
-            vdom = newVDom;
-            if (ref.changed || !view.rendered.value) {
-              view.endUpdate(viewId);
-            }
-            for (const [el, prop, val] of ref.nodeProps) {
-              Reflect.set(el, prop, val);
-            }
-          };
-          vdomSetChildNodes(node, vdom, newVDom, ref, frame, keys, view, ready);
-        }
+        const newDom = domGetNode(result, node);
+        const ref = createDomRef();
+        domSetChildNodes(node, newDom, ref, frame, keys);
+        applyIdUpdates(ref.idUpdates);
+        applyDomOps(ref.domOps);
+        view.endUpdate(viewId);
       }
     } else {
       // Conditions not met — preserve hasChangedFlag so the next digest()

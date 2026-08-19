@@ -28,7 +28,7 @@
  * Nested items are flattened into depth-annotated rows.
  */
 import { State, Router, defineView } from "@lark.js/mvc";
-import type { VDomTemplate, ViewSetup, ViewTemplate } from "@lark.js/mvc";
+import type { ViewSetup, ViewTemplate } from "@lark.js/mvc";
 import { z } from "zod";
 import { icons } from "./icons";
 import type { SidebarItem } from "../types";
@@ -100,9 +100,7 @@ function formatPrefix(prefix: string, baseUrl = "/"): string {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-export function createSidebarView(
-  template: ViewTemplate | VDomTemplate,
-): ViewSetup {
+export function createSidebarView(template: ViewTemplate): ViewSetup {
   return defineView((ctx) => {
     ctx.observeLocation([], true);
 

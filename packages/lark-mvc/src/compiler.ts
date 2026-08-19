@@ -24,7 +24,7 @@
  * Compiler barrel export — re-exports the public compile-time API.
  *
  * - `compileTemplate(source, options?)` — Compile a `.html` template string
- *   into an ES module exporting a render function `(data, viewId, refData) => string | VDomNode`.
+ *   into an ES module exporting a render function `(data, viewId, refData) => string`.
  * - `extractGlobalVars(source)` — AST-based extraction of template data variables
  *   (used for zero-config variable auto-detection).
  *

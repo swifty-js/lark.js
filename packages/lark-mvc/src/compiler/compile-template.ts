@@ -28,7 +28,6 @@ import {
   restoreComments,
 } from "./template-syntax";
 import type { CompileOptions } from "@/types";
-import { compileToVDomFunction } from "./compile-to-vdom-function";
 import { extractGlobalVars } from "./extract-global-vars";
 
 // ─── Phase 3: Compile to template function ───────────────────────────────
@@ -174,13 +173,11 @@ function compileToFunction(source: string, debug: boolean, file?: string): strin
  *
  * The output is an ES module **source string** whose default export is a
  * named function `__lark_template__` with the signature:
- *   (data, viewId, refData) => string      (string mode)
- *   (data, viewId, refData) => VDomNode    (vdom mode)
+ *   (data, viewId, refData) => string
  *
  * Internally the wrapper calls the compiled inner arrow function with the
- * runtime helpers appended — string mode passes 6 args
- * (__lark_data__,__lark_view_id__,__lark_ref_alt__,__lark_enc_html__,__lark_str_safe__,__lark_ref_fn__),
- * vdom mode passes 5 (no __lark_enc_html__).
+ * runtime helpers appended — 6 args
+ * (__lark_data__,__lark_view_id__,__lark_ref_alt__,__lark_enc_html__,__lark_str_safe__,__lark_ref_fn__).
  *
  * @param source - The raw HTML template content
  * @param options - Compilation options
@@ -190,7 +187,7 @@ export async function compileTemplate(
   source: string,
   options: CompileOptions = {},
 ): Promise<string> {
-  const { debug = false, file, vdom = false } = options;
+  const { debug = false, file } = options;
 
   const globalVars = options.globalVars ?? (await extractGlobalVars(source));
 
@@ -214,31 +211,6 @@ export async function compileTemplate(
   // Build the variable declarations string from globalVars
   const varDeclarations = globalVars.map((key) => `let ${key}=__lark_data__.${key};`).join("");
 
-  if (vdom) {
-    // ── VDOM mode ──
-    const funcBody = compileToVDomFunction(finalSource, debug, file);
-    const funcWithVars = funcBody.replace("{{__lark_vars__}}", () => varDeclarations);
-
-    // VDOM module wrapper:
-    // - Imports vdomCreate from @lark.js/mvc (not just runtime helpers)
-    // - Does NOT import encHtml (not needed — VDOM text uses createTextNode)
-    // - Inner function: 5 params (data, viewId, refAlt, strSafe, refFn)
-    //
-    // The default export is a named function (__lark_template__) so that the
-    // auto-injected HMR snippet (see hmr-inject.ts) can reference it by name.
-    return `import { vdomCreate as __lark_vdom_create__ } from "@lark.js/mvc";
-import { strSafe as __lark_str_safe__, refFn as __lark_ref_fn__ } from "@lark.js/mvc/runtime";
-function __lark_template__(data, viewId, refData) {
-  let __lark_data__ = data || {},
-      __lark_view_id__ = viewId || '';
-  return (${funcWithVars})(__lark_data__, __lark_view_id__, refData,
-    __lark_str_safe__, __lark_ref_fn__
-  );
-}
-export default __lark_template__;`;
-  }
-
-  // ── String mode ──
   const funcBody = compileToFunction(finalSource, debug, file);
   const funcWithVars = funcBody.replace("{{__lark_vars__}}", () => varDeclarations);
 

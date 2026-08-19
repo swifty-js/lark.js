@@ -41,7 +41,6 @@
  * - Debug mode with line tracking
  * - View ID injection
  * - Auto variable extraction via AST analysis (Babel)
- * - Virtual DOM support (optional)
  *
  * Usage with Plugin (recommended):
  * ```js
@@ -51,7 +50,6 @@
  *   plugins: [
  *     new LarkMvcPlugin({
  *       debug: process.env.NODE_ENV !== 'production',
- *       vdom: false,
  *     }),
  *   ],
  * };
@@ -64,7 +62,7 @@
  *     rules: [{
  *       test: /\.html$/,
  *       loader: '@lark.js/mvc/webpack',
- *       options: { debug: false, vdom: false },
+ *       options: { debug: false },
  *     }],
  *   },
  * };
@@ -106,7 +104,7 @@ export interface LarkMvcWebpackPluginOptions extends LarkMvcWebpackLoaderOptions
 async function larkMvcLoader(this: LoaderContext, source: string): Promise<string> {
   try {
     const options = this.getOptions() || {};
-    const { debug = false, vdom = false, hmr } = options;
+    const { debug = false, hmr } = options;
 
     // View HMR mode: inject view-class HMR into .ts files that import .html.
     // This is the webpack equivalent of Vite's `transform` hook — ensures .ts
@@ -119,7 +117,6 @@ async function larkMvcLoader(this: LoaderContext, source: string): Promise<strin
     const compiled = await compileTemplate(source, {
       debug,
       globalVars,
-      vdom,
     });
     // Auto-inject HMR: the compiled template module self-accepts, so
     // .html changes hot-swap the template on all mounted views without
@@ -148,7 +145,6 @@ async function larkMvcLoader(this: LoaderContext, source: string): Promise<strin
  *   plugins: [
  *     new LarkMvcPlugin({
  *       debug: true,
- *       vdom: false,
  *     }),
  *   ],
  * };
@@ -160,7 +156,6 @@ class LarkMvcPlugin {
   constructor(options: LarkMvcWebpackPluginOptions = {}) {
     this.options = {
       debug: false,
-      vdom: false,
       test: /\.html$/,
       exclude: /node_modules/,
       ...options,
@@ -178,7 +173,7 @@ class LarkMvcPlugin {
       };
     };
   }): void {
-    const { debug, vdom, test, exclude } = this.options;
+    const { debug, test, exclude } = this.options;
 
     // Push the loader rule into webpack's module.rules
     compiler.options.module = compiler.options.module || {};
@@ -198,7 +193,7 @@ class LarkMvcPlugin {
           // __filename is provided by tsup's ESM shim (shims: true) in ESM output,
           // and is a native CJS global in CJS output.
           loader: __filename,
-          options: { debug, vdom },
+          options: { debug },
         },
       ],
     });

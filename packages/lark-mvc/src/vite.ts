@@ -52,8 +52,6 @@ import { injectTemplateHmrSnippet, injectViewHmrSnippet, importsHtmlTemplate } f
 export interface LarkMvcVitePluginOptions {
   /** Enable debug mode with line tracking (default: false) */
   debug?: boolean;
-  /** Enable virtual DOM output (default: false) */
-  vdom?: boolean;
 }
 
 /** Suffix appended to resolved IDs to mark them as lark template modules */
@@ -63,11 +61,10 @@ const LARK_TEMPLATE_SUFFIX = "?lark-template";
  * Create a Vite plugin that compiles .html template files.
  *
  * @param options - Plugin options
- * @param options.vdom - Generate VDOM output instead of HTML string (default: false)
  * @returns Vite plugin instance
  */
 export function larkMvcPlugin(options: LarkMvcVitePluginOptions = {}): Plugin {
-  const { debug = false, vdom = false } = options;
+  const { debug = false } = options;
   let root = __dirname;
 
   return {
@@ -144,7 +141,6 @@ export function larkMvcPlugin(options: LarkMvcVitePluginOptions = {}): Plugin {
         const compiled = await compileTemplate(raw, {
           debug,
           globalVars,
-          vdom,
         });
         // Auto-inject HMR: the compiled template module self-accepts, so
         // .html changes hot-swap the template on all mounted views without

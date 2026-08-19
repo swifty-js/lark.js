@@ -87,7 +87,7 @@ import { larkDocsPlugin } from "@lark.js/lark-docs/vite";
 import tailwindcss from "@tailwindcss/vite";
 import docsConfig from "./lark-docs.config";
 export default defineConfig({
-  plugins: [larkDocsPlugin({ config: docsConfig, vdom: false }), tailwindcss()],
+  plugins: [larkDocsPlugin({ config: docsConfig }), tailwindcss()],
   resolve: {
     alias: {
       "@lark-docs/generated": resolve(__dirname, ".lark-docs/generated"),
@@ -116,12 +116,11 @@ const config: FrameworkConfig = {
   rootId: "app",
   routeMode: "history", // FrameworkConfig type pins this to "history"
   routes,
-  vdom: false,
   defaultPath: "/docs/",
   defaultView: "theme/docs-layout",
   unmatchedView: "theme/docs-layout", // layout renders its own 404 state
 };
-registerThemeViews({ vdom: config.vdom }); // BEFORE boot
+registerThemeViews(); // BEFORE boot
 State.set({ docsConfig, loadContent, getSearchIndex });
 Framework.boot(config);
 ```
@@ -147,8 +146,7 @@ first paint — copy from `packages/lark-docs/app/index.html`).
 
 ## Critical rules
 
-1. **`registerThemeViews()` before `Framework.boot()`**, and pass the same
-   `vdom` flag — templates are pre-compiled in both string and VDOM modes;
+1. **`registerThemeViews()` before `Framework.boot()`** — templates are pre-compiled in string;
    this call just selects one.
 2. **`defineConfig` has side effects**: importing the config scans `docs/`
    and rewrites `.lark-docs/generated/index.js`. New/renamed `.md` files

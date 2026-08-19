@@ -30,7 +30,6 @@ import {
   isRefToken,
   nextCounter,
   SPLITTER,
-  V_TEXT_NODE,
 } from "../src/common";
 
 describe("common", () => {
@@ -260,10 +259,6 @@ describe("common", () => {
     });
     it("SPLITTER is U+001E (Record Separator)", () => {
       expect(SPLITTER.charCodeAt(0)).toBe(0x1e);
-    });
-    it("V_TEXT_NODE is 0 (falsy)", () => {
-      expect(V_TEXT_NODE).toBe(0);
-      expect(!V_TEXT_NODE).toBe(true);
     });
   });
 });

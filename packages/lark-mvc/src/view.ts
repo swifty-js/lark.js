@@ -58,7 +58,6 @@ import type {
   ViewLocationObserved,
   ViewResourceEntry,
   ViewTemplate,
-  VDomTemplate,
 } from "./types";
 
 // ============================================================
@@ -122,7 +121,7 @@ export function createCtx(frame: FrameObj): ViewCtx {
   const mutable = {
     observedStateKeys: undefined as string[] | undefined,
     endUpdatePending: undefined as number | undefined,
-    template: undefined as ViewTemplate | VDomTemplate | undefined,
+    template: undefined as ViewTemplate | undefined,
     events: undefined as Record<string, AnyFunc> | undefined,
     assignFn: undefined as ((options?: unknown) => boolean | undefined) | undefined,
   };
@@ -330,10 +329,10 @@ export function createCtx(frame: FrameObj): ViewCtx {
   }
 
   // ── Getters/setters as functions (no getter/setter syntax) ──
-  function getTemplate(): ViewTemplate | VDomTemplate | undefined {
+  function getTemplate(): ViewTemplate | undefined {
     return mutable.template;
   }
-  function setTemplate(v: ViewTemplate | VDomTemplate | undefined): void {
+  function setTemplate(v: ViewTemplate | undefined): void {
     mutable.template = v;
   }
   function getObservedStateKeys(): string[] | undefined {

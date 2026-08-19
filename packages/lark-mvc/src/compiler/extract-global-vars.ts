@@ -284,7 +284,6 @@ const BUILTIN_GLOBALS = new Set([
   "__lark_str_safe__",
   "__lark_ref_fn__",
   "__lark_out__",
-  "__lark_vdom_create__",
   "__lark_dbg_expr__",
   "__lark_dbg_art__",
 

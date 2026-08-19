@@ -37,7 +37,6 @@
  * | View | `defineView`, `ViewCtx`, `useState`, `useEffect`, `useStore`, ... |
  * | Frame | `Frame`, `createFrame`, `registerViewClass`, `invalidateViewClass` |
  * | Service | `createService`, `ServiceApi`, `PayloadApi` |
- * | VDOM | `vdomCreate` (used by compiled template modules) |
  * | Types | All types from `./types` via `export *` |
  *
  * Internal-only utilities (`mark`, `createCache`, `createEmitter`, HMR swap
@@ -87,10 +86,6 @@ export { useUrlState } from "./url-state";
 // Store (zustand-aligned state management)
 export { createStore, computed, bindStore } from "./store";
 export type { StoreApi } from "./store";
-
-// VDOM engine — vdomCreate is imported by compiled template modules at runtime
-// (`import { vdomCreate } from "@lark.js/mvc"`). Must stay in the public barrel.
-export { vdomCreate } from "./vdom";
 
 // Types (re-exported for consumer convenience)
 export * from "./types";

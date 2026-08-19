@@ -28,15 +28,14 @@ it separately). Peer: tailwindcss v4, @tailwindcss/typography.
 
 ```ts
 import { larkDocsPlugin } from "@lark.js/lark-docs/vite";
-// options: { config: DocsConfig; debug?: boolean; vdom?: boolean }
-plugins: [larkDocsPlugin({ config: docsConfig, vdom: false })];
+// options: { config: DocsConfig; debug?: boolean }
+plugins: [larkDocsPlugin({ config: docsConfig })];
 ```
 
 Returns **an array of two plugins**: `lark-docs` (enforce pre; `resolveId`
 tags `.md` imports with `?lark-docs` — node_modules markdown is skipped;
 `load` reads + `compileMarkdown`s) and the embedded `larkMvcPlugin` for
-`.html` templates. Do **not** add `larkMvcPlugin` separately, and keep the
-`vdom` option in sync with `FrameworkConfig.vdom`. Editing an existing `.md`
+`.html` templates. Do **not** add `larkMvcPlugin` separately. Editing an existing `.md`
 hot-reloads through the normal Vite pipeline; adding/renaming files requires
 re-running `defineConfig` (dev-server restart).
 
@@ -102,7 +101,7 @@ tests.
 
 The repo's own `vite.config.ts` is the reference for advanced setups: dual
 lib/docs modes, the `themeDualMode` virtual-module plugin (compiles each
-theme `.html` in both string and VDOM modes and merges the import lines),
+theme `.html` in string),
 CJS `__filename` shims for the self-referencing loaders, and dev aliases
 (`@lark.js/lark-docs → src`, `@lark.js/lark-mvc → ../lark-mvc/dist`).
 

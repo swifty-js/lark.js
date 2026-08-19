@@ -4,16 +4,15 @@ A lightweight TypeScript Mvc frontend framework for single-page applications and
 
 ## Overview
 
-lark-mvc is a functional-first framework that provides a complete application architecture with zero runtime dependencies. It features a real-DOM diff engine (with optional VDOM mode), compile-time template transformation, two-phase route confirmation, zustand-aligned state management, and built-in HMR support across Vite, Webpack, and Rspack.
+lark-mvc is a functional-first framework that provides a complete application architecture with zero runtime dependencies. It features a real-DOM diff engine, compile-time template transformation, two-phase route confirmation, zustand-aligned state management, and built-in HMR support across Vite, Webpack, and Rspack.
 
 Design principles:
 
 - Functional API: no class, no this, no prototype, no mixin
 - Zero runtime dependencies (Babel is build-time only)
-- Real DOM diff via innerHTML plus keyed comparison (VDOM mode available via config)
+- Real DOM diff via innerHTML plus keyed comparison
 - Module Federation support for micro-frontends
 - Compile-time template compilation with zero-config variable extraction
-- Two rendering modes: string mode (real-DOM diff) and VDOM mode (LIS reconciliation)
 
 ## Architecture
 
@@ -42,12 +41,9 @@ Design principles:
               |      |       |
          digest()  delegator  useState/useEffect/...
               |
-     +--------+--------+
-     |                 |
-  string mode      VDOM mode
-  (real-DOM diff)  (LIS reconciliation)
-     |                 |
-  dom.ts           vdom.ts
+     real-DOM diff (innerHTML plus keyed comparison)
+              |
+           dom.ts
 ```
 
 ## Installation
@@ -85,7 +81,7 @@ export default defineConfig({
 import { LarkMvcPlugin } from "@lark.js/mvc/webpack";
 
 export default {
-  plugins: [new LarkMvcPlugin({ debug: false, vdom: false })],
+  plugins: [new LarkMvcPlugin({ debug: false })],
 };
 ```
 
@@ -94,7 +90,7 @@ export default {
 import { LarkMvcPlugin } from "@lark.js/mvc/rspack";
 
 export default {
-  plugins: [new LarkMvcPlugin({ debug: false, vdom: false })],
+  plugins: [new LarkMvcPlugin({ debug: false })],
 };
 ```
 
@@ -874,9 +870,7 @@ restoreComments()      -- restore HTML comments
     |
 extractGlobalVars()    -- AST-based variable auto-detection
     |
-compileToFunction()    -- <% %> to JS template function (string mode)
-    or
-compileToVDomFunction() -- <% %> to VDomNode tree builder (VDOM mode)
+compileToFunction()    -- <% %> to JS template function
     |
 ES module output       -- exports default __lark_template__
 ```
@@ -904,21 +898,10 @@ The Updater tracks changes via `setData()`: for each key in the new data, it com
 
 #### Rendering Modes
 
-String mode (default, `vdom: false`):
-
 1. Template function produces an HTML string
 2. `domGetNode()` parses HTML into a temporary DOM tree via `document.implementation.createHTMLDocument`
 3. `domSetChildNodes()` performs keyed diff against the live DOM
 4. `applyDomOps()` applies mutations (appendChild, removeChild, replaceChild, insertBefore)
-
-VDOM mode (`vdom: true`):
-
-1. Template function produces a `VDomNode` tree via `vdomCreate`
-2. `vdomSetChildNodes()` performs three-phase diff:
-   - Phase 1: Head fast-path (match identical nodes from start)
-   - Phase 2: Tail fast-path (match identical nodes from end)
-   - Phase 3: KeyMap reconciliation with LIS (Longest Increasing Subsequence) to minimize DOM moves
-3. DOM mutations are applied directly
 
 ## Bundler Integration
 
@@ -931,7 +914,6 @@ export default defineConfig({
   plugins: [
     larkMvcPlugin({
       debug: false, // enable debug mode with line tracking
-      vdom: false, // enable VDOM output mode
     }),
   ],
 });
@@ -952,7 +934,7 @@ The Vite plugin:
 import { LarkMvcPlugin } from "@lark.js/mvc/webpack";
 
 export default {
-  plugins: [new LarkMvcPlugin({ debug: false, vdom: false })],
+  plugins: [new LarkMvcPlugin({ debug: false })],
 };
 ```
 
@@ -964,14 +946,14 @@ export default {
       {
         test: /\.html$/,
         loader: "@lark.js/mvc/webpack",
-        options: { debug: false, vdom: false },
+        options: { debug: false },
       },
     ],
   },
 };
 ```
 
-Plugin options: `{ debug?, vdom?, test? (default /\.html$/), exclude? (default /node_modules/) }`.
+Plugin options: `{ debug?, test? (default /\.html$/), exclude? (default /node_modules/) }`.
 
 ### Rspack Plugin + Loader
 
@@ -980,7 +962,7 @@ Plugin options: `{ debug?, vdom?, test? (default /\.html$/), exclude? (default /
 import { LarkMvcPlugin } from "@lark.js/mvc/rspack";
 
 export default {
-  plugins: [new LarkMvcPlugin({ debug: false, vdom: false })],
+  plugins: [new LarkMvcPlugin({ debug: false })],
 };
 ```
 
@@ -992,7 +974,7 @@ export default {
       {
         test: /\.html$/,
         loader: "@lark.js/mvc/rspack",
-        options: { debug: false, vdom: false },
+        options: { debug: false },
       },
     ],
   },
@@ -1087,7 +1069,6 @@ All DOM events are delegated to `document.body` in the capture phase. The EventD
 | Hooks     | `useState`, `useEffect`, `useStore`, `useInterval`, `useTimeout`, `useResource`, `useEvent` |
 | Frame     | `Frame`, `createFrame`, `registerViewClass`, `invalidateViewClass`, `FrameApi` (type)       |
 | Service   | `createService`, `ServiceApi`, `ServiceInstance` (types)                                    |
-| VDOM      | `vdomCreate` (used by compiled templates)                                                   |
 | Types     | All types from `./types` via `export *`                                                     |
 
 ### Bundler Entry Points
@@ -1122,7 +1103,6 @@ All DOM events are delegated to `document.body` in the capture phase. The EventD
 | `require`          | `(names, params?) => Promise<unknown[]>`    | -           | Async module loader (Module Federation)     |
 | `skipViewRendered` | `boolean`                                   | -           | Skip view rendered check                    |
 | `projectName`      | `string`                                    | -           | Project name for micro-frontend bridge      |
-| `vdom`             | `boolean`                                   | `false`     | Enable VDOM rendering mode                  |
 
 ### RouteViewConfig
 
@@ -1189,8 +1169,7 @@ packages/lark-mvc/
     service.ts            -- createService, API management
     hooks.ts              -- useState, useEffect, useStore, etc.
     updater.ts            -- per-view data binding and digest
-    dom.ts                -- real-DOM diff engine (string mode)
-    vdom.ts               -- VDOM diff engine (VDOM mode)
+    dom.ts                -- real-DOM diff engine
     event-emitter.ts      -- multi-cast event system
     event-delegator.ts    -- DOM event delegation
     cache.ts              -- LFU-style bounded cache
@@ -1208,7 +1187,6 @@ packages/lark-mvc/
     compiler/
       template-syntax.ts        -- {{}} to <% %> conversion, @event processing
       compile-template.ts       -- main compilation pipeline
-      compile-to-vdom-function.ts -- VDOM compilation via htmlparser2
       extract-global-vars.ts    -- AST-based variable extraction
   tests/                  -- vitest test suite
   dist/                   -- built output
@@ -1220,16 +1198,14 @@ packages/lark-mvc/
 
 2. Real-DOM diff as default: String mode parses HTML into a temporary DOM tree and performs keyed comparison. This avoids the overhead of maintaining a virtual DOM for most use cases.
 
-3. VDOM as opt-in: When enabled via `vdom: true`, templates compile to `vdomCreate` calls and the engine uses a three-phase diff with LIS reconciliation.
+3. Compile-time templates: Templates are compiled at build time into JavaScript functions. The compiler uses `@babel/parser` for AST-based variable extraction, providing zero-config template variable detection.
 
-4. Compile-time templates: Templates are compiled at build time into JavaScript functions. The compiler uses `@babel/parser` for AST-based variable extraction, providing zero-config template variable detection.
+4. Two-phase routing: The Router fires a `change` event before navigation (allowing rejection) and a `changed` event after (triggering view updates). Navigation guards run asynchronously between the two phases.
 
-5. Two-phase routing: The Router fires a `change` event before navigation (allowing rejection) and a `changed` event after (triggering view updates). Navigation guards run asynchronously between the two phases.
+5. Reference-counted events: The EventDelegator uses reference counting per event type on `document.body`, ensuring a single capture-phase listener per event type regardless of how many views register handlers.
 
-6. Reference-counted events: The EventDelegator uses reference counting per event type on `document.body`, ensuring a single capture-phase listener per event type regardless of how many views register handlers.
+6. LFU cache with frequency eviction: The bounded cache uses single-pass partial selection (O(n\*k)) instead of full sorting, making eviction efficient for the typical buffer size of 5.
 
-7. LFU cache with frequency eviction: The bounded cache uses single-pass partial selection (O(n\*k)) instead of full sorting, making eviction efficient for the typical buffer size of 5.
+7. Async callback validity: The `mark`/`unmark` system and `wrapAsync` prevent stale callbacks from executing after a view is re-rendered or destroyed.
 
-8. Async callback validity: The `mark`/`unmark` system and `wrapAsync` prevent stale callbacks from executing after a view is re-rendered or destroyed.
-
-9. Cooperative time-slicing: The task scheduler in `utils.ts` processes tasks in 9ms batches, yielding to the browser via `scheduler.yield()` (Chrome 115+) or `setTimeout(0)` fallback.
+8. Cooperative time-slicing: The task scheduler in `utils.ts` processes tasks in 9ms batches, yielding to the browser via `scheduler.yield()` (Chrome 115+) or `setTimeout(0)` fallback.

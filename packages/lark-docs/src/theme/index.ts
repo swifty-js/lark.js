@@ -26,56 +26,20 @@
  * Exports factory functions that create lark-mvc view setups for each
  * theme component. Each factory takes a single argument: the pre-compiled
  * template to render with.
- *
- * Templates are pre-compiled in BOTH string and VDOM modes during the
- * lib build. registerThemeViews selects the correct version based on
- * the consumer's FrameworkConfig.vdom setting.
  */
-import { Framework } from "@lark.js/mvc";
 import { registerViewClass } from "@lark.js/mvc";
 
-// Dual-mode template imports — each virtual module exports __str (string-mode)
-// and __vdom (VDOM-mode) compiled functions. The lib build's themeDualMode
-// Vite plugin resolves virtual:lark-docs/* IDs and compiles each .html in
-// both modes. Virtual modules are used instead of direct .html imports to
-// avoid conflicts with larkMvcPlugin7 which intercepts all .html via resolveId.
-import {
-  __str as docLayoutStr,
-  __vdom as docLayoutVdom,
-} from "virtual:lark-docs/docs-layout";
-import {
-  __str as sidebarStr,
-  __vdom as sidebarVdom,
-} from "virtual:lark-docs/sidebar";
-import { __str as tocStr, __vdom as tocVdom } from "virtual:lark-docs/toc";
-import {
-  __str as searchStr,
-  __vdom as searchVdom,
-} from "virtual:lark-docs/search";
-import {
-  __str as themeToggleStr,
-  __vdom as themeToggleVdom,
-} from "virtual:lark-docs/theme-toggle";
+import docLayoutTemplate from "virtual:lark-docs/docs-layout";
+import sidebarTemplate from "virtual:lark-docs/sidebar";
+import tocTemplate from "virtual:lark-docs/toc";
+import searchTemplate from "virtual:lark-docs/search";
+import themeToggleTemplate from "virtual:lark-docs/theme-toggle";
 
 import { createDocsLayoutView } from "./docs-layout";
 import { createSidebarView } from "./sidebar";
 import { createTocView } from "./toc";
 import { createSearchView } from "./search";
 import { createThemeToggleView } from "./theme-toggle";
-
-/**
- * Options for registerThemeViews.
- *
- * Pass `{ vdom }` explicitly when calling before `Framework.boot()` — which
- * is the required order, since the default view is mounted during boot.
- */
-interface RegisterThemeViewsOptions {
-  /**
-   * Register VDOM-mode templates instead of string-mode ones.
-   * Resolution order: this option → booted FrameworkConfig.vdom → false.
-   */
-  vdom?: boolean;
-}
 
 /**
  * Register all five built-in theme views (docs-layout, sidebar, toc, search,
@@ -85,34 +49,22 @@ interface RegisterThemeViewsOptions {
  * default view is mounted during boot:
  *
  * ```ts
- * const config: FrameworkConfig = { ..., vdom: true };
- * registerThemeViews({ vdom: config.vdom });
+ * registerThemeViews();
  * Framework.boot(config);
  * ```
- *
- * Templates are pre-compiled in both string and VDOM modes during the
- * lib build, so this function simply selects the correct version.
  */
-export function registerThemeViews(options?: RegisterThemeViewsOptions): void {
-  // Determine rendering mode: explicit option > Framework config > default
-  const vdom =
-    options?.vdom ??
-    (Framework.isBooted()
-      ? Framework.getConfig<boolean | undefined>("vdom")
-      : undefined) ??
-    false;
-
-  const docLayout = vdom ? docLayoutVdom : docLayoutStr;
-  const sidebar = vdom ? sidebarVdom : sidebarStr;
-  const toc = vdom ? tocVdom : tocStr;
-  const search = vdom ? searchVdom : searchStr;
-  const themeToggle = vdom ? themeToggleVdom : themeToggleStr;
-
-  registerViewClass("theme/docs-layout", createDocsLayoutView(docLayout));
-  registerViewClass("theme/sidebar", createSidebarView(sidebar));
-  registerViewClass("theme/toc", createTocView(toc));
-  registerViewClass("theme/search", createSearchView(search));
-  registerViewClass("theme/theme-toggle", createThemeToggleView(themeToggle));
+export function registerThemeViews(): void {
+  registerViewClass(
+    "theme/docs-layout",
+    createDocsLayoutView(docLayoutTemplate),
+  );
+  registerViewClass("theme/sidebar", createSidebarView(sidebarTemplate));
+  registerViewClass("theme/toc", createTocView(tocTemplate));
+  registerViewClass("theme/search", createSearchView(searchTemplate));
+  registerViewClass(
+    "theme/theme-toggle",
+    createThemeToggleView(themeToggleTemplate),
+  );
 }
 
 // Re-export factories and helpers for advanced users who want custom

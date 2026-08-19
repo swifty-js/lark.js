@@ -42,7 +42,6 @@
  * - **Frame** — view lifecycle management (mount/unmount, parent-child tree,
  *   cross-view method invocation)
  * - **Updater** — per-view data binding with change detection and DOM diff
- *   (real-DOM diff in string mode, VDOM diff with LIS reconciliation in vdom mode)
  *
  * ## Design principles
  *
@@ -237,73 +236,6 @@ export type DomOp =
   | [2, Element, ChildNode] // removeChild(parent, oldChild)
   | [4, Element, ChildNode, ChildNode] // replaceChild(parent, newChild, oldChild)
   | [8, Element, ChildNode, ChildNode]; // insertBefore(parent, newChild, refChild)
-
-// ============================== VDOM ==============================
-
-// ============================================================
-// VDOM types
-// ============================================================
-
-/**
- * Virtual DOM node. Produced by `vdomCreate`, consumed by the VDOM diff engine.
- *
- * Property semantics:
- * - Text nodes: tag = 0 (V_TEXT_NODE), html = text content
- * - Element nodes: tag = string, attrs = serialized opening tag, children = child VDomNodes
- * - Raw HTML nodes: tag = SPLITTER (\x1e), html = raw HTML string
- * - Self-closing: selfClose = true (children param was 1)
- */
-export interface VDomNode {
-  /** Tag name for elements, 0 (V_TEXT_NODE) for text, SPLITTER for raw HTML */
-  tag: string | number;
-  /** Inner HTML (serialized children for elements, text content for text nodes) */
-  html: string;
-  /** Serialized opening tag with attributes, e.g. '<div class="row"' */
-  attrs?: string;
-  /** Attribute key-value map */
-  attrsMap?: Record<string, unknown>;
-  /** Attribute names that are set as DOM properties (not attributes) */
-  attrsSpecials?: Record<string, string>;
-  /** Original specials argument before defaulting (for change detection) */
-  hasSpecials?: Record<string, string> | undefined;
-  /** Child VDomNode array (undefined for text/raw/self-closing) */
-  children?: VDomNode[] | undefined;
-  /** Diff key: from id, #, or v-lark path */
-  compareKey?: string | undefined;
-  /** Keyed children count map (compareKey -> count) */
-  reused?: Record<string, number> | undefined;
-  /** Total count of keyed children */
-  reusedTotal?: number;
-  /** Sub-view references: [viewPath, owner, uri, params] tuples */
-  views?: [string, string, string, Record<string, string>][] | undefined;
-  /** Whether self-closing (children param was literal 1) */
-  selfClose?: boolean;
-  /** Sub-view path if this node hosts a v-lark view, otherwise falsy */
-  isLarkView?: string | undefined;
-}
-
-/**
- * VDOM diff operation tracker. Parallel to DomRef but for the VDOM pipeline.
- */
-export interface VDomRef {
-  /** View ID (for placeholder replacement) */
-  viewId: string;
-  /** Deferred DOM property assignments: [element, propName, value][] */
-  nodeProps: [Element, string, unknown][];
-  /** Pending async operation count */
-  asyncCount: number;
-  /** Whether the DOM actually changed */
-  changed: number;
-}
-
-/**
- * VDOM template function signature.
- * The compiled template imports vdomCreate via ES module import and
- * takes only (data, viewId, refData). Extra arguments are ignored.
- */
-export type VDomTemplate = (data: unknown, viewId: string, refData: unknown) => VDomNode;
-
-// ============================== VDOM ==============================
 
 // ============================================================
 // Frame internal types
@@ -515,8 +447,8 @@ export interface ViewCtx {
   /** Whether rendered at least once */
   rendered: Ref<boolean>;
   /** View template function (accessed via getTemplate/setTemplate) */
-  getTemplate(): ViewTemplate | VDomTemplate | undefined;
-  setTemplate(v: ViewTemplate | VDomTemplate | undefined): void;
+  getTemplate(): ViewTemplate | undefined;
+  setTemplate(v: ViewTemplate | undefined): void;
   /** Location observation config */
   locationObserved: ViewLocationObserved;
   /** Observed state keys (accessed via getObservedStateKeys/setObservedStateKeys) */
@@ -613,7 +545,7 @@ export type ViewSetup<T = unknown> = (
   ctx: ViewCtx,
   params?: T,
 ) => {
-  template?: ViewTemplate | VDomTemplate;
+  template?: ViewTemplate;
   events?: Record<string, AnyFunc>;
   assign?: (options?: unknown) => boolean | undefined;
 };
@@ -1014,8 +946,6 @@ export interface FrameworkConfig {
    * belongs to the current project or a remote project.
    */
   projectName?: string;
-  /** Default false. */
-  vdom?: boolean;
 }
 
 export interface RouteViewConfig {
@@ -1047,6 +977,4 @@ export interface CompileOptions {
   globalVars?: string[];
   /** File path for debug error messages (default: undefined) */
   file?: string;
-  /** Generate VDOM output instead of HTML string (default: false) */
-  vdom?: boolean;
 }

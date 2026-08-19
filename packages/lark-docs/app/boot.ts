@@ -46,7 +46,6 @@ const config: FrameworkConfig = {
   rootId: "app",
   routeMode: "history",
   routes,
-  vdom: false,
   defaultPath: "/",
   // All /docs/* routes map to "theme/docs-layout" (see generated routes).
   // The layout stays mounted across navigation; observeLocation triggers
@@ -59,10 +58,9 @@ const config: FrameworkConfig = {
 };
 
 // === Register theme views ===
-// Pass config so registerThemeViews selects the correct template mode
-// (string vs VDOM) based on vdom. Must be called before Framework.boot()
+// Must be called before Framework.boot()
 // so views are registered when the default view is mounted during boot.
-registerThemeViews({ vdom: config.vdom });
+registerThemeViews();
 
 // === Inject site data + content loader into State ===
 

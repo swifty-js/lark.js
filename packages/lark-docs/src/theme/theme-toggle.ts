@@ -21,7 +21,7 @@
  */
 
 import { defineView, useState, useResource } from "@lark.js/mvc";
-import type { VDomTemplate, ViewSetup, ViewTemplate } from "@lark.js/mvc";
+import type { ViewSetup, ViewTemplate } from "@lark.js/mvc";
 import { icons } from "./icons";
 
 const STORAGE_KEY = "lark-docs-theme";
@@ -41,9 +41,7 @@ function isDark(): boolean {
   return systemPrefersDark();
 }
 
-export function createThemeToggleView(
-  template: ViewTemplate | VDomTemplate,
-): ViewSetup {
+export function createThemeToggleView(template: ViewTemplate): ViewSetup {
   return defineView((ctx) => {
     const [getDark, setDark] = useState("dark", isDark());
     ctx.updater.set({ icons });

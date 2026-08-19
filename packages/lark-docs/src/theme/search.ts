@@ -29,7 +29,7 @@
  */
 import MiniSearch, { type SearchResult } from "minisearch";
 import { State, Router, defineView, useEffect } from "@lark.js/mvc";
-import type { VDomTemplate, ViewSetup, ViewTemplate } from "@lark.js/mvc";
+import type { ViewSetup, ViewTemplate } from "@lark.js/mvc";
 import { z } from "zod";
 import { icons } from "./icons";
 import { escapeHtml } from "../utils/escape-html";
@@ -59,9 +59,7 @@ const GetSearchIndexSchema = z.custom<GetSearchIndexFn>(
 
 const MAX_RESULTS = 12;
 
-export function createSearchView(
-  template: ViewTemplate | VDomTemplate,
-): ViewSetup {
+export function createSearchView(template: ViewTemplate): ViewSetup {
   return defineView((ctx) => {
     let mini: MiniSearch | null = null;
     let seq = 0;

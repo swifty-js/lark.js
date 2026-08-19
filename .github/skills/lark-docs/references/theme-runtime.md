@@ -8,8 +8,7 @@ Source of truth: `src/theme/*` (5 view factories + .html templates),
 ```ts
 import { registerThemeViews } from "@lark.js/lark-docs"; // or /theme
 
-registerThemeViews(options?: { vdom?: boolean }): void
-// vdom resolution: explicit option > Framework config (if booted) > false
+registerThemeViews(): void
 ```
 
 Registers five views via `registerViewClass`:
@@ -22,8 +21,7 @@ Registers five views via `registerViewClass`:
 | `theme/search`       | `createSearchView(tpl)`      | MiniSearch command palette                                                     |
 | `theme/theme-toggle` | `createThemeToggleView(tpl)` | Dark-mode button                                                               |
 
-Templates are pre-compiled in **both** string and VDOM modes at lib-build
-time (via `virtual:lark-docs/*` modules exporting `__str`/`__vdom`);
+Templates are pre-compiled in string at lib-build time (via `virtual:lark-docs/*` modules exporting `__str`);
 `registerThemeViews` merely picks the version matching `vdom`. Call it
 **before `Framework.boot()`** so `theme/docs-layout` is registered when the
 default view mounts.

@@ -31,15 +31,7 @@
  * Also declares module types for `*.html` (compiled template functions) and
  * `*.css` imports so bundlers resolve them correctly.
  */
-import type {
-  FrameApi,
-  FrameworkApi,
-  StateApi,
-  RouterApi,
-  ViewSetup,
-  ViewTemplate,
-  VDomTemplate,
-} from "./types";
+import type { FrameApi, FrameworkApi, StateApi, RouterApi, ViewSetup, ViewTemplate } from "./types";
 declare global {
   /** Scheduler API (Chrome 94+) — used by `Framework.task` for time-slicing. */
   var scheduler: Scheduler;
@@ -88,6 +80,6 @@ declare module "*.css" {
 }
 
 declare module "*.html" {
-  const template: ViewTemplate | VDomTemplate;
+  const template: ViewTemplate;
   export default template;
 }

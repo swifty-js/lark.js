@@ -477,6 +477,10 @@ function vdomSetNode(
       if (oldFrameId && newViewPath === oldViewPath) {
         // Same view: preserve existing sub-view
         updateChildren = false;
+      } else if (oldFrameId && oldViewPath) {
+        // v-lark path changed in place: tear down the old child frame so
+        // mountZone treats the element as unbound and mounts the new view
+        frame.unmountFrame(oldFrameId);
       }
     }
 

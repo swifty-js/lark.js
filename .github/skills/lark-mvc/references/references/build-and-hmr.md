@@ -12,7 +12,7 @@ Source of truth: `src/vite.ts`, `src/webpack.ts`, `src/rspack.ts`,
 // vite.config.ts
 import { larkMvcPlugin } from "@lark.js/lark-mvc/vite";
 export default defineConfig({
-  plugins: [larkMvcPlugin({ debug: false, vdom: false })],
+  plugins: [larkMvcPlugin({ debug: false })],
 });
 ```
 
@@ -26,9 +26,9 @@ injects view HMR into any `.ts/.js` file that imports a `.html`.
 ```ts
 import { LarkMvcPlugin } from "@lark.js/lark-mvc/webpack"; // or /rspack
 export default {
-  plugins: [new LarkMvcPlugin({ debug: false, vdom: false })],
+  plugins: [new LarkMvcPlugin({ debug: false })],
 };
-// Options: { debug?, vdom?, test? (default /\.html$/), exclude? (default /node_modules/) }
+// Options: { debug?, test? (default /\.html$/), exclude? (default /node_modules/) }
 ```
 
 The plugin auto-registers two rules: `.html` → loader with
@@ -44,14 +44,12 @@ module.exports = {
       {
         test: /\.html$/,
         loader: "@lark.js/lark-mvc/webpack", // or "@lark.js/lark-mvc/rspack"
-        options: { debug: false, vdom: false },
+        options: { debug: false },
       },
     ],
   },
 };
 ```
-
-**Rule: the `vdom` option must equal `FrameworkConfig.vdom`.**
 
 TypeScript: add `"@lark.js/lark-mvc/client"` to `types` (or a triple-slash
 reference) so `*.html` / `*.css` imports type-check.
@@ -73,7 +71,6 @@ reference) so `*.html` / `*.css` imports type-check.
 | `extensions`       | `string[]`                                  | —                           | Extension view paths loaded at startup                          |
 | `initModule`       | `string`                                    | —                           | Init module loaded at startup                                   |
 | `projectName`      | `string`                                    | —                           | Micro-frontend bridge: local vs remote view paths               |
-| `vdom`             | `boolean`                                   | `false`                     | VDOM rendering mode (match plugin option)                       |
 | `devtool`          | `boolean`                                   | `false`                     | Install Frame Devtool Bridge (postMessage)                      |
 | `skipViewRendered` | `boolean`                                   | —                           | Skip rendered checks                                            |
 

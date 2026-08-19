@@ -1,12 +1,12 @@
 # Template Syntax & Compilation
 
 Source of truth: `src/compiler/template-syntax.ts`,
-`src/compiler/compile-template.ts`, `src/compiler/compile-to-vdom-function.ts`,
-`src/compiler/extract-global-vars.ts`, `src/runtime.ts`.
+`src/compiler/compile-template.ts`, `src/compiler/extract-global-vars.ts`,
+`src/runtime.ts`.
 
 Templates are plain `.html` files, compiled at build time by the bundler
 plugin into an ES module whose default export is a render function
-`(data, viewId, refData) => string | VDomNode`. View code imports them:
+`(data, viewId, refData) => string`. View code imports them:
 `import template from "./home.html";`.
 
 ## Output operators
@@ -36,8 +36,8 @@ untouched (comments are protected during compilation).
 - Shorthand `{{if(cond)}}` and `{{for(init;test;step)}}` are accepted.
 - Blocks are validated at compile time: unclosed/mismatched blocks throw with
   the opening line number.
-- Control flow works **inside attribute values** too (compiled to an IIFE in
-  VDOM mode): `class="base {{if active}}on{{/if}}"`.
+- Control flow works **inside attribute values** too:
+  `class="base {{if active}}on{{/if}}"`.
 
 ## Loops
 
@@ -112,8 +112,8 @@ the template must exist on `updater.data`.
 
 ## Keyed diff hints
 
-The diff engines key elements by `id` attribute, or by `#` (VDOM-mode-only
-key attribute that is stripped from output), or by `v-lark` path. Give loop
+The diff engines key elements by `id` attribute, or by `#` (a key attribute
+that is stripped from output), or by `v-lark` path. Give loop
 items a stable `id="item-{{=item.id}}"` to get keyed reordering instead of
 in-place rewrites.
 
@@ -128,15 +128,13 @@ in-place rewrites.
   → restoreComments()
   → extractGlobalVars()    @babel/parser AST scope analysis (zero-config)
   → string mode: compileToFunction()      → `__lark_out__ += ...` concatenation
-    vdom mode:  compileToVDomFunction()   → htmlparser2 walk → vdomCreate() calls
   → ES module: `function __lark_template__(data, viewId, refData) {...}
                 export default __lark_template__;`
   → HMR snippet appended by the bundler plugin
 ```
 
-String-mode modules import `encHtml`/`strSafe`/`refFn` from
-`@lark.js/lark-mvc/runtime`; VDOM-mode modules additionally import `vdomCreate`
-from `@lark.js/lark-mvc` (which is why `vdomCreate` stays in the public barrel).
+Compiled modules import `encHtml`/`strSafe`/`refFn` from
+`@lark.js/lark-mvc/runtime`.
 
 ## Compiler API (build-time, Node)
 
@@ -148,7 +146,6 @@ await compileTemplate(source, {
   debug?: boolean,        // wrap in try/catch, report template line + expression on render errors
   globalVars?: string[],  // skip auto-extraction
   file?: string,          // path shown in debug error messages
-  vdom?: boolean,         // emit VDomNode-building function instead of string
 }): string                // ES module source
 ```
 

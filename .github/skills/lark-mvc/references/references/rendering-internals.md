@@ -1,6 +1,6 @@
-# Rendering Internals: Updater, Digest, DOM Diff, VDOM & Scheduler
+# Rendering Internals: Updater, Digest, DOM Diff & Scheduler
 
-Source of truth: `src/updater.ts`, `src/dom.ts`, `src/vdom.ts`,
+Source of truth: `src/updater.ts`, `src/dom.ts`,
 `src/framework.ts` (dispatcher/task), `src/utils.ts` (scheduler).
 Read this when debugging "why didn't it re-render", flicker, lost focus,
 child views unexpectedly remounting, or performance.
@@ -72,31 +72,6 @@ state.
    (append/remove/replace/insertBefore tuples).
 5. An element carrying `v-lark` with an unchanged view path keeps its
    subtree — the child view is NOT remounted; only its props update.
-
-## VDOM mode (`vdom: true`) — three-phase diff with LIS (`src/vdom.ts`)
-
-Template (compiled with `vdom: true`) returns a `VDomNode` tree via
-`vdomCreate(tag, props?, children?, specials?)`:
-
-- text node `vdomCreate(0, "text")`, raw HTML `vdomCreate(0, html, 1)`
-  (SPLITTER tag), element, self-closing (`children === 1`), root
-  `vdomCreate(viewId, 0, children)`.
-- `compareKey` comes from `#` or `id` props (or `tag + v-lark path`).
-
-Diff (`vdomSetChildNodes`):
-
-1. First render → `innerHTML` fast path. Identical serialized `html` →
-   short-circuit no-op.
-2. **Head fast-path** then **tail fast-path**: patch matching nodes in place.
-3. **KeyMap + LIS reconciliation**: matched-by-key nodes at Longest Increasing
-   Subsequence positions stay put; others move via `insertBefore`; unmatched
-   new nodes are created; unused old nodes are removed (child frames
-   unmounted first via `domUnmountFrames`).
-4. Form-state sync (`value/checked/selected`) compares against live DOM
-   values so user typing isn't clobbered.
-5. The `ready` callback (endUpdate + deferred DOM property writes) is pushed
-   through the scheduler so the browser can paint between mutation and
-   post-processing.
 
 ## Dispatcher (route/state → renders)
 

@@ -22,7 +22,7 @@ Registers five views via `registerViewClass`:
 | `theme/theme-toggle` | `createThemeToggleView(tpl)` | Dark-mode button                                                               |
 
 Templates are pre-compiled in string at lib-build time (via `virtual:lark-docs/*` modules exporting `__str`);
-`registerThemeViews` merely picks the version matching `vdom`. Call it
+`registerThemeViews` merely registers the templates. Call it
 **before `Framework.boot()`** so `theme/docs-layout` is registered when the
 default view mounts.
 
@@ -141,7 +141,7 @@ import { registerThemeViews, createSidebarView } from "@lark.js/lark-docs";
 import { registerViewClass } from "@lark.js/lark-mvc";
 import mySidebarTpl from "./my-sidebar.html";
 
-registerThemeViews({ vdom: false });
+registerThemeViews();
 registerViewClass("theme/sidebar", createSidebarView(mySidebarTpl));
 ```
 

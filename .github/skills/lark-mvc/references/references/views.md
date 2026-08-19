@@ -12,7 +12,7 @@ type ViewSetup<T = unknown> = (
   ctx: ViewCtx,
   params?: T, // route params + v-lark props + viewInitParams merged
 ) => {
-  template?: ViewTemplate | VDomTemplate; // default-imported from the .html file
+  template?: ViewTemplate; // default-imported from the .html file
   events?: Record<string, AnyFunc>; // "name<eventType>" keyed handlers
   assign?: (options?: unknown) => boolean | undefined; // optional per-render data fn
 };

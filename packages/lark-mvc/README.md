@@ -896,7 +896,7 @@ ctx.updater.getChangedKeys(); // keys changed in current digest
 
 The Updater tracks changes via `setData()`: for each key in the new data, it compares against the old value. Only non-primitive, non-function values trigger comparison; primitives are always considered changed if the reference differs. Changed keys are collected into a `Set<string>` and passed through the diff pipeline.
 
-#### Rendering Modes
+#### Rendering Pipeline
 
 1. Template function produces an HTML string
 2. `domGetNode()` parses HTML into a temporary DOM tree via `document.implementation.createHTMLDocument`

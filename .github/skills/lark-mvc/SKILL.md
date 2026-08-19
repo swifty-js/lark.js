@@ -6,8 +6,8 @@ description: >-
   defineView() + ViewCtx + hooks, Frame tree, two-phase Router, State
   singleton, zustand-aligned createStore/computed/bindStore, createService
   request layer, compile-time .html templates ({{=}}/{{!}}/{{@}}/{{forOf}}),
-  v-lark child views with *prop/@event bindings, string-mode real-DOM diff
-  and opt-in VDOM (LIS) rendering, Vite/Webpack/Rspack plugins with
+  v-lark child views with *prop/@event bindings, real-DOM diff rendering,
+  Vite/Webpack/Rspack plugins with
   auto-injected HMR, and the Frame Devtool Bridge. Use this skill whenever the
   user reads, writes, debugs, reviews, or extends code that imports from
   "@lark.js/lark-mvc" (or any sub-path like /vite, /webpack, /rspack, /runtime,
@@ -20,7 +20,7 @@ description: >-
   createService, PayloadApi, updater.set().digest(), ctx.owner.fire,
   mountZone, mountView, v-lark, p-lark-, e-lark-, larkMvcPlugin,
   LarkMvcPlugin, larkMvcLoader, hotSwapByTemplate, hotSwapByView,
-  vdomCreate, EventDelegator, compileTemplate, extractGlobalVars,
+  EventDelegator, compileTemplate, extractGlobalVars,
   "handler<click>" event maps, or Lark template syntax in .html files. Even
   if the user just says "add a page/view/component to the Lark app", consult
   this skill first. Do NOT use for the legacy class-based Lark (View.extend)
@@ -42,8 +42,8 @@ re-renders until you call `.digest()` (or a hook/store does it for you).
 
 | Import                       | Provides                                                                                                                                                                                                      |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@lark.js/lark-mvc`          | Runtime: `Framework`, `defineView`, hooks, `State`, `Router`, `Frame`, `createStore`, `computed`, `bindStore`, `createService`, `useUrlState`, `EventDelegator`, `vdomCreate`, `registerViewClass`, all types |
-| `@lark.js/lark-mvc/vite`     | `larkMvcPlugin({ debug?, vdom? })`                                                                                                                                                                            |
+| `@lark.js/lark-mvc`          | Runtime: `Framework`, `defineView`, hooks, `State`, `Router`, `Frame`, `createStore`, `computed`, `bindStore`, `createService`, `useUrlState`, `EventDelegator`, `registerViewClass`, all types |
+| `@lark.js/lark-mvc/vite`     | `larkMvcPlugin({ debug? })`                                                                                                                                                                            |
 | `@lark.js/lark-mvc/webpack`  | `larkMvcLoader`, `LarkMvcPlugin` (auto-registers loader)                                                                                                                                                      |
 | `@lark.js/lark-mvc/rspack`   | `larkMvcLoader`, `LarkMvcPlugin`                                                                                                                                                                              |
 | `@lark.js/lark-mvc/runtime`  | Template helpers (`encHtml`, `strSafe`, `encUri`, `encQuote`, `refFn`) — imported by compiled templates, not by app code                                                                                      |
@@ -113,7 +113,6 @@ Framework.boot({
   defaultView: "home",
   routes: { "/home": "home", "/about": "about" },
   unmatchedView: "404",
-  vdom: false, // true = VDOM/LIS mode (must match plugin option)
   require: async (
     names, // lazy view loading (chunk-split / MF)
   ) =>
@@ -126,7 +125,7 @@ Framework.boot({
 ```ts
 // vite.config.ts
 import { larkMvcPlugin } from "@lark.js/lark-mvc/vite";
-export default defineConfig({ plugins: [larkMvcPlugin({ vdom: false })] });
+export default defineConfig({ plugins: [larkMvcPlugin()] });
 ```
 
 HTML entry needs `<div id="app"></div>` matching `rootId`. HMR for both
@@ -157,26 +156,24 @@ boilerplate by hand.
    rendered into the attribute (e.g. `pick(index=112)`) and delivered via
    `e.params` (stringified). Only static literals (`{mode: 'soft'}`) may be
    written without interpolation.
-4. **`vdom` must match in two places**: `FrameworkConfig.vdom` and the bundler
-   plugin option (`larkMvcPlugin({ vdom })`). Mismatch = broken rendering.
-5. **Hooks only inside setup** — they read a module-level `currentCtx`; calling
+4. **Hooks only inside setup** — they read a module-level `currentCtx`; calling
    them in event handlers or async callbacks throws.
-6. **Setup runs once** — no re-execution on render. Put per-render data logic
+5. **Setup runs once** — no re-execution on render. Put per-render data logic
    in the optional `assign()` (pattern: `updater.snapshot()` → `set(...)` →
    `return updater.altered()`), and call it once manually for the first render.
-7. **Pass objects to children with `{{@expr}}`** (ref token), strings with
+6. **Pass objects to children with `{{@expr}}`** (ref token), strings with
    `{{=expr}}`. Child receives them in `params`; later parent renders push
    updated props via `mountZone` automatically.
-8. **Guard async work** with `ctx.wrapAsync(fn)` (signature-guarded; stale
+7. **Guard async work** with `ctx.wrapAsync(fn)` (signature-guarded; stale
    callbacks after re-render/destroy are dropped) or check inside `useEffect`
    cleanup flags. `useEffect` runs synchronously during setup — the DOM does
    not exist yet; defer DOM access with `setTimeout(..., 0)`.
-9. **State needs digest too**: `State.set({...}); State.digest();` and views
+8. **State needs digest too**: `State.set({...}); State.digest();` and views
    only react if they declared `ctx.observeState("key1,key2")`. Use
    `State.clean("keys")(ctx)` for reference-counted cleanup.
-10. View paths are extension-less and relative to the app source root
-    (`"components/counter-store"`), used consistently in `routes`, `v-lark`,
-    `registerViewClass`, and the `require` loader.
+9. View paths are extension-less and relative to the app source root
+   (`"components/counter-store"`), used consistently in `routes`, `v-lark`,
+   `registerViewClass`, and the `require` loader.
 
 ## Reference files — read on demand
 
@@ -187,7 +184,7 @@ boilerplate by hand.
 | [references/state-routing.md](references/state-routing.md)             | `State`, `createStore`/`computed`/`bindStore`/`useStore`, `Router` (parse/to/diff/beforeEach, history vs hash), `useUrlState`                                     |
 | [references/services.md](references/services.md)                       | `createService`, endpoint metadata, caching/dedup/queueing, `PayloadApi`, `createCache`, `createEmitter`                                                          |
 | [references/build-and-hmr.md](references/build-and-hmr.md)             | Vite/Webpack/Rspack integration, `FrameworkConfig` (full table), lazy loading & Module Federation, HMR internals, Devtool Bridge, project scaffolding conventions |
-| [references/rendering-internals.md](references/rendering-internals.md) | Updater/digest semantics, string-mode real-DOM diff vs VDOM LIS diff, keyed diff (`id`/`#` compare keys), task scheduler — read when debugging rendering/perf     |
+| [references/rendering-internals.md](references/rendering-internals.md) | Updater/digest semantics, real-DOM diff, keyed diff (`id`/`#` compare keys), task scheduler — read when debugging rendering/perf     |
 
 Real-world example code lives in `packages/lark-demo` (chunk-split app with
 nested components, stores, Module Federation) and `packages/lark-docs/app`

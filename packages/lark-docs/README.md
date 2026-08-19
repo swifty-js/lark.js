@@ -112,7 +112,7 @@ export default defineConfig({
     // larkDocsPlugin returns a plugin array that handles BOTH .md
     // compilation and .html template compilation (the lark-mvc template
     // plugin is embedded) — no separate larkMvcPlugin is needed.
-    ...larkDocsPlugin({ config: docsConfig, vdom: false }),
+    ...larkDocsPlugin({ config: docsConfig }),
     tailwindcss(),
   ],
   resolve: {
@@ -173,7 +173,6 @@ const config: FrameworkConfig = {
   rootId: "app",
   routeMode: "history",
   routes,
-  vdom: false,
   defaultPath: "/docs/",
   // All docs routes map to "theme/docs-layout" (see generated routes).
   // The layout stays mounted across navigation; observeLocation triggers
@@ -183,11 +182,9 @@ const config: FrameworkConfig = {
 };
 
 // === Register theme views ===
-// Must run BEFORE Framework.boot() so the views are registered when the
-// default view mounts. Pass the same vdom flag as the config — templates
-// are pre-compiled in both string and VDOM modes, and this selects one.
+// Register built-in theme views before boot
 
-registerThemeViews({ vdom: config.vdom });
+registerThemeViews();
 
 // === Inject site data + content loader into State ===
 
@@ -429,11 +426,11 @@ The recommended way to set up the theme:
 ```ts
 import { registerThemeViews } from "@lark.js/docs"; // also exported from /theme
 
-// Call BEFORE Framework.boot(), passing the same vdom flag as your config:
-registerThemeViews({ vdom: false });
+// Call BEFORE Framework.boot():
+registerThemeViews();
 ```
 
-Signature: `registerThemeViews(options?: { vdom?: boolean })`. The theme templates are pre-compiled in BOTH string and VDOM modes during the library build; this call selects the version matching the rendering mode (explicit option > booted Framework config > `false`). Consumers never need to import `.html` files or call `registerViewClass` manually.
+Signature: `registerThemeViews()`. Consumers never need to import `.html` files or call `registerViewClass` manually.
 
 ### Layout Structure
 
@@ -580,9 +577,9 @@ The `/client` sub-path is types-only (no runtime code). It ships `client.d.ts` w
 
 Type-safe configuration helper. Returns the config unchanged while triggering route generation. The optional `projectRoot` parameter controls path resolution for the `docs` directory and the generated output. Defaults to `process.cwd()`.
 
-### `registerThemeViews(options?: RegisterThemeViewsOptions): void`
+### `registerThemeViews(): void`
 
-Registers all five theme views (layout, sidebar, TOC, search, theme toggle) with the lark-mvc view registry. Templates are pre-compiled in both string and VDOM modes; pass `{ vdom }` (before boot) to select the rendering mode.
+Registers all five theme views (layout, sidebar, TOC, search, theme toggle) with the lark-mvc view registry. Must be called before `Framework.boot()`.
 
 ### `scanDocsDir(docsDir: string, baseUrl: string): DocsRoute[]`
 
@@ -707,8 +704,8 @@ pnpm format
 The repository's own `vite.config.ts` is a dual-mode config: `--mode lib`
 builds the library (and copies `file-content.ejs`, `client.css`, `client.d.ts`
 into `dist/`), while `--mode docs` builds the documentation site. It also
-hosts the `themeDualMode` plugin that compiles each theme `.html` in both
-string and VDOM modes into `virtual:lark-docs/*` modules.
+hosts the `themeTemplates` plugin that compiles each theme `.html` into
+`virtual:lark-docs/*` ES modules.
 
 Deployment: the output is a `history`-mode SPA. Serve `dist-docs/` with a
 fallback rewrite of all paths to `index.html` (on GitHub-Pages-style hosts

@@ -48,11 +48,10 @@ import {
  */
 export async function extractGlobalVars(source: string): Promise<string[]> {
   // Step 1: Convert {{ }} art syntax to <% %> so we can analyze it
-  // (reuse the same pipeline as compilation, but without debug markers)
   const { protectedSource, comments: _comments } = protectComments(source);
   const viewEventProcessed = processViewEvents(protectedSource);
   const viewBindingsProcessed = processViewBindings(viewEventProcessed);
-  const converted = convertArtSyntax(viewBindingsProcessed, false);
+  const converted = convertArtSyntax(viewBindingsProcessed);
   const template = restoreComments(converted, _comments);
 
   // Step 2: Convert <% %> template commands into a JS-parsable form

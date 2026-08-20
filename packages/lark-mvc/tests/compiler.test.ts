@@ -34,7 +34,7 @@ import * as runtime from "../src/runtime";
 async function render(
   source: string,
   data: Record<string, unknown> = {},
-  options?: { debug?: boolean; file?: string },
+  options?: { file?: string },
 ): Promise<string> {
   const globalVars = await extractGlobalVars(source);
   const moduleCode = await compileTemplate(source, { ...options, globalVars });
@@ -229,14 +229,6 @@ describe("compileTemplate", () => {
       const result = await render('<div @click="handler()">text</div>', {});
       // viewId "testViewId" should appear in output
       expect(result).toContain("testViewId");
-    });
-  });
-
-  describe("debug mode", () => {
-    it("compiles successfully in debug mode", async () => {
-      const moduleCode = await compileTemplate("{{=name}}", { debug: true });
-      expect(moduleCode).toContain("function __lark_template__");
-      expect(moduleCode).toContain("export default __lark_template__");
     });
   });
 

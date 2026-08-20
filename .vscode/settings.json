@@ -6,6 +6,7 @@
     "dedup",
     "esbuild",
     "FOUC",
+    "frontmatter",
     "gstatic",
     "hangtiancheng",
     "idempotently",
@@ -18,12 +19,15 @@
     "oklch",
     "precached",
     "rspack",
+    "Rspress",
     "SECRETNODE",
     "shiki",
     "slidev",
     "Swifty",
     "uncoerced",
+    "UNLOADABLE",
     "unstub",
-    "vite"
+    "vite",
+    "zustand"
   ]
 }

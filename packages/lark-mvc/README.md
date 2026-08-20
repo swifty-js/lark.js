@@ -81,7 +81,7 @@ export default defineConfig({
 import { LarkMvcPlugin } from "@lark.js/mvc/webpack";
 
 export default {
-  plugins: [new LarkMvcPlugin({ debug: false })],
+  plugins: [new LarkMvcPlugin()],
 };
 ```
 
@@ -90,7 +90,7 @@ export default {
 import { LarkMvcPlugin } from "@lark.js/mvc/rspack";
 
 export default {
-  plugins: [new LarkMvcPlugin({ debug: false })],
+  plugins: [new LarkMvcPlugin()],
 };
 ```
 
@@ -911,11 +911,7 @@ The Updater tracks changes via `setData()`: for each key in the new data, it com
 import { larkMvcPlugin } from "@lark.js/mvc/vite";
 
 export default defineConfig({
-  plugins: [
-    larkMvcPlugin({
-      debug: false, // enable debug mode with line tracking
-    }),
-  ],
+  plugins: [larkMvcPlugin()],
 });
 ```
 
@@ -934,7 +930,7 @@ The Vite plugin:
 import { LarkMvcPlugin } from "@lark.js/mvc/webpack";
 
 export default {
-  plugins: [new LarkMvcPlugin({ debug: false })],
+  plugins: [new LarkMvcPlugin()],
 };
 ```
 
@@ -946,14 +942,13 @@ export default {
       {
         test: /\.html$/,
         loader: "@lark.js/mvc/webpack",
-        options: { debug: false },
       },
     ],
   },
 };
 ```
 
-Plugin options: `{ debug?, test? (default /\.html$/), exclude? (default /node_modules/) }`.
+Plugin options: `{ test? (default /\.html$/), exclude? (default /node_modules/) }`.
 
 ### Rspack Plugin + Loader
 
@@ -962,7 +957,7 @@ Plugin options: `{ debug?, test? (default /\.html$/), exclude? (default /node_mo
 import { LarkMvcPlugin } from "@lark.js/mvc/rspack";
 
 export default {
-  plugins: [new LarkMvcPlugin({ debug: false })],
+  plugins: [new LarkMvcPlugin()],
 };
 ```
 
@@ -974,7 +969,6 @@ export default {
       {
         test: /\.html$/,
         loader: "@lark.js/mvc/rspack",
-        options: { debug: false },
       },
     ],
   },

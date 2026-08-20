@@ -110,4 +110,4 @@ Two cooperative schedulers exist:
 - Child view remounting on every parent render? Its element id or `v-lark`
   path changes between renders; keep both stable.
 - Render error mentions a template expression? Rebuild with
-  `larkMvcPlugin({ debug: true })` for line-accurate messages.
+  `larkMvcPlugin()` for line-accurate messages.

@@ -517,7 +517,7 @@ Protected pages are excluded from the search index, and their `excerpt`/`heading
 import { larkDocsPlugin } from "@lark.js/docs/vite";
 
 export default defineConfig({
-  plugins: [larkDocsPlugin({ config: docsConfig, debug: false })],
+  plugins: [larkDocsPlugin({ config: docsConfig })],
 });
 ```
 
@@ -525,7 +525,7 @@ The plugin runs in the `pre` enforcement phase. Its `resolveId` hook appends a `
 
 `larkDocsPlugin()` returns a plugin array: the `.md` compiler, a `base-sync` plugin (sets Vite's `base` from `config.baseUrl` unless you set `base` yourself), a `spa-fallback` plugin (copies `index.html` to `404.html` after build so GitHub-Pages-style hosts serve deep links), and the embedded lark-mvc `.html` template plugin.
 
-Options: `{ config: DocsConfig, debug?: boolean }`.
+Options: `{ config: DocsConfig }`.
 
 ### Webpack Plugin + Loader
 

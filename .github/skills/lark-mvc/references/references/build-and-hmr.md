@@ -12,7 +12,7 @@ Source of truth: `src/vite.ts`, `src/webpack.ts`, `src/rspack.ts`,
 // vite.config.ts
 import { larkMvcPlugin } from "@lark.js/lark-mvc/vite";
 export default defineConfig({
-  plugins: [larkMvcPlugin({ debug: false })],
+  plugins: [larkMvcPlugin()],
 });
 ```
 
@@ -26,9 +26,9 @@ injects view HMR into any `.ts/.js` file that imports a `.html`.
 ```ts
 import { LarkMvcPlugin } from "@lark.js/lark-mvc/webpack"; // or /rspack
 export default {
-  plugins: [new LarkMvcPlugin({ debug: false })],
+  plugins: [new LarkMvcPlugin()],
 };
-// Options: { debug?, test? (default /\.html$/), exclude? (default /node_modules/) }
+// Options: { test? (default /\.html$/), exclude? (default /node_modules/) }
 ```
 
 The plugin auto-registers two rules: `.html` → loader with
@@ -44,7 +44,6 @@ module.exports = {
       {
         test: /\.html$/,
         loader: "@lark.js/lark-mvc/webpack", // or "@lark.js/lark-mvc/rspack"
-        options: { debug: false },
       },
     ],
   },

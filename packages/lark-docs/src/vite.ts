@@ -47,10 +47,7 @@ import { compileMarkdown } from "./compile-markdown";
 import { extractFrontmatter } from "./markdown/frontmatter";
 import type { Plugin } from "vite";
 import { createCipheriv, pbkdf2Sync, randomBytes } from "node:crypto";
-import {
-  larkMvcPlugin,
-  type LarkMvcVitePluginOptions,
-} from "@lark.js/mvc/vite";
+import { larkMvcPlugin } from "@lark.js/mvc/vite";
 
 // Re-export build-time utilities for use in vite.config
 // (avoids importing from main entry which pulls in lucide-static SVG ?raw imports)
@@ -59,7 +56,7 @@ export { scanDocsDir } from "./scanner";
 export { generateSidebar } from "./sidebar-generator";
 export type { DocsConfig, SidebarConfig } from "./types";
 
-export interface LarkDocsVitePluginOptions extends LarkMvcVitePluginOptions {
+export interface LarkDocsVitePluginOptions {
   /** Full docs config. */
   config: DocsConfig;
 }
@@ -75,7 +72,7 @@ const MD_SUFFIX = "?lark-docs";
  * 2. lark-template (from @lark.js/mvc): compiles .html templates
  */
 export function larkDocsPlugin(options: LarkDocsVitePluginOptions): Plugin[] {
-  const { config, debug = false } = options;
+  const { config } = options;
 
   const docsPlugin: Plugin = {
     name: "lark-docs",
@@ -137,11 +134,6 @@ export function larkDocsPlugin(options: LarkDocsVitePluginOptions): Plugin[] {
       // returning "/@fs/.../docs/index.md?lark-docs" confused downstream
       // id normalization.
       const real = abs.startsWith("/@fs") ? abs.slice("/@fs".length) : abs;
-      if (debug) {
-        console.log(
-          `[@lark.js/docs] resolveId: ${source} -> ${real}${MD_SUFFIX} (importer=${importer ?? "none"})`,
-        );
-      }
       return real + MD_SUFFIX;
     },
 
@@ -159,11 +151,6 @@ export function larkDocsPlugin(options: LarkDocsVitePluginOptions): Plugin[] {
       if (filePath.startsWith("/@fs")) {
         filePath = filePath.slice("/@fs".length); // "/@fs/path" → "/path"
       }
-
-      if (debug) {
-        console.log(`[@lark.js/docs] load: id=${id} filePath=${filePath}`);
-      }
-
       const source = fs.readFileSync(filePath, "utf-8");
 
       return await compileMarkdown(source, {
@@ -201,16 +188,13 @@ export function larkDocsPlugin(options: LarkDocsVitePluginOptions): Plugin[] {
       const fallbackHtml = resolve(resolvedOutDir, "404.html");
       if (fs.existsSync(indexHtml) && !fs.existsSync(fallbackHtml)) {
         fs.copyFileSync(indexHtml, fallbackHtml);
-        if (debug) {
-          console.log("[@lark.js/docs] emitted 404.html SPA fallback");
-        }
       }
     },
   };
 
   // The lark-mvc template plugin handles .html template compilation.
   // We integrate it internally so consumers don't need to configure it separately.
-  const plugin = larkMvcPlugin({ debug });
+  const plugin = larkMvcPlugin();
 
   return [docsPlugin, baseSyncPlugin, spaFallbackPlugin, plugin as Plugin];
 }

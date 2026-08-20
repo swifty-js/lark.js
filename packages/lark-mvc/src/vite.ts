@@ -30,7 +30,6 @@
  * - All template operators: = (escape), ! (raw), @ (ref lookup), : (binding)
  * - @event attribute processing with \x1f prefix + \x1e separator
  * - __lark_enc_html__ (HTML entity encode), __lark_str_safe__ (null-safe toString), __lark_ref_fn__ (reference lookup)
- * - Debug mode with line tracking
  * - View ID injection
  * - Auto variable extraction
  *
@@ -49,11 +48,6 @@ import { existsSync, readFileSync } from "fs";
 import { compileTemplate, extractGlobalVars } from "./compiler";
 import { injectTemplateHmrSnippet, injectViewHmrSnippet, importsHtmlTemplate } from "./hmr-inject";
 
-export interface LarkMvcVitePluginOptions {
-  /** Enable debug mode with line tracking (default: false) */
-  debug?: boolean;
-}
-
 /** Suffix appended to resolved IDs to mark them as lark template modules */
 const LARK_TEMPLATE_SUFFIX = "?lark-template";
 
@@ -63,8 +57,7 @@ const LARK_TEMPLATE_SUFFIX = "?lark-template";
  * @param options - Plugin options
  * @returns Vite plugin instance
  */
-export function larkMvcPlugin(options: LarkMvcVitePluginOptions = {}): Plugin {
-  const { debug = false } = options;
+export function larkMvcPlugin(): Plugin {
   let root = __dirname;
 
   return {
@@ -139,7 +132,6 @@ export function larkMvcPlugin(options: LarkMvcVitePluginOptions = {}): Plugin {
         // Auto-extract variables from template for 0-config experience
         const globalVars = await extractGlobalVars(raw);
         const compiled = await compileTemplate(raw, {
-          debug,
           globalVars,
         });
         // Auto-inject HMR: the compiled template module self-accepts, so

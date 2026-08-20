@@ -298,7 +298,6 @@ function docsConfig(): UserConfig {
       themeTemplates() as PluginOption,
       ...larkDocsPlugin({
         config: larkDocsConfig,
-        debug: true,
       }),
       docsGuardPlugin(),
       tailwindcss() as PluginOption,

@@ -971,10 +971,6 @@ export interface DomElement extends Element {
 
 /** Options for compileTemplate() */
 export interface CompileOptions {
-  /** Enable debug mode with line tracking (default: false) */
-  debug?: boolean;
   /** Global variable names to destructure from $$ (refData) */
   globalVars?: string[];
-  /** File path for debug error messages (default: undefined) */
-  file?: string;
 }

@@ -156,6 +156,6 @@ export const pageData = {
 export const contentHtml = "…"; // pre-rendered HTML (JSON string literal)
 ```
 
-`compileMarkdown(source, { config, filePath, debug?, projectRoot? })` is the
+`compileMarkdown(source, { config, filePath, projectRoot? })` is the
 programmatic entry (`@lark.js/lark-docs/compiler`) — async because Shiki's WASM
 init is lazy (per theme+languages cache key; `resetHighlighter()` for tests).

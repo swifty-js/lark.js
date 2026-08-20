@@ -31,7 +31,6 @@
  * - All template operators: = (escape), ! (raw), @ (ref lookup), : (binding)
  * - @event attribute processing with \x1f (viewId) prefix + \x1e (splitter) separator
  * - __lark_str_safe__ (null-safe toString), __lark_enc_html__ (HTML entity encode), __lark_ref_fn__ (ref lookup)
- * - Debug mode with line tracking (__lark_dbg_expr__/__lark_dbg_art__) and try-catch error wrapper
  * - View ID injection (\x1f → '+__lark_view_id__+')
  * - Post-processing cleanup of empty concatenations
  * - 0 configuration: auto-extract variables via AST analysis
@@ -178,72 +177,13 @@ export function processViewBindings(source: string): string {
   return result;
 }
 
-// ─── Phase 2: Art-template syntax → Internal <% %> syntax ────────────────
-
-/**
- * Add line-number markers for debug mode.
- *
- * Inserts `SPLITTER + lineNo` before each `{{` tag so that runtime errors
- * can be traced back to the original template line.
- */
-function addLineMarkers(source: string): string {
-  const lines = source.split(/\r\n?|\n/);
-  const result: string[] = [];
-  let lineNo = 0;
-  const openTag = "{{";
-
-  for (const line of lines) {
-    // Split by {{ and rejoin with \x1e + lineNo prefix
-    const parts = line.split(openTag);
-    if (parts.length > 1) {
-      const reconstructed = parts
-        .map((part, i) => {
-          if (i === 0) return part;
-          return openTag + SPLITTER + ++lineNo + part;
-        })
-        .join("");
-      result.push(reconstructed);
-    } else {
-      result.push(line);
-    }
-  }
-  return result.join("\n");
-}
-
-/**
- * Extract the debug line-marker from a `{{ }}` block.
- *
- * Returns `{ line, art }` if the block has a `SPLITTER + digits` prefix
- * (added by `addLineMarkers`), otherwise `null`.
- */
-function extractArtInfo(art: string): { line: number; art: string } | null {
-  const m = art.match(new RegExp(`^${SPLITTER}(\\d+)([\\s\\S]+)`));
-  if (m) {
-    let code = m[2].trimStart();
-    // Normalize "if(" → "if (" and "for(" → "for ("
-    if (code.startsWith("if(")) {
-      code = code.substring(0, 2) + " " + code.substring(2);
-    } else if (code.startsWith("for(")) {
-      code = code.substring(0, 3) + " " + code.substring(3);
-    }
-    return { line: parseInt(m[1], 10), art: code };
-  }
-  return null;
-}
-
 /**
  * Convert {{=}}/{{:}}/{{!}}/{{@}} and control flow syntax to internal <% %> syntax.
- *
- * In debug mode, adds \x11-delimited line tracking markers:
- *   <%'lineNo\x11code\x11'%> before forOf art expression
  */
-export function convertArtSyntax(source: string, debug: boolean): string {
-  // Step 1: Add line markers for debug mode
-  const markedSource = debug ? addLineMarkers(source) : source;
-
-  // Step 2: Split by {{ and process forOf art block
+export function convertArtSyntax(source: string): string {
+  // Split by {{ and process forOf art block
   const openTag = "{{";
-  const parts = markedSource.split(openTag);
+  const parts = source.split(openTag);
   const result: string[] = [parts[0]]; // First part is always plain text
 
   // Block stack for validation
@@ -262,21 +202,11 @@ export function convertArtSyntax(source: string, debug: boolean): string {
     const code = part.substring(0, closeIdx);
     const rest = part.substring(closeIdx + 2);
 
-    // Extract debug info if present
-    let lineNo = -1;
-    let cleanCode = code;
-    if (debug) {
-      const info = extractArtInfo(code);
-      if (info) {
-        lineNo = info.line;
-        cleanCode = info.art;
-      }
-    } else {
-      cleanCode = code.trim();
-    }
+    const lineNo = -1;
+    const cleanCode = code.trim();
 
     // Convert the art expression to <% %> syntax
-    const converted = convertArtExpression(cleanCode, debug, lineNo, blockStack);
+    const converted = convertArtExpression(cleanCode, lineNo, blockStack);
     result.push(converted);
     result.push(rest);
   }
@@ -374,17 +304,10 @@ function trimOuterParens(expr: string): string {
  */
 function convertArtExpression(
   code: string,
-  debug: boolean,
   lineNo: number,
   blockStack: { ctrl: string; line: number }[] = [],
 ): string {
   code = code.trim();
-
-  // Debug line marker: <%'lineNo\x11code\x11'%>
-  const debugPrefix =
-    debug && lineNo > -1
-      ? `<%'${lineNo}\x11${code.replace(/\\|'/g, "\\$&").replace(/\r\n?|\n/g, "\\n")}\x11'%>`
-      : "";
 
   // Detect if/for shorthand: "if(condition)" or "for(init;test;update)"
   const ifForMatch = code.match(/^\s*(if|for)\s*\(/);
@@ -396,13 +319,13 @@ function convertArtExpression(
       // then trimParentheses on the condition expression
       const rawExpr = expr.replace(/\)\s*$/, "");
       const cleanExpr = trimOuterParens(rawExpr);
-      return `${debugPrefix}<%if(${cleanExpr}){%>`;
+      return `<%if(${cleanExpr}){%>`;
     }
     // {{for(init;test;update)}} → for(init;test;update){
     // expr has trailing ")" from the original "for(...)", need to strip it
     blockStack.push({ ctrl: "for", line: lineNo });
     const forExpr = expr.replace(/\)\s*$/, "");
-    return `${debugPrefix}<%for(${forExpr}){%>`;
+    return `<%for(${forExpr}){%>`;
   }
 
   // Split by whitespace to get keyword + args. `String.prototype.split` on
@@ -418,7 +341,7 @@ function convertArtExpression(
       const rawExpr = tokens.join(" ").trim();
       // Strip matched outer parentheses, e.g., "((a > b))" → "(a > b)"
       const expr = trimOuterParens(rawExpr);
-      return `${debugPrefix}<%if(${expr}){%>`;
+      return `<%if(${expr}){%>`;
     }
 
     case "else": {
@@ -427,9 +350,9 @@ function convertArtExpression(
         tokens.shift(); // consume "if"
         const rawExpr = tokens.join(" ").trim();
         const expr = trimOuterParens(rawExpr);
-        return `${debugPrefix}<%}else if(${expr}){%>`;
+        return `<%}else if(${expr}){%>`;
       }
-      return `${debugPrefix}<%}else{%>`;
+      return `<%}else{%>`;
     }
 
     case "forOf": {
@@ -470,7 +393,7 @@ function convertArtExpression(
         firstAndLast += `let ${asExpr.last}=${index}===_lc;`;
       }
 
-      return `${debugPrefix}<%for(let ${index}=0${refExpr},${refObjCount}=${refObj}.length${lastCount};${index}<${refObjCount};${index}++){${firstAndLast}${valueDecl}%>`;
+      return `<%for(let ${index}=0${refExpr},${refObjCount}=${refObj}.length${lastCount};${index}<${refObjCount};${index}++){${firstAndLast}${valueDecl}%>`;
     }
 
     case "forIn": {
@@ -492,17 +415,17 @@ function convertArtExpression(
       const refExpr2 = /[.[\]]/.test(object) ? `let ${refObj2}=${object};` : "";
       const valueDecl2 = asExpr2.vars ? `let ${asExpr2.vars}=${refObj2}[${key1}]` : "";
 
-      return `${debugPrefix}<%${refExpr2}for(let ${key1} in ${refObj2}){${valueDecl2}%>`;
+      return `<%${refExpr2}for(let ${key1} in ${refObj2}){${valueDecl2}%>`;
     }
 
     case "for": {
       blockStack.push({ ctrl: "for", line: lineNo });
       const expr = tokens.join(" ").trim();
-      return `${debugPrefix}<%for(${expr}){%>`;
+      return `<%for(${expr}){%>`;
     }
 
     case "set":
-      return `${debugPrefix}<%let ${tokens.join(" ")};%>`;
+      return `<%let ${tokens.join(" ")};%>`;
 
     case "/if":
     case "/forOf":
@@ -519,12 +442,12 @@ function convertArtExpression(
           `Unexpected {{${code}}}: expected {{/${last.ctrl}}} to close block opened at line ${last.line}`,
         );
       }
-      return `${debugPrefix}<%}%>`;
+      return `<%}%>`;
     }
 
     default:
       // Unknown keyword or inline expression — pass through
-      return `${debugPrefix}<%${code}%>`;
+      return `<%${code}%>`;
   }
 }
 

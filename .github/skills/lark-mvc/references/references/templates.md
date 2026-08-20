@@ -122,7 +122,7 @@ in-place rewrites.
 ```
 .html source
   → protectComments()      HTML comments → placeholders
-  → convertArtSyntax()     {{ }} → internal <% %> (+ block validation, debug line markers)
+  → convertArtSyntax()     {{ }} → internal <% %> (+ block validation)
   → processViewEvents()    @evt="h(args)" → \x1f\x1e prefix + URL params
   → processViewBindings()  *prop → p-lark-*, paren-less @evt → e-lark-*
   → restoreComments()
@@ -143,12 +143,6 @@ import { compileTemplate, extractGlobalVars } from "@lark.js/lark-mvc/compiler";
 
 await extractGlobalVars(source): string[]      // AST-based; regex fallback on parse failure
 await compileTemplate(source, {
-  debug?: boolean,        // wrap in try/catch, report template line + expression on render errors
   globalVars?: string[],  // skip auto-extraction
-  file?: string,          // path shown in debug error messages
 }): string                // ES module source
 ```
-
-Debug mode (`larkMvcPlugin({ debug: true })`) makes runtime render errors
-report the original `{{...}}` expression and line — enable it in dev when
-diagnosing "render error" messages.

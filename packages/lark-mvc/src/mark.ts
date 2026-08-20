@@ -29,7 +29,7 @@
  *
  * State is stored in a module-level WeakMap, not on the host object, so
  * `mark/unmark` never pollutes user objects with magic keys, never breaks
- * on `Object.freeze`-ed inputs, and never shows up in debug snapshots.
+ * on `Object.freeze`-ed inputs.
  */
 
 interface HostRecord {

@@ -44,15 +44,11 @@ import { extractGlobalVars } from "./extract-global-vars";
  *
  * Plain text between blocks is escaped and appended to `__lark_out__`.
  *
- * In debug mode, wraps each expression in a `__lark_dbg_expr__` assignment so
- * runtime errors report the original template expression and line number.
  *
  * @param source - The `<% %>`-syntax source (from `convertArtSyntax`)
- * @param debug - Enable debug mode (line tracking + try-catch wrapper)
- * @param file - Optional file path for debug error messages
  * @returns An arrow function source string
  */
-function compileToFunction(source: string, debug: boolean, file?: string): string {
+function compileToFunction(source: string): string {
   const matcher = /<%([@=!:])?([\s\S]*?)%>|$/g;
   let index = 0;
   let funcSource = `__lark_out__+='`;
@@ -69,62 +65,21 @@ function compileToFunction(source: string, debug: boolean, file?: string): strin
       .replace(escapeBreakReturnRegExp, "\\n");
     index = offset + match.length;
 
-    if (debug) {
-      // Debug mode: extract expression and art info for error reporting
-      let expr = source.substring(index - match.length + 2 + (operate ? 1 : 0), index - 2);
-      // Use String.fromCharCode to safely construct regexp with \x11 control character
-      const x11 = String.fromCharCode(0x11);
-      const artRegExp = new RegExp(`^'(\\d+)${x11}([^${x11}]+)${x11}'$`);
-      const artM = expr.match(artRegExp);
-      let art = "";
-
-      if (artM) {
-        expr = expr.replace(artRegExp, "");
-        art = artM[2];
-      } else {
-        expr = expr.replace(escapeSlashRegExp, "\\$&").replace(escapeBreakReturnRegExp, "\\n");
+    // Production mode: compact output
+    if (operate === "@") {
+      funcSource += `'+__lark_ref_fn__(__lark_ref_alt__,${content})+'`;
+    } else if (operate === "=" || operate === ":") {
+      // : (binding) is treated the same as = (escaped output) for rendering
+      funcSource += `'+__lark_enc_html__(${content})+'`;
+    } else if (operate === "!") {
+      funcSource += `'+__lark_str_safe__(${content})+'`;
+    } else if (content) {
+      funcSource += `';`;
+      // Clean up trailing +''; → ;
+      if (funcSource.endsWith(`+'';`)) {
+        funcSource = funcSource.substring(0, funcSource.length - 4) + ";";
       }
-
-      if (operate === "@") {
-        funcSource += `'+(__lark_dbg_expr__='<%${operate + expr}%>',__lark_ref_fn__(__lark_ref_alt__,${content}))+'`;
-      } else if (operate === "=" || operate === ":") {
-        // : (binding) is treated the same as = (escaped output) for rendering
-        funcSource += `'+(__lark_dbg_expr__='<%${operate + expr}%>',__lark_enc_html__(${content}))+'`;
-      } else if (operate === "!") {
-        funcSource += `'+(__lark_dbg_expr__='<%${operate + expr}%>',__lark_str_safe__(${content}))+'`;
-      } else if (content) {
-        if (artM) {
-          funcSource += `';__lark_dbg_art__='${art}';`;
-          content = "";
-        } else {
-          funcSource += `';`;
-        }
-        // Clean up trailing +''; → ;
-        if (funcSource.endsWith(`+'';`)) {
-          funcSource = funcSource.substring(0, funcSource.length - 4) + ";";
-        }
-        if (expr) {
-          funcSource += `__lark_dbg_expr__='<%${expr}%>';`;
-        }
-        funcSource += content + `;__lark_out__+='`;
-      }
-    } else {
-      // Production mode: compact output
-      if (operate === "@") {
-        funcSource += `'+__lark_ref_fn__(__lark_ref_alt__,${content})+'`;
-      } else if (operate === "=" || operate === ":") {
-        // : (binding) is treated the same as = (escaped output) for rendering
-        funcSource += `'+__lark_enc_html__(${content})+'`;
-      } else if (operate === "!") {
-        funcSource += `'+__lark_str_safe__(${content})+'`;
-      } else if (content) {
-        funcSource += `';`;
-        // Clean up trailing +''; → ;
-        if (funcSource.endsWith(`+'';`)) {
-          funcSource = funcSource.substring(0, funcSource.length - 4) + ";";
-        }
-        funcSource += `${content};__lark_out__+='`;
-      }
+      funcSource += `${content};__lark_out__+='`;
     }
     return match;
   });
@@ -137,13 +92,6 @@ function compileToFunction(source: string, debug: boolean, file?: string): strin
   funcSource = funcSource.replace(/__lark_out__\+='';/g, "");
   // Fix empty string concatenation: __lark_out__=''+ → __lark_out__+=
   funcSource = funcSource.replace(/__lark_out__\+=''\+/g, "__lark_out__+=");
-
-  // ─── Debug error wrapper ──────────────────────────────────────────
-
-  if (debug) {
-    const filePart = file ? `\\r\\n\\tat file:${file}` : "";
-    funcSource = `let __lark_dbg_expr__,__lark_dbg_art__;try{${funcSource}}catch(e){let msg='render error:'+(e.message||e);if(__lark_dbg_art__)msg+='\\r\\n\\tsrc art:{{'+__lark_dbg_art__+'}}';msg+='\\r\\n\\t'+(__lark_dbg_art__?'translate to:':'expr:');msg+=__lark_dbg_expr__+'${filePart}';throw msg;}`;
-  }
 
   // ─── View ID injection: \x1f → '+__lark_view_id__+' ────────────────
 
@@ -187,8 +135,6 @@ export async function compileTemplate(
   source: string,
   options: CompileOptions = {},
 ): Promise<string> {
-  const { debug = false, file } = options;
-
   const globalVars = options.globalVars ?? (await extractGlobalVars(source));
 
   // Phase 1: Protect comments
@@ -197,7 +143,7 @@ export async function compileTemplate(
   // Phase 2: Convert {{ }} art-template syntax to <% %> internal syntax
   // (Before @event processing, so {{=variable}} inside @event params
   // is already converted to <%=variable%>
-  const converted = convertArtSyntax(protectedSource, debug);
+  const converted = convertArtSyntax(protectedSource);
 
   // Phase 3: Process @event attributes after art conversion
   const viewEventProcessed = processViewEvents(converted);
@@ -211,7 +157,7 @@ export async function compileTemplate(
   // Build the variable declarations string from globalVars
   const varDeclarations = globalVars.map((key) => `let ${key}=__lark_data__.${key};`).join("");
 
-  const funcBody = compileToFunction(finalSource, debug, file);
+  const funcBody = compileToFunction(finalSource);
   const funcWithVars = funcBody.replace("{{__lark_vars__}}", () => varDeclarations);
 
   // Runtime helpers (`encHtml`, `strSafe`, `refFn`) are imported from

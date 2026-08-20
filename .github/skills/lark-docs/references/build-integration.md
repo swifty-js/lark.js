@@ -28,7 +28,7 @@ it separately). Peer: tailwindcss v4, @tailwindcss/typography.
 
 ```ts
 import { larkDocsPlugin } from "@lark.js/lark-docs/vite";
-// options: { config: DocsConfig; debug?: boolean }
+// options: { config: DocsConfig }
 plugins: [larkDocsPlugin({ config: docsConfig })];
 ```
 
@@ -44,7 +44,7 @@ re-running `defineConfig` (dev-server restart).
 ```ts
 import { LarkDocsPlugin } from "@lark.js/lark-docs/webpack"; // or /rspack
 plugins: [new LarkDocsPlugin({ config: docsConfig })];
-// options: { config, debug?, test? (default /\.md$/), exclude? (default /node_modules/) }
+// options: { config, test? (default /\.md$/), exclude? (default /node_modules/) }
 ```
 
 The plugin pushes a `.md` loader rule referencing itself via `__filename`
@@ -78,7 +78,6 @@ import { compileMarkdown } from "@lark.js/lark-docs/compiler";
 const js = await compileMarkdown(source, {
   config,               // DocsConfig (markdown/highlight options used)
   filePath,             // absolute or docs-relative path of the .md
-  debug?: boolean,
   projectRoot?: string, // for resolving config.docs → relativePath
 });
 // → "export const pageData = {...};\nexport const contentHtml = \"...\";"

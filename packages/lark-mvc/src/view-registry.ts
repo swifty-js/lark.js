@@ -66,7 +66,7 @@ export function invalidateViewClass(viewPath: string): void {
 }
 
 /**
- * Get the full view setup registry (for HMR / debugging).
+ * Get the full view setup registry (for HMR).
  */
 export function getViewClassRegistry(): Record<string, ViewSetup> {
   return viewSetupRegistry;

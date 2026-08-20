@@ -40,16 +40,16 @@ re-renders until you call `.digest()` (or a hook/store does it for you).
 
 ## Package entry points
 
-| Import                       | Provides                                                                                                                                                                                                      |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Import                       | Provides                                                                                                                                                                                        |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `@lark.js/lark-mvc`          | Runtime: `Framework`, `defineView`, hooks, `State`, `Router`, `Frame`, `createStore`, `computed`, `bindStore`, `createService`, `useUrlState`, `EventDelegator`, `registerViewClass`, all types |
-| `@lark.js/lark-mvc/vite`     | `larkMvcPlugin({ debug? })`                                                                                                                                                                            |
-| `@lark.js/lark-mvc/webpack`  | `larkMvcLoader`, `LarkMvcPlugin` (auto-registers loader)                                                                                                                                                      |
-| `@lark.js/lark-mvc/rspack`   | `larkMvcLoader`, `LarkMvcPlugin`                                                                                                                                                                              |
-| `@lark.js/lark-mvc/runtime`  | Template helpers (`encHtml`, `strSafe`, `encUri`, `encQuote`, `refFn`) — imported by compiled templates, not by app code                                                                                      |
-| `@lark.js/lark-mvc/compiler` | Build-time `compileTemplate`, `extractGlobalVars`                                                                                                                                                             |
-| `@lark.js/lark-mvc/devtool`  | `installFrameDevtoolBridge`, frame-tree serialization types                                                                                                                                                   |
-| `@lark.js/lark-mvc/client`   | Ambient types: `*.html` / `*.css` module declarations, DOM augmentations                                                                                                                                      |
+| `@lark.js/lark-mvc/vite`     | `larkMvcPlugin()`                                                                                                                                                                               |
+| `@lark.js/lark-mvc/webpack`  | `larkMvcLoader`, `LarkMvcPlugin` (auto-registers loader)                                                                                                                                        |
+| `@lark.js/lark-mvc/rspack`   | `larkMvcLoader`, `LarkMvcPlugin`                                                                                                                                                                |
+| `@lark.js/lark-mvc/runtime`  | Template helpers (`encHtml`, `strSafe`, `encUri`, `encQuote`, `refFn`) — imported by compiled templates, not by app code                                                                        |
+| `@lark.js/lark-mvc/compiler` | Build-time `compileTemplate`, `extractGlobalVars`                                                                                                                                               |
+| `@lark.js/lark-mvc/devtool`  | `installFrameDevtoolBridge`, frame-tree serialization types                                                                                                                                     |
+| `@lark.js/lark-mvc/client`   | Ambient types: `*.html` / `*.css` module declarations, DOM augmentations                                                                                                                        |
 
 ## The 60-second mental model
 
@@ -184,7 +184,7 @@ boilerplate by hand.
 | [references/state-routing.md](references/state-routing.md)             | `State`, `createStore`/`computed`/`bindStore`/`useStore`, `Router` (parse/to/diff/beforeEach, history vs hash), `useUrlState`                                     |
 | [references/services.md](references/services.md)                       | `createService`, endpoint metadata, caching/dedup/queueing, `PayloadApi`, `createCache`, `createEmitter`                                                          |
 | [references/build-and-hmr.md](references/build-and-hmr.md)             | Vite/Webpack/Rspack integration, `FrameworkConfig` (full table), lazy loading & Module Federation, HMR internals, Devtool Bridge, project scaffolding conventions |
-| [references/rendering-internals.md](references/rendering-internals.md) | Updater/digest semantics, real-DOM diff, keyed diff (`id`/`#` compare keys), task scheduler — read when debugging rendering/perf     |
+| [references/rendering-internals.md](references/rendering-internals.md) | Updater/digest semantics, real-DOM diff, keyed diff (`id`/`#` compare keys), task scheduler — read when rendering/perf                                            |
 
 Real-world example code lives in `packages/lark-demo` (chunk-split app with
 nested components, stores, Module Federation) and `packages/lark-docs/app`

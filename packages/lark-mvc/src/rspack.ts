@@ -38,7 +38,6 @@
  * - All template operators: = (escape), ! (raw), @ (ref lookup), : (binding)
  * - @event attribute processing with \x1f prefix + \x1e separator
  * - __lark_enc_html__ (HTML entity encode), __lark_str_safe__ (null-safe toString), __lark_ref_fn__ (reference lookup)
- * - Debug mode with line tracking
  * - View ID injection
  * - Auto variable extraction via AST analysis (Babel)
  *
@@ -48,9 +47,7 @@
  *
  * export default {
  *   plugins: [
- *     new LarkMvcPlugin({
- *       debug: process.env.NODE_ENV !== 'production',
- *     }),
+ *     new LarkMvcPlugin(),
  *   ],
  * };
  * ```
@@ -62,7 +59,6 @@
  *     rules: [{
  *       test: /\.html$/,
  *       loader: '@lark.js/mvc/rspack',
- *       options: { debug: false },
  *     }],
  *   },
  * };
@@ -94,7 +90,7 @@ interface LoaderContext {
 export async function larkMvcLoader(this: LoaderContext, source: string): Promise<string> {
   try {
     const options = this.getOptions();
-    const { debug = false, hmr } = options;
+    const { hmr } = options;
 
     // View HMR mode: inject view-class HMR into .ts files that import .html.
     // This is the rspack equivalent of Vite's `transform` hook — ensures .ts
@@ -105,7 +101,6 @@ export async function larkMvcLoader(this: LoaderContext, source: string): Promis
 
     const globalVars = await extractGlobalVars(source);
     const compiled = await compileTemplate(source, {
-      debug,
       globalVars,
     });
     // Auto-inject HMR: the compiled template module self-accepts, so
@@ -133,9 +128,7 @@ export async function larkMvcLoader(this: LoaderContext, source: string): Promis
  *
  * export default {
  *   plugins: [
- *     new LarkMvcPlugin({
- *       debug: true,
- *     }),
+ *     new LarkMvcPlugin(),
  *   ],
  * };
  * ```
@@ -145,7 +138,6 @@ export class LarkMvcPlugin implements RspackPluginInstance {
 
   constructor(options: LarkMvcWebpackPluginOptions = {}) {
     this.options = {
-      debug: false,
       test: /\.html$/,
       exclude: /node_modules/,
       ...options,
@@ -157,7 +149,7 @@ export class LarkMvcPlugin implements RspackPluginInstance {
    * Called by rspack when the plugin is applied.
    */
   apply(compiler: Compiler): void {
-    const { debug, test, exclude } = this.options;
+    const { test, exclude } = this.options;
 
     // Push the loader rule into rspack's module.rules
     compiler.options.module = compiler.options.module || {};
@@ -179,7 +171,6 @@ export class LarkMvcPlugin implements RspackPluginInstance {
           // __filename is provided by tsup's ESM shim (shims: true) in ESM output,
           // and is a native CJS global in CJS output.
           loader: __filename,
-          options: { debug },
         },
       ],
     });

@@ -1,7 +1,7 @@
 ---
 name: lark-mvc
 description: >-
-  Authoritative reference for @lark.js/lark-mvc (v0.0.19), the functional-first
+  Authoritative reference for @lark.js/mvc (v0.0.19), the functional-first
   TypeScript frontend framework located at packages/lark-mvc — views via
   defineView() + ViewCtx + hooks, Frame tree, two-phase Router, State
   singleton, zustand-aligned createStore/computed/bindStore, createService
@@ -10,7 +10,7 @@ description: >-
   Vite/Webpack/Rspack plugins with
   auto-injected HMR, and the Frame Devtool Bridge. Use this skill whenever the
   user reads, writes, debugs, reviews, or extends code that imports from
-  "@lark.js/lark-mvc" (or any sub-path like /vite, /webpack, /rspack, /runtime,
+  "@lark.js/mvc" (or any sub-path like /vite, /webpack, /rspack, /runtime,
   /compiler, /devtool, /client), works under packages/lark-mvc,
   packages/lark-demo, or packages/lark-docs, or mentions any of these
   symbols and concepts — Framework.boot, defineView, ViewCtx, ViewSetup,
@@ -27,7 +27,7 @@ description: >-
   or for unrelated React/Vue projects.
 ---
 
-# Lark Mvc Framework (`@lark.js/lark-mvc`)
+# Lark Mvc Framework (`@lark.js/mvc`)
 
 A lightweight, functional-first TypeScript framework for SPAs and
 micro-frontends. Source: `packages/lark-mvc` (v0.0.19, ESM+CJS dual build,
@@ -40,16 +40,16 @@ re-renders until you call `.digest()` (or a hook/store does it for you).
 
 ## Package entry points
 
-| Import                       | Provides                                                                                                                                                                                        |
-| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@lark.js/lark-mvc`          | Runtime: `Framework`, `defineView`, hooks, `State`, `Router`, `Frame`, `createStore`, `computed`, `bindStore`, `createService`, `useUrlState`, `EventDelegator`, `registerViewClass`, all types |
-| `@lark.js/lark-mvc/vite`     | `larkMvcPlugin()`                                                                                                                                                                               |
-| `@lark.js/lark-mvc/webpack`  | `larkMvcLoader`, `LarkMvcPlugin` (auto-registers loader)                                                                                                                                        |
-| `@lark.js/lark-mvc/rspack`   | `larkMvcLoader`, `LarkMvcPlugin`                                                                                                                                                                |
-| `@lark.js/lark-mvc/runtime`  | Template helpers (`encHtml`, `strSafe`, `encUri`, `encQuote`, `refFn`) — imported by compiled templates, not by app code                                                                        |
-| `@lark.js/lark-mvc/compiler` | Build-time `compileTemplate`, `extractGlobalVars`                                                                                                                                               |
-| `@lark.js/lark-mvc/devtool`  | `installFrameDevtoolBridge`, frame-tree serialization types                                                                                                                                     |
-| `@lark.js/lark-mvc/client`   | Ambient types: `*.html` / `*.css` module declarations, DOM augmentations                                                                                                                        |
+| Import                  | Provides                                                                                                                                                                                        |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@lark.js/mvc`          | Runtime: `Framework`, `defineView`, hooks, `State`, `Router`, `Frame`, `createStore`, `computed`, `bindStore`, `createService`, `useUrlState`, `EventDelegator`, `registerViewClass`, all types |
+| `@lark.js/mvc/vite`     | `larkMvcPlugin()`                                                                                                                                                                               |
+| `@lark.js/mvc/webpack`  | `larkMvcLoader`, `LarkMvcPlugin` (auto-registers loader)                                                                                                                                        |
+| `@lark.js/mvc/rspack`   | `larkMvcLoader`, `LarkMvcPlugin`                                                                                                                                                                |
+| `@lark.js/mvc/runtime`  | Template helpers (`encHtml`, `strSafe`, `encUri`, `encQuote`, `refFn`) — imported by compiled templates, not by app code                                                                        |
+| `@lark.js/mvc/compiler` | Build-time `compileTemplate`, `extractGlobalVars`                                                                                                                                               |
+| `@lark.js/mvc/devtool`  | `installFrameDevtoolBridge`, frame-tree serialization types                                                                                                                                     |
+| `@lark.js/mvc/client`   | Ambient types: `*.html` / `*.css` module declarations, DOM augmentations                                                                                                                        |
 
 ## The 60-second mental model
 
@@ -77,7 +77,7 @@ closures — template variables are auto-extracted at build time (zero config).
 
 ```ts
 // src/views/home.ts
-import { defineView, useState, Router } from "@lark.js/lark-mvc";
+import { defineView, useState, Router } from "@lark.js/mvc";
 import template from "./home.html"; // compiled by the bundler plugin
 import styles from "./home.module.css"; // CSS modules via updater data
 
@@ -105,7 +105,7 @@ export default defineView((ctx, params) => {
 
 ```ts
 // src/boot.ts
-import { Framework } from "@lark.js/lark-mvc";
+import { Framework } from "@lark.js/mvc";
 Framework.boot({
   rootId: "app",
   routeMode: "history", // or "hash" (#! prefix)
@@ -124,7 +124,7 @@ Framework.boot({
 
 ```ts
 // vite.config.ts
-import { larkMvcPlugin } from "@lark.js/lark-mvc/vite";
+import { larkMvcPlugin } from "@lark.js/mvc/vite";
 export default defineConfig({ plugins: [larkMvcPlugin()] });
 ```
 

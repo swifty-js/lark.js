@@ -9,7 +9,7 @@ A Service manages API requests with **TTL caching (LFU-backed)**,
 It is transport-agnostic — you supply a `syncFn`.
 
 ```ts
-import { createService } from "@lark.js/lark-mvc";
+import { createService } from "@lark.js/mvc";
 
 const apiService = createService(
   (payload, callback) => {

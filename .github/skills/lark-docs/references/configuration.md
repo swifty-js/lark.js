@@ -7,7 +7,7 @@ Source of truth: `src/define-config.ts`, `src/types.ts`, `src/scanner.ts`,
 ## DocsConfig (complete)
 
 ```ts
-import { defineConfig } from "@lark.js/lark-docs/vite"; // or "@lark.js/lark-docs" (Node context)
+import { defineConfig } from "@lark.js/docs/vite"; // or "@lark.js/docs" (Node context)
 
 defineConfig(config: DocsConfig, projectRoot = process.cwd()): DocsConfig
 ```
@@ -99,9 +99,9 @@ getSearchIndex(): Promise<SearchEntry[]>
 // alias paths are excluded via an internal _searchablePaths set. Cached.
 ```
 
-Types for this module come from `@lark.js/lark-docs/client`
+Types for this module come from `@lark.js/docs/client`
 (`declare module "@lark-docs/generated"`), referenced via
-`/// <reference types="@lark.js/lark-docs/client" />`. Add a tsconfig `paths`
+`/// <reference types="@lark.js/docs/client" />`. Add a tsconfig `paths`
 entry `"@lark-docs/generated/*": ["./.lark-docs/generated/*"]` for IDE
 resolution.
 

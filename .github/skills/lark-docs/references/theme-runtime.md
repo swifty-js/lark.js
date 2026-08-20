@@ -6,7 +6,7 @@ Source of truth: `src/theme/*` (5 view factories + .html templates),
 ## registerThemeViews
 
 ```ts
-import { registerThemeViews } from "@lark.js/lark-docs"; // or /theme
+import { registerThemeViews } from "@lark.js/docs"; // or /theme
 
 registerThemeViews(): void
 ```
@@ -117,7 +117,7 @@ with zod at read time — bad shapes degrade gracefully):
   after importing `client.css` — no Tailwind config needed.
 - Consumer Tailwind setup must `@source` the theme bundle so utility classes
   used in theme templates are generated:
-  `@source "../node_modules/@lark.js/lark-docs/dist/theme.js";`
+  `@source "../node_modules/@lark.js/docs/dist/theme.js";`
 
 ## Icons
 
@@ -137,8 +137,8 @@ Two levels:
    custom template or writing a fresh `defineView`:
 
 ```ts
-import { registerThemeViews, createSidebarView } from "@lark.js/lark-docs";
-import { registerViewClass } from "@lark.js/lark-mvc";
+import { registerThemeViews, createSidebarView } from "@lark.js/docs";
+import { registerViewClass } from "@lark.js/mvc";
 import mySidebarTpl from "./my-sidebar.html";
 
 registerThemeViews();
@@ -147,5 +147,5 @@ registerViewClass("theme/sidebar", createSidebarView(mySidebarTpl));
 
 Keep the State contract (read `docsConfig`, honor `searchOpen`/`drawerOpen`,
 navigate via `data-href` + `Router.to`) so the other stock views keep
-working. `@lark.js/lark-docs/runtime` exports the browser-safe `slugify` for
+working. `@lark.js/docs/runtime` exports the browser-safe `slugify` for
 custom TOC/anchor logic.

@@ -5,29 +5,29 @@ Source of truth: `src/vite.ts`, `src/webpack.ts`, `src/rspack.ts`,
 
 ## Package exports
 
-| Sub-path                      | Exports                                                                                                                                                                                                                                                                    | Context      |
-| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
-| `@lark.js/lark-docs`          | Re-exports from lark-mvc (`Framework`, `defineView`, `State`, `Router`, `registerViewClass`, `FrameworkConfig` with routeMode pinned to `"history"`, `ViewCtx`, `ViewSetup`), all DocsConfig/PageData/… types, `slugify`, theme factories + `registerThemeViews` + `icons` | Browser-safe |
-| `@lark.js/lark-docs/vite`     | `larkDocsPlugin`, plus build-time re-exports: `defineConfig`, `scanDocsDir`, `generateSidebar`, types                                                                                                                                                                      | Node (build) |
-| `@lark.js/lark-docs/webpack`  | `larkDocsLoader` (callback style), `LarkDocsPlugin`, + `scanDocsDir`/`generateSidebar`                                                                                                                                                                                     | Node         |
-| `@lark.js/lark-docs/rspack`   | `larkDocsLoader` (Promise style), `LarkDocsPlugin`, + same re-exports                                                                                                                                                                                                      | Node         |
-| `@lark.js/lark-docs/compiler` | `compileMarkdown`, `CompileMarkdownOptions`                                                                                                                                                                                                                                | Node         |
-| `@lark.js/lark-docs/runtime`  | `slugify` only (zero build deps)                                                                                                                                                                                                                                           | Browser-safe |
-| `@lark.js/lark-docs/theme`    | `registerThemeViews`, 5 `create*View` factories, `icons`                                                                                                                                                                                                                   | Browser      |
-| `@lark.js/lark-docs/client`   | Types only: `declare module "@lark-docs/generated"` and `*.html`                                                                                                                                                                                                           | d.ts         |
+| Sub-path                 | Exports                                                                                                                                                                                                                                                                    | Context      |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| `@lark.js/docs`          | Re-exports from lark-mvc (`Framework`, `defineView`, `State`, `Router`, `registerViewClass`, `FrameworkConfig` with routeMode pinned to `"history"`, `ViewCtx`, `ViewSetup`), all DocsConfig/PageData/… types, `slugify`, theme factories + `registerThemeViews` + `icons` | Browser-safe |
+| `@lark.js/docs/vite`     | `larkDocsPlugin`, plus build-time re-exports: `defineConfig`, `scanDocsDir`, `generateSidebar`, types                                                                                                                                                                      | Node (build) |
+| `@lark.js/docs/webpack`  | `larkDocsLoader` (callback style), `LarkDocsPlugin`, + `scanDocsDir`/`generateSidebar`                                                                                                                                                                                     | Node         |
+| `@lark.js/docs/rspack`   | `larkDocsLoader` (Promise style), `LarkDocsPlugin`, + same re-exports                                                                                                                                                                                                      | Node         |
+| `@lark.js/docs/compiler` | `compileMarkdown`, `CompileMarkdownOptions`                                                                                                                                                                                                                                | Node         |
+| `@lark.js/docs/runtime`  | `slugify` only (zero build deps)                                                                                                                                                                                                                                           | Browser-safe |
+| `@lark.js/docs/theme`    | `registerThemeViews`, 5 `create*View` factories, `icons`                                                                                                                                                                                                                   | Browser      |
+| `@lark.js/docs/client`   | Types only: `declare module "@lark-docs/generated"` and `*.html`                                                                                                                                                                                                           | d.ts         |
 
 Import `defineConfig` from `/vite` (or `/webpack`, `/rspack`) rather than the
 main entry in Node contexts — the main entry pulls in lucide `?raw` SVG
 imports that fail outside a bundler.
 
 Deps: markdown-it (+container), js-yaml, shiki, minisearch, ejs,
-lucide-static, zod, `@lark.js/lark-mvc` (re-exported — consumers don't install
+lucide-static, zod, `@lark.js/mvc` (re-exported — consumers don't install
 it separately). Peer: tailwindcss v4, @tailwindcss/typography.
 
 ## Vite
 
 ```ts
-import { larkDocsPlugin } from "@lark.js/lark-docs/vite";
+import { larkDocsPlugin } from "@lark.js/docs/vite";
 // options: { config: DocsConfig }
 plugins: [larkDocsPlugin({ config: docsConfig })];
 ```
@@ -42,7 +42,7 @@ re-running `defineConfig` (dev-server restart).
 ## Webpack / Rspack
 
 ```ts
-import { LarkDocsPlugin } from "@lark.js/lark-docs/webpack"; // or /rspack
+import { LarkDocsPlugin } from "@lark.js/docs/webpack"; // or /rspack
 plugins: [new LarkDocsPlugin({ config: docsConfig })];
 // options: { config, test? (default /\.md$/), exclude? (default /node_modules/) }
 ```
@@ -50,7 +50,7 @@ plugins: [new LarkDocsPlugin({ config: docsConfig })];
 The plugin pushes a `.md` loader rule referencing itself via `__filename`
 (ESM shim injected at build). Loader difference: webpack uses
 `this.callback()`, rspack returns the Promise. You still need lark-mvc's
-`LarkMvcPlugin` (from `@lark.js/lark-mvc/webpack|rspack`) for `.html` theme
+`LarkMvcPlugin` (from `@lark.js/mvc/webpack|rspack`) for `.html` theme
 templates in these bundlers — only the Vite plugin bundles both.
 
 ## Required project wiring (any bundler)
@@ -62,7 +62,7 @@ project/
   app/index.html           <div id="app"> + no-FOUC dark-mode script
   app/boot.ts              registerThemeViews → State.set → Framework.boot
   app/main.css             @import "tailwindcss" + client.css + @source theme.js
-  shims.d.ts               /// <reference types="@lark.js/lark-docs/client" />
+  shims.d.ts               /// <reference types="@lark.js/docs/client" />
   .lark-docs/generated/   generated (gitignore)
 ```
 
@@ -74,7 +74,7 @@ project/
 ## compileMarkdown (programmatic)
 
 ```ts
-import { compileMarkdown } from "@lark.js/lark-docs/compiler";
+import { compileMarkdown } from "@lark.js/docs/compiler";
 const js = await compileMarkdown(source, {
   config,               // DocsConfig (markdown/highlight options used)
   filePath,             // absolute or docs-relative path of the .md
@@ -102,7 +102,7 @@ The repo's own `vite.config.ts` is the reference for advanced setups: dual
 lib/docs modes, the `themeDualMode` virtual-module plugin (compiles each
 theme `.html` in string),
 CJS `__filename` shims for the self-referencing loaders, and dev aliases
-(`@lark.js/lark-docs → src`, `@lark.js/lark-mvc → ../lark-mvc/dist`).
+(`@lark.js/docs → src`, `@lark.js/mvc → ../lark-mvc/dist`).
 
 Deployment: `history`-mode SPA — serve `dist-docs/` with a fallback rewrite
 of all paths to `index.html`. `baseUrl` is a route prefix inside the SPA;

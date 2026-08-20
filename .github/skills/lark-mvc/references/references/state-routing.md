@@ -13,7 +13,7 @@ Two state layers, choose deliberately:
 ## State (singleton)
 
 ```ts
-import { State } from "@lark.js/lark-mvc";
+import { State } from "@lark.js/mvc";
 
 State.set({ count: 1, title: "Hello" }); // accumulates changed keys, does NOT notify
 State.digest(); // fires one "changed" event with all keys
@@ -40,7 +40,7 @@ view whose observed keys intersect the changed set.
 ## createStore / computed / bindStore / useStore
 
 ```ts
-import { createStore, computed, bindStore } from "@lark.js/lark-mvc";
+import { createStore, computed, bindStore } from "@lark.js/mvc";
 
 interface CountStore {
   count: number; step: number; doubled: number;
@@ -96,7 +96,7 @@ unmatchedView, rewrite, hashbang })`. Two modes:
 - `"hash"`: `location.hash` with `#!` prefix (configurable via `hashbang`).
 
 ```ts
-import { Router } from "@lark.js/lark-mvc";
+import { Router } from "@lark.js/mvc";
 
 Router.to("/list", { page: 2 }); // navigate with params
 Router.to({ page: 3 }); // params only — keeps current path, merges params
@@ -153,7 +153,7 @@ present, else digests).
 ## useUrlState
 
 ```ts
-import { useUrlState } from "@lark.js/lark-mvc";
+import { useUrlState } from "@lark.js/mvc";
 
 export default defineView((ctx) => {
   const [state, setState] = useUrlState(ctx, { page: "1", size: "20" });

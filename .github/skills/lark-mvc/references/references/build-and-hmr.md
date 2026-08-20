@@ -10,7 +10,7 @@ Source of truth: `src/vite.ts`, `src/webpack.ts`, `src/rspack.ts`,
 
 ```ts
 // vite.config.ts
-import { larkMvcPlugin } from "@lark.js/lark-mvc/vite";
+import { larkMvcPlugin } from "@lark.js/mvc/vite";
 export default defineConfig({
   plugins: [larkMvcPlugin()],
 });
@@ -24,7 +24,7 @@ injects view HMR into any `.ts/.js` file that imports a `.html`.
 ### Webpack / Rspack — plugin form (recommended, zero config)
 
 ```ts
-import { LarkMvcPlugin } from "@lark.js/lark-mvc/webpack"; // or /rspack
+import { LarkMvcPlugin } from "@lark.js/mvc/webpack"; // or /rspack
 export default {
   plugins: [new LarkMvcPlugin()],
 };
@@ -43,14 +43,14 @@ module.exports = {
     rules: [
       {
         test: /\.html$/,
-        loader: "@lark.js/lark-mvc/webpack", // or "@lark.js/lark-mvc/rspack"
+        loader: "@lark.js/mvc/webpack", // or "@lark.js/mvc/rspack"
       },
     ],
   },
 };
 ```
 
-TypeScript: add `"@lark.js/lark-mvc/client"` to `types` (or a triple-slash
+TypeScript: add `"@lark.js/mvc/client"` to `types` (or a triple-slash
 reference) so `*.html` / `*.css` imports type-check.
 
 ## FrameworkConfig (complete)
@@ -120,7 +120,7 @@ Framework.boot({
 ```
 
 For Module Federation, `require` branches on the path prefix and imports
-from the remote (`import("remote_app/" + rest)`). Share `@lark.js/lark-mvc` as a
+from the remote (`import("remote_app/" + rest)`). Share `@lark.js/mvc` as a
 singleton in the MF `shared` config.
 
 ## HMR (auto-injected — never hand-write it)
@@ -142,13 +142,13 @@ Bundler differences (`src/hmr-inject.ts` — important when debugging HMR):
   handler, so the snippet uses self-accept + a top-level
   `import.meta.webpackHot.data.oldTemplate/oldView` check on re-execution.
 - Swap functions are reached via `globalThis.__lark_hmr__` (registered in
-  `Framework.boot`) instead of importing `@lark.js/lark-mvc` — importing would
+  `Framework.boot`) instead of importing `@lark.js/mvc` — importing would
   register the module as an MF shared consumer and cause ChunkLoadError.
 
 ## Devtool bridge
 
 `Framework.boot({ devtool: true })` installs a `postMessage` listener
-(`installFrameDevtoolBridge` from `@lark.js/lark-mvc/devtool`). Protocol:
+(`installFrameDevtoolBridge` from `@lark.js/mvc/devtool`). Protocol:
 `LARK_DEVTOOL_PING` → `PONG`; `REQUEST_TREE` → `TREE` (serialized frame tree
 with per-view info: rendered flag, signature, observed keys, event keys,
 resource keys, updater snapshot); `TREE_DELTA` pushed on frame add/remove

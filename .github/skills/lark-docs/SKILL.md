@@ -1,7 +1,7 @@
 ---
 name: lark-docs
 description: >-
-  Authoritative reference for @lark.js/lark-docs (v0.0.1), the documentation site
+  Authoritative reference for @lark.js/docs (v0.0.1), the documentation site
   generator built on the Lark Mvc framework, located at packages/lark-docs
   — analogous to VitePress for Vue or Docusaurus for React. Covers
   defineConfig() in lark-docs.config.ts, the generated
@@ -18,7 +18,7 @@ description: >-
   semantic-token theming with .dark mode, and the app boot pattern
   (State.set({docsConfig, loadContent, getSearchIndex}) + Framework.boot).
   Use this skill whenever the user reads, writes, debugs, reviews, or extends
-  code under packages/lark-docs, imports from "@lark.js/lark-docs" or any
+  code under packages/lark-docs, imports from "@lark.js/docs" or any
   sub-path (/vite, /webpack, /rspack, /compiler, /runtime, /theme, /client),
   edits lark-docs.config.ts, works with the @lark-docs/generated virtual
   module, writes or restructures markdown docs under a docs/ directory served
@@ -30,9 +30,9 @@ description: >-
   skill for framework APIs).
 ---
 
-# Lark Docs (`@lark.js/lark-docs`)
+# Lark Docs (`@lark.js/docs`)
 
-Documentation site generator for `@lark.js/lark-mvc` — what VitePress is to Vue,
+Documentation site generator for `@lark.js/mvc` — what VitePress is to Vue,
 this is to Lark Mvc. Source: `packages/lark-docs` (v0.0.1, ESM+CJS dual
 build via Vite lib mode). It turns a `docs/` directory of markdown into an
 SPA: one persistent layout view, per-page compiled `.md` modules loaded on
@@ -68,7 +68,7 @@ Phase 3 · Runtime (browser)
 
 ```ts
 // lark-docs.config.ts
-import { defineConfig } from "@lark.js/lark-docs/vite";
+import { defineConfig } from "@lark.js/docs/vite";
 export default defineConfig({
   docs: "docs", // source dir, relative to project root
   baseUrl: "/docs/", // route prefix
@@ -83,7 +83,7 @@ export default defineConfig({
 
 ```ts
 // vite.config.ts — larkDocsPlugin handles BOTH .md and .html compilation
-import { larkDocsPlugin } from "@lark.js/lark-docs/vite";
+import { larkDocsPlugin } from "@lark.js/docs/vite";
 import tailwindcss from "@tailwindcss/vite";
 import docsConfig from "./lark-docs.config";
 export default defineConfig({
@@ -103,7 +103,7 @@ import {
   State,
   registerThemeViews,
   type FrameworkConfig,
-} from "@lark.js/lark-docs";
+} from "@lark.js/docs";
 import {
   routes,
   docsConfig,
@@ -130,14 +130,14 @@ Framework.boot(config);
 @import "tailwindcss";
 /* client.css ships in the package dist but is NOT in the exports map — 
    reference it by file path: */
-@import "../node_modules/@lark.js/lark-docs/dist/client.css";
+@import "../node_modules/@lark.js/docs/dist/client.css";
 /* let Tailwind see the theme templates' utility classes: */
-@source "../node_modules/@lark.js/lark-docs/dist/theme.js";
+@source "../node_modules/@lark.js/docs/dist/theme.js";
 ```
 
 ```ts
 // shims.d.ts
-/// <reference types="@lark.js/lark-docs/client" />
+/// <reference types="@lark.js/docs/client" />
 ```
 
 `index.html` needs `<div id="app"></div>` plus the no-FOUC dark-mode snippet

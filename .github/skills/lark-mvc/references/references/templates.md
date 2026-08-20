@@ -134,12 +134,12 @@ in-place rewrites.
 ```
 
 Compiled modules import `encHtml`/`strSafe`/`refFn` from
-`@lark.js/lark-mvc/runtime`.
+`@lark.js/mvc/runtime`.
 
 ## Compiler API (build-time, Node)
 
 ```ts
-import { compileTemplate, extractGlobalVars } from "@lark.js/lark-mvc/compiler";
+import { compileTemplate, extractGlobalVars } from "@lark.js/mvc/compiler";
 
 await extractGlobalVars(source): string[]      // AST-based; regex fallback on parse failure
 await compileTemplate(source, {

@@ -1,6 +1,6 @@
 {
   "name": "@lark.js/docs",
-  "version": "0.0.19",
+  "version": "0.0.20",
   "description": "Documentation site generator for @lark.js/mvc",
   "keywords": [
     "@lark.js",
@@ -30,6 +30,31 @@
   "main": "dist/index.cjs",
   "module": "dist/index.js",
   "types": "dist/index.d.ts",
+  "typesVersions": {
+    "*": {
+      "compiler": [
+        "./dist/compiler.d.ts"
+      ],
+      "vite": [
+        "./dist/vite.d.ts"
+      ],
+      "webpack": [
+        "./dist/webpack.d.ts"
+      ],
+      "rspack": [
+        "./dist/rspack.d.ts"
+      ],
+      "runtime": [
+        "./dist/runtime.d.ts"
+      ],
+      "theme": [
+        "./dist/theme/index.d.ts"
+      ],
+      "client": [
+        "./dist/client.d.ts"
+      ]
+    }
+  },
   "exports": {
     ".": {
       "import": {

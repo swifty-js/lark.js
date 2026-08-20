@@ -91,7 +91,7 @@ export {
   createTocView,
   createSearchView,
   registerThemeViews,
-} from "./theme";
+} from "./theme/index";
 
 // Theme icons (lucide-static raw SVG strings)
 export { icons } from "./theme/icons";

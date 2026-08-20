@@ -29,7 +29,6 @@ import { defineConfig } from "tsup";
 (() => {
   process.on("exit", () => {
     copyFileSync("src/client.d.ts", "dist/client.d.ts");
-    copyFileSync("src/client.d.ts", "dist/client.d.cts");
   });
 })();
 

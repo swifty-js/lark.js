@@ -221,7 +221,6 @@ function getChanged(oldLoc: Location, newLoc: Location): { changed: boolean; dif
   // Build result
   const result: LocationDiff = {
     ["params"]: changedParams,
-    force: !oKey,
     changed: hasChanged,
   };
 

@@ -59,7 +59,7 @@
  * needed by another view.
  */
 import { EVENT_METHOD_REGEXP } from "./common";
-import { parseUri, funcWithTry, noop, assign } from "./utils";
+import { parseUri, funcWithTry, noop } from "./utils";
 import { createCache } from "./cache";
 import type { FrameObj, AnyFunc } from "./types";
 
@@ -74,7 +74,7 @@ const rootEvents: Record<string, number> = {};
 const selectorEvents: Record<string, number> = {};
 
 /** Event info cache */
-const eventInfoCache = createCache<Record<string, string>>({
+const eventInfoCache = createCache<EventInfo>({
   maxSize: 30,
   bufferSize: 10,
 });
@@ -94,8 +94,6 @@ interface EventInfo {
   name: string;
   /** Params string */
   params: string;
-  /** Raw attribute value; Handler name or selector */
-  value: string;
 }
 
 /**
@@ -105,7 +103,7 @@ interface EventInfo {
 function parseEventInfo(eventInfo: string): EventInfo {
   const cached = eventInfoCache.get(eventInfo);
   if (cached) {
-    return assign({}, cached, { value: eventInfo }) as EventInfo;
+    return cached;
   }
 
   const match = eventInfo.match(EVENT_METHOD_REGEXP) || [];
@@ -116,7 +114,7 @@ function parseEventInfo(eventInfo: string): EventInfo {
   };
 
   eventInfoCache.set(eventInfo, result);
-  return assign({}, result, { value: eventInfo }) as EventInfo;
+  return result;
 }
 
 /**
@@ -210,7 +208,6 @@ function findFrameInfo(current: HTMLElement, eventType: string): EventInfo[] {
   if (match) {
     eventInfos.push({
       id: match.id,
-      value: match.value,
       name: match.name,
       params: match.params,
     });

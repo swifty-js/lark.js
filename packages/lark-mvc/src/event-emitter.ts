@@ -79,7 +79,7 @@ export function createEmitter<T = unknown>(): EmitterApi<T> {
       list = [];
       listeners.set(key, list);
     }
-    list.push({ handler: handler as AnyFunc, executing: 0 });
+    list.push({ handler: handler as AnyFunc });
     return api;
   }
 
@@ -139,9 +139,7 @@ export function createEmitter<T = unknown>(): EmitterApi<T> {
           const listener = list[idx];
           if (!listener) continue;
           if (listener.handler === noop) continue;
-          listener.executing = 1;
           funcWithTry([listener.handler], [eventData], null, noop);
-          listener.executing = "";
         }
       }
 

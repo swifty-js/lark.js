@@ -47,12 +47,16 @@ import {
  * @returns Array of global variable names found in the template
  */
 export async function extractGlobalVars(source: string): Promise<string[]> {
-  // Step 1: Convert {{ }} art syntax to <% %> so we can analyze it
+  // Step 1: Convert {{ }} art syntax to <% %> so we can analyze it.
+  // Phase order MUST match compile-template.ts: art conversion runs BEFORE
+  // @event / binding processing, so {{=variable}} inside @event params is
+  // already converted before the event rewrite reads it. Diverging here made
+  // extraction see different text than the compiler emits.
   const { protectedSource, comments: _comments } = protectComments(source);
-  const viewEventProcessed = processViewEvents(protectedSource);
+  const converted = convertArtSyntax(protectedSource);
+  const viewEventProcessed = processViewEvents(converted);
   const viewBindingsProcessed = processViewBindings(viewEventProcessed);
-  const converted = convertArtSyntax(viewBindingsProcessed);
-  const template = restoreComments(converted, _comments);
+  const template = restoreComments(viewBindingsProcessed, _comments);
 
   // Step 2: Convert <% %> template commands into a JS-parsable form
   //   - Replace HTML text between <% %> with unique placeholders
@@ -115,8 +119,8 @@ export async function extractGlobalVars(source: string): Promise<string[]> {
     VariableDeclarator(node: t.VariableDeclarator) {
       if (node.id.type === "Identifier") {
         const name = node.id.name;
-        // Mark as declared (value 3 = with init, 2 = without init)
-        globalExists[name] = node.init ? 3 : 2;
+        // Mark as declared (any truthy value other than 1, which flags globals)
+        globalExists[name] = 2;
       }
     },
     FunctionDeclaration(node: t.FunctionDeclaration) {
@@ -283,14 +287,9 @@ const BUILTIN_GLOBALS = new Set([
   "__lark_str_safe__",
   "__lark_ref_fn__",
   "__lark_out__",
-  "__lark_dbg_expr__",
-  "__lark_dbg_art__",
 
   // JS literals
   "undefined",
-  "null",
-  "true",
-  "false",
   "NaN",
   "Infinity",
 
@@ -346,7 +345,6 @@ const BUILTIN_GLOBALS = new Set([
 
   // Babel helpers
   "arguments",
-  "this",
   "require",
 
   // Lark framework

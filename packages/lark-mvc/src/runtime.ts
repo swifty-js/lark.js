@@ -35,19 +35,13 @@
  * and updater.ts all share a single copy.
  */
 
-import { strSafe as commonStrSafe, encodeHTML, encodeURIExtra, encodeQuote, refFn } from "./common";
+import { strSafe as commonStrSafe, encodeHTML, refFn } from "./common";
 
 /** Null-safe `String(value)` — `null`/`undefined` become `""`. */
 export const strSafe = commonStrSafe;
 
 /** HTML-escape a value for safe embedding in markup. */
 export const encHtml = encodeHTML;
-
-/** Percent-encode a value, with extra characters escaped for stricter URIs. */
-export const encUri = encodeURIExtra;
-
-/** Backslash-escape quotes and backslashes for attribute string contents. */
-export const encQuote = encodeQuote;
 
 /**
  * Look up (or assign) a stable refData token for an object value.

@@ -65,7 +65,7 @@ function compileToFunction(source: string): string {
       .replace(escapeBreakReturnRegExp, "\\n");
     index = offset + match.length;
 
-    // Production mode: compact output
+    // Dispatch on the operator character of the <%op content%> block
     if (operate === "@") {
       funcSource += `'+__lark_ref_fn__(__lark_ref_alt__,${content})+'`;
     } else if (operate === "=" || operate === ":") {

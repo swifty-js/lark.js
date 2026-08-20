@@ -39,11 +39,5 @@
     // "jsx": "react-jsx",
     "verbatimModuleSyntax": true
   },
-  "include": [
-    "src/**/*.ts",
-    "tests/**/*.test.ts",
-    "rollup.config.mjs",
-    "tsup.config.ts",
-    "vitest.config.ts"
-  ]
+  "include": ["src/**/*.ts", "tests/**/*.test.ts", "tsup.config.ts", "vitest.config.ts"]
 }

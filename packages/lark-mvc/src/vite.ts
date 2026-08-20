@@ -58,7 +58,7 @@ const LARK_TEMPLATE_SUFFIX = "?lark-template";
  * @returns Vite plugin instance
  */
 export function larkMvcPlugin(): Plugin {
-  let root = __dirname;
+  let root: string = "";
 
   return {
     name: "lark-template",

@@ -543,9 +543,7 @@ function serviceSend(
     if (!attr) continue;
 
     const attrObj: Record<string, unknown> = typeof attr === "string" ? { name: attr } : attr;
-    const payloadInfo = internals
-      ? getPayload(internals, attrObj, save)
-      : { entity: createPayload(), needsUpdate: true };
+    const payloadInfo = getPayload(internals, attrObj, save);
     const payloadEntity = payloadInfo.entity;
     const cacheKey = payloadEntity.cacheInfo?.key ?? "";
     doneArr[requestCount + 1] = payloadEntity;

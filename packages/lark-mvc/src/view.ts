@@ -196,27 +196,21 @@ export function createCtx(frame: FrameObj): ViewCtx {
       signature.value++;
       fire("render");
       destroyAllResources(ctx, false);
+
       if (typeof ctx.renderMethod === "function") {
         funcWithTry(ctx.renderMethod, [], ctx, noop);
       } else {
+        const assignFn = mutable.assignFn;
+        if (assignFn) {
+          const altered = funcWithTry(assignFn, [], ctx, noop);
+          if (altered === false && rendered.value) return;
+        }
         updater.digest();
       }
     }
   }
 
   // ── Update zones ──
-
-  /**
-   * Begin a zone update: unmount the zone's child frames before re-rendering.
-   *
-   * Called before `assign()` produces new data, so stale child views are
-   * torn down before the new template output is diffed.
-   */
-  function beginUpdate(zoneId?: string): void {
-    if (signature.value > 0 && mutable.endUpdatePending !== undefined) {
-      frame.unmountZone(zoneId);
-    }
-  }
 
   /**
    * End a zone update: re-mount child frames via `frame.mountZone`, then
@@ -338,23 +332,11 @@ export function createCtx(frame: FrameObj): ViewCtx {
   function getObservedStateKeys(): string[] | undefined {
     return mutable.observedStateKeys;
   }
-  function setObservedStateKeys(v: string[] | undefined): void {
-    mutable.observedStateKeys = v;
-  }
-  function getEndUpdatePending(): number | undefined {
-    return mutable.endUpdatePending;
-  }
-  function setEndUpdatePending(v: number | undefined): void {
-    mutable.endUpdatePending = v;
-  }
   function getEvents(): Record<string, AnyFunc> | undefined {
     return mutable.events;
   }
   function setEvents(v: Record<string, AnyFunc> | undefined): void {
     mutable.events = v;
-  }
-  function getAssign(): ((options?: unknown) => boolean | undefined) | undefined {
-    return mutable.assignFn;
   }
   function setAssign(v: ((options?: unknown) => boolean | undefined) | undefined): void {
     mutable.assignFn = v;
@@ -370,18 +352,13 @@ export function createCtx(frame: FrameObj): ViewCtx {
     setTemplate,
     locationObserved,
     getObservedStateKeys,
-    setObservedStateKeys,
     resources,
     emitter,
-    getEndUpdatePending,
-    setEndUpdatePending,
     getEvents,
     setEvents,
     cleanups,
-    getAssign,
     setAssign,
     render,
-    beginUpdate,
     endUpdate,
     wrapAsync,
     observeLocation,

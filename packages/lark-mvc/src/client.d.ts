@@ -44,8 +44,9 @@ declare global {
     /** HMR context provided by Vite / webpack dev server. Undefined in production. */
     hot?: {
       accept(cb?: (mod: { default?: unknown } | undefined) => void): void;
-      dispose(cb: (data: unknown) => void): void;
+      dispose(cb: (data: Record<string, unknown>) => void): void;
       invalidate(): void;
+      data?: Record<string, unknown>;
     };
   }
   interface HTMLElement {
@@ -64,12 +65,6 @@ declare global {
     cachedCompareKey?: string | undefined;
     /** `v-lark` attribute — declares a child view embedding point */
     "v-lark"?: string | undefined;
-
-    // @lark.js/sentry — declarative tracking attributes (read by the sentry SDK)
-    /** Sentry event name for declarative click tracking */
-    "s-lark-ev"?: string | undefined;
-    /** Sentry message for declarative error reporting */
-    "s-lark-msg"?: string | undefined;
   }
 }
 

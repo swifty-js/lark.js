@@ -94,8 +94,6 @@ function jsObjectToUrlParams(paramsStr: string): string {
 
 // ─── Phase 1: Pre-processing ─────────────────────────────────────────────
 
-/** Protected comment store — used internally by protectComments */
-
 /**
  * Preserve HTML comments to prevent template syntax inside comments from being converted.
  */
@@ -178,6 +176,18 @@ export function processViewBindings(source: string): string {
 }
 
 /**
+ * Return the 1-based line number for a character offset in `source`.
+ */
+function countLine(source: string, offset: number): number {
+  let line = 1;
+  const end = Math.min(offset, source.length);
+  for (let i = 0; i < end; i++) {
+    if (source.charCodeAt(i) === 10 /* \n */) line++;
+  }
+  return line;
+}
+
+/**
  * Convert {{=}}/{{:}}/{{!}}/{{@}} and control flow syntax to internal <% %> syntax.
  */
 export function convertArtSyntax(source: string): string {
@@ -189,8 +199,15 @@ export function convertArtSyntax(source: string): string {
   // Block stack for validation
   const blockStack: { ctrl: string; line: number }[] = [];
 
+  // Character offset of the current `{{` in the original source, used to
+  // report accurate 1-based line numbers in unclosed/mismatched-block errors.
+  // source === parts.join(openTag), so each part is preceded by one openTag.
+  let consumed = parts[0].length;
+
   for (let i = 1; i < parts.length; i++) {
     const part = parts[i];
+    const lineNo = countLine(source, consumed);
+    consumed += openTag.length + part.length;
     // Find the closing }}
     const closeIdx = findCloseBrace(part);
     if (closeIdx === -1) {
@@ -202,7 +219,6 @@ export function convertArtSyntax(source: string): string {
     const code = part.substring(0, closeIdx);
     const rest = part.substring(closeIdx + 2);
 
-    const lineNo = -1;
     const cleanCode = code.trim();
 
     // Convert the art expression to <% %> syntax
@@ -305,7 +321,7 @@ function trimOuterParens(expr: string): string {
 function convertArtExpression(
   code: string,
   lineNo: number,
-  blockStack: { ctrl: string; line: number }[] = [],
+  blockStack: { ctrl: string; line: number }[],
 ): string {
   code = code.trim();
 
@@ -457,7 +473,6 @@ interface AsExpr {
   key: string;
   last: string;
   first: string;
-  bad: boolean;
 }
 
 /**
@@ -472,7 +487,7 @@ interface AsExpr {
 function parseAsExpr(expr: string): AsExpr {
   expr = expr.trim();
   if (!expr) {
-    return { vars: "", key: "", last: "", first: "", bad: false };
+    return { vars: "", key: "", last: "", first: "" };
   }
 
   // Destructuring: starts with { or [
@@ -483,7 +498,6 @@ function parseAsExpr(expr: string): AsExpr {
     let last = "";
     let first = "";
     let pos = 0;
-    let bad = false;
 
     for (const c of expr) {
       if (pos === 0) vars += c;
@@ -494,16 +508,10 @@ function parseAsExpr(expr: string): AsExpr {
       if (c === "{" || c === "[") stack.push(c);
       else if (c === "}") {
         if (stack[stack.length - 1] === "{") stack.pop();
-        else {
-          bad = true;
-          break;
-        }
+        else break;
       } else if (c === "]") {
         if (stack[stack.length - 1] === "[") stack.pop();
-        else {
-          bad = true;
-          break;
-        }
+        else break;
       } else if (c === " " && !stack.length) {
         pos++;
       }
@@ -513,7 +521,6 @@ function parseAsExpr(expr: string): AsExpr {
       key: key.trim(),
       last: last.trim(),
       first: first.trim(),
-      bad: bad || stack.length > 0,
     };
   }
 
@@ -524,6 +531,5 @@ function parseAsExpr(expr: string): AsExpr {
     key: parts[1] || "",
     last: parts[2] || "",
     first: parts[3] || "",
-    bad: false,
   };
 }

@@ -250,6 +250,13 @@ describe("compileTemplate", () => {
         return compileTemplate("{{/if}}");
       }).rejects.toThrow();
     });
+
+    it("mismatched close reports the real opening line (not -1)", async () => {
+      // `if` opens on line 3; the wrong `/forOf` close should point back to it.
+      const src = "line1\nline2\n{{if a}}\n{{/forOf}}";
+      await expect(compileTemplate(src)).rejects.toThrow(/line 3/);
+      await expect(compileTemplate(src)).rejects.not.toThrow(/line -1/);
+    });
   });
 
   describe("miscellaneous", () => {

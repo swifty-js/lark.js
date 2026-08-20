@@ -635,12 +635,6 @@ apiService.add({
     const id = payload.get("id");
     payload.set("url", `/api/user/${id}`);
   },
-  after(payload) {
-    // Transform response data after fetch
-    const result = payload.get("result");
-    payload.set("userName", result.name);
-  },
-  cleanKeys: "listUsers", // Clear listUsers cache after this call
 });
 
 apiService.add({
@@ -1011,7 +1005,6 @@ lark-mvc supports Module Federation and cross-project view loading via `Framewor
 ```ts
 Framework.boot({
   rootId: "root",
-  projectName: "host-app",
   require(names, params) {
     // Integrate with Webpack Module Federation or dynamic import
     return Promise.all(
@@ -1081,22 +1074,18 @@ All DOM events are delegated to `document.body` in the capture phase. The EventD
 
 ### FrameworkConfig
 
-| Key                | Type                                        | Default     | Description                                 |
-| ------------------ | ------------------------------------------- | ----------- | ------------------------------------------- |
-| `rootId`           | `string`                                    | `"root"`    | DOM root element ID                         |
-| `routeMode`        | `"history" or "hash"`                       | `"history"` | Routing mode                                |
-| `defaultView`      | `string`                                    | -           | Default view path when URL matches no route |
-| `defaultPath`      | `string`                                    | `"/"`       | Default path when URL hash/query is empty   |
-| `routes`           | `Record<string, string or RouteViewConfig>` | -           | Path-to-view mapping                        |
-| `hashbang`         | `string`                                    | `"#!"`      | Hash prefix (hash mode only)                |
-| `error`            | `(error: Error) => void`                    | throws      | Global error handler                        |
-| `extensions`       | `string[]`                                  | -           | Extension view paths loaded at startup      |
-| `initModule`       | `string`                                    | -           | Init module to load at startup              |
-| `rewrite`          | `(path, params, routes) => string`          | -           | Route rewriting function                    |
-| `unmatchedView`    | `string`                                    | -           | View path for 404 pages                     |
-| `require`          | `(names, params?) => Promise<unknown[]>`    | -           | Async module loader (Module Federation)     |
-| `skipViewRendered` | `boolean`                                   | -           | Skip view rendered check                    |
-| `projectName`      | `string`                                    | -           | Project name for micro-frontend bridge      |
+| Key             | Type                                        | Default     | Description                                 |
+| --------------- | ------------------------------------------- | ----------- | ------------------------------------------- |
+| `rootId`        | `string`                                    | `"root"`    | DOM root element ID                         |
+| `routeMode`     | `"history" or "hash"`                       | `"history"` | Routing mode                                |
+| `defaultView`   | `string`                                    | -           | Default view path when URL matches no route |
+| `defaultPath`   | `string`                                    | `"/"`       | Default path when URL hash/query is empty   |
+| `routes`        | `Record<string, string or RouteViewConfig>` | -           | Path-to-view mapping                        |
+| `hashbang`      | `string`                                    | `"#!"`      | Hash prefix (hash mode only)                |
+| `error`         | `(error: Error) => void`                    | throws      | Global error handler                        |
+| `rewrite`       | `(path, params, routes) => string`          | -           | Route rewriting function                    |
+| `unmatchedView` | `string`                                    | -           | View path for 404 pages                     |
+| `require`       | `(names, params?) => Promise<unknown[]>`    | -           | Async module loader (Module Federation)     |
 
 ### RouteViewConfig
 

@@ -95,8 +95,6 @@ export interface CacheOptions<T> {
 export interface EventListenerEntry {
   /** Handler function */
   handler: AnyFunc;
-  /** Whether currently executing (1 = executing, '' = done) */
-  executing: number | string;
 }
 
 // ============================================================
@@ -178,10 +176,6 @@ export interface LocationDiff {
   path?: ParamDiff;
   /** View diff when rendered view has changed */
   view?: ParamDiff;
-  /**
-   * Whether this is a first forced change during app initialization.
-   */
-  force: boolean;
   /** Whether any content has changed */
   changed: boolean;
 }
@@ -293,12 +287,7 @@ export interface RouterApi {
   /** Unbind event listener */
   off(event: string, handler?: AnyFunc): this;
   /** Fire event */
-  fire(
-    event: string,
-    data?: Record<string, unknown>,
-    remove?: boolean,
-    lastToFirst?: boolean,
-  ): this;
+  fire(event: string, data?: Record<string, unknown>, remove?: boolean): this;
   /**
    * Parse href into Location object.
    * Parses query and hash sections of href, returns structured routing information.
@@ -451,16 +440,12 @@ export interface ViewCtx {
   setTemplate(v: ViewTemplate | undefined): void;
   /** Location observation config */
   locationObserved: ViewLocationObserved;
-  /** Observed state keys (accessed via getObservedStateKeys/setObservedStateKeys) */
+  /** Observed state keys (declared via observeState) */
   getObservedStateKeys(): string[] | undefined;
-  setObservedStateKeys(v: string[] | undefined): void;
   /** Resource map */
   resources: Record<string, ViewResourceEntry>;
   /** Internal emitter for lifecycle events ("destroy", "render", etc.) */
   emitter: EmitterApi;
-  /** EndUpdate pending flag (accessed via getEndUpdatePending/setEndUpdatePending) */
-  getEndUpdatePending(): number | undefined;
-  setEndUpdatePending(v: number | undefined): void;
   /** Wrapped render method */
   renderMethod?: AnyFunc;
   /** Event handlers returned by setup (accessed via getEvents/setEvents) */
@@ -468,13 +453,11 @@ export interface ViewCtx {
   setEvents(v: Record<string, AnyFunc> | undefined): void;
   /** Cleanup functions registered by useEffect */
   cleanups: Array<() => void>;
-  /** assign function returned by setup (accessed via getAssign/setAssign) */
-  getAssign(): ((options?: unknown) => boolean | undefined) | undefined;
+  /** assign function returned by setup — invoked by the framework on render */
   setAssign(v: ((options?: unknown) => boolean | undefined) | undefined): void;
 
   // Lifecycle / framework API methods
   render(): void;
-  beginUpdate(id?: string): void;
   endUpdate(id?: string, inner?: boolean): void;
   wrapAsync<Fn extends AnyFunc>(
     fn: Fn,
@@ -609,12 +592,7 @@ export interface StateApi {
   /** Unbind event listener */
   off(event: string, handler?: AnyFunc): this;
   /** Fire event */
-  fire(
-    event: string,
-    data?: Record<string, unknown>,
-    remove?: boolean,
-    lastToFirst?: boolean,
-  ): this;
+  fire(event: string, data?: Record<string, unknown>, remove?: boolean): this;
   /**
    * Get data from global state, returns complete state object if key is omitted.
    * @param key Data key name, omitted returns complete state object
@@ -679,20 +657,6 @@ export interface ServiceMetaEntry {
    * @param payload Data carrier for current request
    */
   before?: (payload: PayloadApi) => void;
-  /**
-   * After-fetch hook.
-   * Hook function called after request succeeds, before data is passed to view.
-   * Can process response data in this method.
-   * @param payload Data carrier for current request
-   */
-  after?: (payload: PayloadApi) => void;
-  /** Clean keys on destroy,
-   * Comma-separated endpoint name string for clearing other endpoints' cache.
-   * For example, if an endpoint creates new data,
-   * after successful call, should clear all data-fetching endpoints' cache,
-   * otherwise new data cannot be retrieved.
-   */
-  cleanKeys?: string;
   /** Additional properties */
   [k: string]: unknown;
 }
@@ -908,15 +872,6 @@ export interface FrameworkConfig {
    * Note: Do not re-throw any errors in this method.
    */
   error?: (error: Error) => void;
-  /**
-   * Extension module paths.
-   * Reserved configuration: `Framework.boot()` does NOT load these
-   * automatically yet. Load extension modules explicitly (e.g. static
-   * `import` in the entry file, or `Framework.use(...)`) when needed.
-   */
-  extensions?: string[];
-  /** Init module path. Reserved — not consumed by the current runtime. */
-  initModule?: string;
   /** Rewrite function for routes */
   rewrite?: (
     path: string,
@@ -938,14 +893,6 @@ export interface FrameworkConfig {
    * @returns Promise resolving to an array of loaded modules, or undefined if not available
    */
   require?: (names: string[], params?: Record<string, unknown>) => Promise<unknown[]> | undefined;
-  /** Skip view rendered check */
-  skipViewRendered?: boolean;
-  /**
-   * Project name of the current application.
-   * Used by the micro-frontend bridge to determine if a view path
-   * belongs to the current project or a remote project.
-   */
-  projectName?: string;
 }
 
 export interface RouteViewConfig {

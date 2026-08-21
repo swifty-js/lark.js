@@ -1,6 +1,6 @@
 {
   "name": "@lark.js/sentry",
-  "version": "0.0.16",
+  "version": "0.0.17",
   "description": "@swifty.js/sentry framework-level integration for lark framework (@lark.js/mvc)",
   "keywords": [
     "lark.js",
@@ -83,7 +83,7 @@
     "vitest": "^4.1.10"
   },
   "peerDependencies": {
-    "@lark.js/mvc": ">=0.0.26",
+    "@lark.js/mvc": ">=0.0.27",
     "@swifty.js/sentry": ">=0.0.5",
     "vite": "^7.0.0 || ^8.0.0",
     "webpack": "^4.0.0 || ^5.0.0"
@@ -95,6 +95,5 @@
     "webpack": {
       "optional": true
     }
-  },
-  "packageManager": "pnpm@10.33.1"
+  }
 }

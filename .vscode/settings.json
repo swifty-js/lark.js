@@ -28,6 +28,7 @@
     "UNLOADABLE",
     "unstub",
     "vite",
+    "webawesome",
     "zustand"
   ]
 }

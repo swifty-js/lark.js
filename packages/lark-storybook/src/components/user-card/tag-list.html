@@ -1,0 +1,26 @@
+<div class="{{=styles['tag-list']}}">
+  {{if tags.length > 0}} {{forOf tags as tag}}
+  <wa-tag
+    class="{{=styles['tag-list__tag']}}"
+    variant="brand"
+    appearance="outlined"
+    size="s"
+    pill
+    role="button"
+    tabindex="0"
+    data-tag="{{=tag}}"
+    @click="pick()"
+    @keydown="pickKey()"
+  >
+    {{=tag}}
+  </wa-tag>
+  {{/forOf}} {{else}}
+  <wa-badge
+    class="{{=styles['tag-list__empty']}}"
+    variant="neutral"
+    appearance="outlined"
+  >
+    No tags
+  </wa-badge>
+  {{/if}}
+</div>

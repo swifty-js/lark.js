@@ -1,0 +1,17 @@
+@reference "../../styles/global.css";
+
+.tag-list {
+  @apply flex flex-wrap gap-1.5;
+}
+
+.tag-list__tag {
+  @apply cursor-pointer;
+}
+
+.tag-list__tag:focus-visible {
+  @apply outline-2 outline-offset-2 outline-blue-600;
+}
+
+.tag-list__empty {
+  @apply text-xs;
+}

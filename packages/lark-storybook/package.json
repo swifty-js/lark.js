@@ -1,0 +1,28 @@
+{
+  "name": "@lark.js/storybook",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Storybook (Vite builder) workbench for @lark.js/mvc",
+  "type": "module",
+  "scripts": {
+    "dev": "storybook dev -p 5520",
+    "build": "storybook build -o storybook-static",
+    "preview": "storybook dev -p 5520 --no-open",
+    "typecheck": "tsc --noEmit",
+    "format": "prettier -w ./ --experimental-cli"
+  },
+  "dependencies": {
+    "@awesome.me/webawesome": "^3.11.0",
+    "@lark.js/mvc": "workspace:^",
+    "tailwindcss": "^4.3.3"
+  },
+  "devDependencies": {
+    "@storybook/html-vite": "^10.5.10",
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/node": "^24.13.3",
+    "prettier": "^3.9.6",
+    "storybook": "^10.5.10",
+    "typescript": "^5.9.3",
+    "vite": "^8.2.2"
+  }
+}

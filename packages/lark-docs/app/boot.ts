@@ -48,8 +48,8 @@ const config: FrameworkConfig = {
   routes,
   defaultPath: "/",
   // All /docs/* routes map to "theme/docs-layout" (see generated routes).
-  // The layout stays mounted across navigation; observeLocation triggers
-  // an async render that loads the matching .md content via loadContent.
+  // The layout stays mounted across navigation; its useSignalEffect reads
+  // Router.parse() (tracked) and loads the matching .md via loadContent.
   defaultView: "theme/docs-layout",
   unmatchedView: "theme/docs-layout",
   error(e: Error) {

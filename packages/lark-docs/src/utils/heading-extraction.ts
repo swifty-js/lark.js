@@ -34,7 +34,7 @@
  * the compiler, so avoiding repeated parses matters.
  */
 import MarkdownIt from "markdown-it";
-import type { Token } from "markdown-it/index.js";
+import type { Token } from "markdown-it";
 import type { HeadingInfo } from "../types";
 import { createSlugger } from "./slugify";
 

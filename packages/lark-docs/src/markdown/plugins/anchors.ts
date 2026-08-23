@@ -30,7 +30,10 @@
 import type MarkdownIt from "markdown-it";
 import { createSlugger } from "../../utils/slugify";
 import { inlineText } from "../../utils/heading-extraction";
-import type { StateCore } from "markdown-it/index.js";
+// Import from the package root: it resolves (import condition) to the same
+// type graph as the MarkdownIt default import above. The "/index.js" subpath
+// resolves to the parallel CJS type graph, which is structurally incompatible.
+import type { StateCore } from "markdown-it";
 
 export interface AnchorOptions {
   /** Add a permalink `#` symbol after headings. Default: true */

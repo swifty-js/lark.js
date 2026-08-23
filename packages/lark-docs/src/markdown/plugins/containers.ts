@@ -28,9 +28,16 @@
  * functions that produce callout-styled markup with inline lucide icons.
  */
 import type MarkdownIt from "markdown-it";
-import container from "markdown-it-container";
-import type { Token } from "markdown-it/index.js";
+import type { PluginWithParams, Token } from "markdown-it";
+import containerRaw from "markdown-it-container";
 import { escapeHtml } from "../../utils/escape-html";
+
+// @types/markdown-it-container types "markdown-it" via a CJS `require`
+// import, which resolves to @types/markdown-it's dist (require-condition)
+// type graph; this ESM package resolves the root import to the lib
+// (import-condition) graph. The two graphs are structurally equivalent for
+// the plugin contract but nominally incompatible — bridge once here.
+const container = containerRaw as unknown as PluginWithParams;
 
 // Inlined lucide SVGs (MIT license) — this module runs at build time in
 // plain Node, where Vite's ?raw import suffix is unavailable.

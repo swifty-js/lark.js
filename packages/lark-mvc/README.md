@@ -4,15 +4,22 @@ A lightweight TypeScript Mvc frontend framework for single-page applications and
 
 ## Overview
 
-lark-mvc is a functional-first framework that provides a complete application architecture with zero dependencies. Views are written with React-style JSX (automatic runtime, `jsxImportSource: "@lark.js/mvc"`), rendered through a real-DOM diff engine. It features two-phase route confirmation, zustand-aligned state management, and built-in state-preserving HMR across Vite, Webpack, and Rspack.
+lark-mvc is a functional-first framework built on **signals reactivity**
+(`@preact/signals-core`). Views are written with React-style JSX (automatic
+runtime, `jsxImportSource: "@lark.js/mvc"`) and rendered through a real-DOM
+diff engine. Every mounted view runs its template inside one render effect —
+reading a signal subscribes the view, writing it re-renders synchronously.
+There is no manual digest, no dirty-checking, no observer declarations.
 
 Design principles:
 
 - Functional API: no class, no this, no prototype, no mixin
-- Zero dependencies
+- Signals-based reactivity — read = subscribe, write = re-render; **shallow**
+  (reference) comparison, like React/Preact
 - React-style JSX templates — real JS scoping, inline event closures, type checking
 - Real DOM diff via innerHTML plus keyed comparison (no virtual DOM)
 - Module Federation support for micro-frontends
+- One runtime dependency: `@preact/signals-core` (~1.5 kB gzip)
 
 ## Architecture
 
@@ -22,29 +29,27 @@ Design principles:
           +---------------------+---------------------+
           |                     |                     |
        Router               State                Frame Tree
-    (history/hash)       (observable)          (mount/unmount)
+    (history/hash)     (per-key signals)       (mount/unmount)
           |                     |                     |
-    two-phase              get/set/digest         createFrame
-    confirmation           change tracking       parent-child
+    two-phase             tracked get(key)        createFrame
+    confirmation          batched set(obj)       parent-child
           |                     |                     |
-          +----------+----------+                     |
-                     |                                |
-              dispatcherNotifyChange                  |
-                     |                                |
-              dispatcherUpdate (walk tree)            |
-                     |                                |
-                   ViewCtx <----+----> mountCtx / unmountCtx
-                     |          |
-              +------+-------+  |
-              |      |       |  |
-           updater  events  hooks
-              |      |       |
-         digest()  delegator  useState/useEffect/...
-              |
+   route-view mount             |              params proxy (per-key signals)
+          |                     |                     |
+          +----------+----------+----------+----------+
+                     |
+        per-view render effect  (@preact/signals-core)
+                     |
+        template()  -- TRACKED: every signal read subscribes the view
+                     |
      real-DOM diff (innerHTML plus keyed comparison)
-              |
-           dom.ts
+                     |
+        endUpdate -> mountZone  -- UNTRACKED: children own their own effects
 ```
+
+Signal writes re-run only the render effects that read them. DOM event
+handlers and child→parent trampolines run inside `batch()`, so multi-signal
+writes coalesce into one render pass per affected view.
 
 ## Installation
 
@@ -58,6 +63,9 @@ npm install @lark.js/mvc
 # yarn
 yarn add @lark.js/mvc
 ```
+
+`@preact/signals-core` is installed automatically as the framework's only
+runtime dependency.
 
 ### Peer dependencies
 
@@ -122,18 +130,16 @@ export default {
 
 ```tsx
 // src/views/home.tsx
-import { defineView, jsxTemplate, useState } from "@lark.js/mvc";
+import { defineView, jsxTemplate, signal } from "@lark.js/mvc";
 
-type Data = { count: number };
+export default defineView(() => {
+  const count = signal(0);
 
-export default defineView((ctx) => {
-  const [getCount, setCount] = useState("count", 0);
-
-  const template = jsxTemplate<Data>(({ count }) => (
+  const template = jsxTemplate(() => (
     <div class="home">
       <h1>Welcome to Lark Mvc</h1>
-      <p>Count: {count}</p>
-      <button onClick={() => setCount(getCount() + 1)}>Increment</button>
+      <p>Count: {count.value}</p>
+      <button onClick={() => count.value++}>Increment</button>
     </div>
   ));
 
@@ -141,9 +147,10 @@ export default defineView((ctx) => {
 });
 ```
 
-Events are inline functions — there is no events map and no handler-name
-strings. Define the template inside the setup when handlers need `ctx` or
-hook setters; a template without handlers can live at module level.
+That's the whole reactive loop: the template reads `count.value` (subscribe),
+the click handler writes it (re-render). No digest calls, no state
+declarations. Events are inline functions — there is no events map and no
+handler-name strings.
 
 ### 2. Boot the framework
 
@@ -182,21 +189,97 @@ for lazy loading / Module Federation — see `registerViewClass`).
 </html>
 ```
 
+## Reactivity
+
+The framework re-exports the `@preact/signals-core` primitives — they are the
+single reactivity mechanism for everything:
+
+```ts
+import { signal, computed, effect, batch, untracked } from "@lark.js/mvc";
+import type { Signal, ReadonlySignal } from "@lark.js/mvc";
+
+const count = signal(1); //   count.value  (read/write)
+const doubled = computed(() => count.value * 2); // derived, auto-tracked, lazy
+const dispose = effect(() => console.log(count.value)); // runs now + on change
+batch(() => {
+  count.value = 2;
+  count.value = 3; // effects notified ONCE, at batch end
+});
+untracked(() => count.value); // read without subscribing
+```
+
+### Tracked regions
+
+A signal read subscribes the reader **only inside a tracked region**:
+
+| Region                               | Established by           |
+| ------------------------------------ | ------------------------ |
+| The view template (`jsxTemplate` fn) | the view's render effect |
+| `computed(fn)` bodies                | the computed             |
+| `useSignalEffect(fn)` / `effect(fn)` | the effect               |
+
+Every reactive data source in the framework is signal-backed, so reading it
+in a tracked region subscribes automatically:
+
+| Source           | Tracked read                 | Write                          |
+| ---------------- | ---------------------------- | ------------------------------ |
+| view-local state | `sig.value`                  | `sig.value = next`             |
+| props            | `params.key`                 | parent re-render (`mountZone`) |
+| cross-view State | `State.get("key")`           | `State.set({ key: next })`     |
+| stores           | `store.getState().key`       | `store.setState({...})`        |
+| router           | `Router.parse()` (any field) | `Router.to(...)`               |
+
+Reads outside a tracked region (setup body, event handlers, async callbacks)
+return the current value without subscribing — use `.peek()` /
+`untracked()` when you want to be explicit about it.
+
+### Shallow reactivity (important)
+
+Signals compare by **reference** (`===`), exactly like React state:
+
+```ts
+const list = signal([1, 2]);
+
+list.value.push(3); // ✗ in-place mutation — nothing re-renders
+list.value = [...list.value, 3]; // ✓ replace the reference
+
+const user = signal({ name: "a" });
+user.value.name = "b"; // ✗ invisible
+user.value = { ...user.value, name: "b" }; // ✓
+```
+
+The same rule applies to `State.set`, `store.setState`, and props: pushing
+the **same object reference** again is a no-op; deriving new data requires a
+new reference. There is no deep proxy and no dependency on property paths —
+one signal per key, compared by identity.
+
+### Rules
+
+- **Do not write a signal that the same template/computed reads.** The
+  effect would invalidate itself; `@preact/signals-core` throws
+  `Cycle detected` after 100 batch iterations. Derive with `computed`, or
+  write from event handlers / `useSignalEffect` with disjoint reads.
+- Event handlers already run inside `batch()` (DOM delegation and
+  child→parent trampolines) — multiple writes in one handler produce one
+  render pass per affected view.
+- Every reactive re-render bumps `ctx.signature` — `ctx.wrapAsync` callbacks
+  from before the render are dropped (by design).
+
 ## Core Concepts
 
 ### Views
 
 A view component is defined via `defineView<P>()`. The setup function runs
-once on mount, receives a `ViewCtx` and the props passed at the JSX usage
-site, and returns `{ template, assign? }`. The result is used directly as a
-JSX tag — never called as a function.
+once on mount, receives a `ViewCtx` and the reactive `params` proxy, and
+returns `{ template }`. The result is used directly as a JSX tag — never
+called as a function.
 
 ```tsx
-import { defineView, jsxTemplate, useState, useEffect } from "@lark.js/mvc";
+import { defineView, jsxTemplate, signal, useEffect } from "@lark.js/mvc";
 
-export default defineView((ctx, params) => {
-  // View-local state
-  const [getName, setName] = useState("name", "world");
+export default defineView((ctx) => {
+  // View-local state — template reads subscribe, writes re-render
+  const name = signal("world");
 
   // Side effect with cleanup
   useEffect(() => {
@@ -204,50 +287,63 @@ export default defineView((ctx, params) => {
     return () => clearInterval(timer);
   });
 
-  const template = jsxTemplate<{ greeting: string }>(({ greeting }) => (
-    <p onClick={() => setName("Lark")}>{greeting}</p>
+  const template = jsxTemplate(() => (
+    <p onClick={() => (name.value = "Lark")}>Hello, {name.value}!</p>
   ));
 
-  return {
-    template,
-    // Optional: custom data assignment logic
-    assign(options) {
-      ctx.updater.set({ greeting: `Hello, ${getName()}!` }).digest();
-      return true;
-    },
-  };
+  return { template };
 });
 ```
 
-Window/document-level listeners are plain `useEffect` work:
+Derived data is ordinary code inside the template (it re-runs per render) or
+a `computed()` when it should cache:
 
 ```tsx
+const items = signal<Item[]>([]);
+const total = computed(() => items.value.reduce((s, i) => s + i.price, 0));
+
+const template = jsxTemplate(() => (
+  <p>
+    {items.value.length} items, total {total.value}
+  </p>
+));
+```
+
+Window/document-level listeners are plain `useEffect` work; reactive
+side effects (run again when a signal changes) use `useSignalEffect`:
+
+```tsx
+const width = signal(window.innerWidth);
+
 useEffect(() => {
-  const onResize = () => ctx.updater.digest({ width: window.innerWidth });
+  const onResize = () => (width.value = window.innerWidth);
   window.addEventListener("resize", onResize);
   return () => window.removeEventListener("resize", onResize);
+});
+
+useSignalEffect(() => {
+  document.title = `width: ${width.value}`; // re-runs on every width change
 });
 ```
 
 #### ViewCtx
 
-The `ViewCtx` is the first argument to every setup function. It provides all framework APIs:
+The `ViewCtx` is the first argument to every setup function:
 
-| Method                        | Description                              |
-| ----------------------------- | ---------------------------------------- |
-| `ctx.render()`                | Force re-render the view                 |
-| `ctx.observeLocation(params)` | Declare URL params this view reacts to   |
-| `ctx.observeState(keys)`      | Declare State keys this view reacts to   |
-| `ctx.capture(key, resource)`  | Register a destroyable resource          |
-| `ctx.release(key)`            | Remove and destroy a resource            |
-| `ctx.on(event, handler)`      | Listen to view lifecycle events          |
-| `ctx.fire(event, data)`       | Emit a view event                        |
-| `ctx.wrapAsync(fn)`           | Wrap async callback with signature guard |
-| `ctx.beginUpdate(zoneId)`     | Begin zone update (unmount children)     |
-| `ctx.endUpdate(zoneId)`       | End zone update (remount children)       |
-| `ctx.updater`                 | Per-view data binding API                |
-| `ctx.id`                      | View ID (same as owner frame ID)         |
-| `ctx.owner`                   | Owner frame reference                    |
+| Member                       | Description                                                                                  |
+| ---------------------------- | -------------------------------------------------------------------------------------------- |
+| `ctx.render()`               | Force a re-render through the render effect (rarely needed — writes re-render automatically) |
+| `ctx.capture(key, resource)` | Register a destroyable resource                                                              |
+| `ctx.release(key)`           | Remove and destroy a resource                                                                |
+| `ctx.on(event, handler)`     | Listen to view lifecycle events (`render`, `destroy`)                                        |
+| `ctx.fire(event, data)`      | Emit a view event                                                                            |
+| `ctx.wrapAsync(fn)`          | Wrap async callback with signature guard                                                     |
+| `ctx.endUpdate(zoneId)`      | End zone update (remount children)                                                           |
+| `ctx.refData`                | Ref-token store read by templates (internal)                                                 |
+| `ctx.translate(token)`       | Resolve a refData token to its live value (internal)                                         |
+| `ctx.signals`                | Keyed signals created via `useSignal` (HMR-preserved)                                        |
+| `ctx.id`                     | View ID (same as owner frame ID)                                                             |
+| `ctx.owner`                  | Owner frame reference (`ctx.owner.fire` = child→parent)                                      |
 
 #### View Lifecycle
 
@@ -258,32 +354,34 @@ mountView(viewPath)
        |
    setCurrentCtx(ctx)
        |
-   setup(ctx, params)
-       |
-   +-- hooks: useState, useEffect, useStore, ...
+   untracked( setup(ctx, params) )   -- setup-body reads never leak into an
+       |                                enclosing render effect
+   +-- hooks: useSignal, useEffect, useSignalEffect, ...
        |
    setCurrentCtx(null)
        |
-   wire template / events / assign
+   wire template
        |
-   signature.value = 1
+   signature.value = 1;  frame.view = ctx
        |
-   frame.view = ctx
+   createRenderEffect(ctx)
        |
-   registerEvents(ctx)
+   effect(() => renderCore())        -- first run = initial render
        |
-   ctx.render() --> updater.digest() --> DOM diff --> endUpdate()
+   template() TRACKED --> DOM diff --> untracked( endUpdate/mountZone )
 ```
+
+Each render pass: `signature.value++` → fire `"render"` → destroy
+`destroyOnRender` resources → evaluate template (tracked) → keyed DOM diff →
+mount child zones (untracked — children own their own render effects).
 
 On unmount:
 
 ```
 unmountView()
        |
-   run useEffect cleanups (reverse order)
-       |
-   unregisterEvents(ctx)
-       |
+   run useEffect cleanups (reverse order)   -- includes the render-effect
+       |                                       dispose and event unbinding
    destroyAllResources(ctx, true)
        |
    fire("destroy")
@@ -348,6 +446,7 @@ root.unmountFrame("child-id");
 | `frame.parent(level?)`                | Navigate up the tree                        |
 | `frame.invoke(name, args?)`           | Cross-view method call                      |
 | `frame.children()`                    | Get child frame IDs                         |
+| `frame.paramsStore`                   | Reactive props store (per-key signals)      |
 | `frame.on/off/fire`                   | Frame-level events                          |
 
 #### Embedded Components
@@ -374,16 +473,17 @@ Pass data and event handlers to child components as regular JSX props:
 ```tsx
 import CounterUpdater from "./components/counter-updater";
 
-const template = jsxTemplate<{ count: number; step: number; history: number[] }>((d) => (
+const count = signal(0);
+const history = signal<number[]>([]);
+
+const template = jsxTemplate(() => (
   <CounterUpdater
     key="counter-updater"
     class="mx-2"
-    count={d.count}
-    step={d.step}
-    history={d.history}
-    onIncrement={() => bump(+1)}
-    onDecrement={() => bump(-1)}
-    onClearHistory={(data) => clear(data)}
+    count={count.value}
+    history={history.value}
+    onIncrement={() => (count.value += 1)}
+    onClearHistory={() => (history.value = [])}
   />
 ));
 ```
@@ -392,33 +492,48 @@ const template = jsxTemplate<{ count: number; step: number; history: number[] }>
 | ---------------------------------- | ----------------------------------------------------------------------- |
 | `id` / `key` / `class` / `style`   | Routed to the auto-generated host element (`key` becomes the host `id`) |
 | `on` + Capitalized, function value | Child→parent event subscription (`onClearHistory` → `"clearHistory"`)   |
-| everything else                    | Delivered to the child — objects/arrays/functions by live reference     |
+| everything else                    | Delivered to the child's `params` — objects/functions by live reference |
 
 All child props travel through ONE refData token (`p-lark` wire attribute),
 so names keep their exact camelCase and values keep their types — `count={5}`
 arrives as the number `5`. `children` are not supported on component tags.
 
-**Props flow:** Parent `updater.set().digest()` → template re-renders → the
-props token updates → `mountZone` translates it and pushes data into the
-child with `updater.set(data)` + a full `view.render()` (the child's
-`assign` / `renderMethod` re-run).
-
-**Events flow:** Child calls `ctx.owner.fire("eventName", data?)` → the frame
-emitter hits a stable trampoline that always points at the parent's LATEST
-handler prop (re-synced every parent render — inline closures never go
-stale). Event names match exactly (case-sensitive); they never pass through
-HTML attributes.
+**Props flow (reactive):** the child's `params` is a proxy over per-key
+signals. Reading `params.key` inside the child's **template** subscribes the
+child to that key. When the parent re-renders, `mountZone` batch-writes the
+fresh props into the signals — the child re-renders only if a key it actually
+read changed (reference comparison). Props read once in the setup body are a
+snapshot and never update — read props in the template, like React render
+functions. A prop the parent stops passing reads as `undefined`.
 
 ```tsx
-// Child component
+// Child component — props are read INSIDE the template (tracked)
 export default defineView<{ count?: number; onIncrement?: () => void }>((ctx, params) => {
-  ctx.updater.digest({ count: params?.count ?? 0 });
-  const template = jsxTemplate<{ count: number }>(({ count }) => (
-    <button onClick={() => ctx.owner.fire("increment")}>count: {count}</button>
+  const template = jsxTemplate(() => (
+    <button onClick={() => ctx.owner.fire("increment")}>count: {params?.count ?? 0}</button>
   ));
   return { template };
 });
 ```
+
+**Signal-as-prop (fine-grained):** pass the signal itself instead of its
+value — the child reads `.value` in its own template and updates **without
+re-rendering the parent**:
+
+```tsx
+const count = signal(0);
+// Parent template does NOT read count.value — parent never re-renders on count
+const template = jsxTemplate(() => <Counter count={count} />);
+
+// Child
+const template = jsxTemplate(() => <b>{(params!.count as Signal<number>).value}</b>);
+```
+
+**Events flow:** Child calls `ctx.owner.fire("eventName", data?)` → the frame
+emitter hits a stable trampoline that always points at the parent's LATEST
+handler prop (re-synced every parent render — inline closures never go
+stale). Handler calls run inside `batch()`. Event names match exactly
+(case-sensitive); they never pass through HTML attributes.
 
 Use `key` on components rendered in `map()` loops — it becomes the host `id`
 and preserves child frames (and their state) across list reorders.
@@ -426,6 +541,9 @@ and preserves child frames (and their state) across list reorders.
 ### Routing
 
 The Router supports two modes with a two-phase change confirmation protocol.
+`Router.parse()` is a **tracked read** — calling it inside a template,
+`computed`, or `useSignalEffect` subscribes the caller to navigation, so
+views that read the URL re-render on every route change automatically.
 
 ```ts
 import { Router } from "@lark.js/mvc";
@@ -435,7 +553,7 @@ Router.to("/list", { page: 2 });
 Router.to({ page: 3 }); // update params only, keep current path
 Router.to("/detail", { id: "123" }, true); // replace history entry
 
-// Parse current URL
+// Parse current URL (tracked when called in a tracked region)
 const loc = Router.parse();
 console.log(loc.path); // "/list"
 console.log(loc.params); // { page: "2" }
@@ -448,6 +566,18 @@ const diff = Router.diff();
 
 // Join path segments
 Router.join("/api", "v1", "users"); // "/api/v1/users"
+```
+
+A view that reacts to the URL simply reads it in a tracked region:
+
+```tsx
+const template = jsxTemplate(() => <p>page = {Router.parse().get("page", "1")}</p>);
+
+// Or drive async work from navigation:
+useSignalEffect(() => {
+  const path = Router.parse().path; // subscribe
+  untracked(() => void loadContent(path)); // async body untracked
+});
 ```
 
 #### Two-Phase Change Confirmation
@@ -472,9 +602,9 @@ User action (Router.to, back/forward, link click)
    |           |
    CHANGED event (final)
        |
-   dispatcherNotifyChange
+   location signal bump  -->  tracked Router.parse() readers re-render
        |
-   mount new view / update params
+   route-view mount (when the matched VIEW changed)
 ```
 
 ```ts
@@ -542,41 +672,44 @@ Framework.boot({
 
 ### State Management
 
-lark-mvc provides two state management layers:
+lark-mvc provides two state management layers, both signal-backed.
 
 #### State (Simple Cross-View Data)
 
-`State` is a singleton for lightweight shared values (counters, toggles, session info).
+`State` is a singleton for lightweight shared values (counters, toggles,
+session info). Every key is its own signal:
 
 ```ts
 import { State } from "@lark.js/mvc";
 
-// Write
+// Write — batched per-key signal writes; subscribed views re-render. Done.
 State.set({ count: 1, title: "Hello" });
-State.digest(); // fire changed event, notify views
 
-// Read
-const count = State.get("count");
-const all = State.get(); // entire state object
+// Read — tracked when called inside a template/computed/useSignalEffect
+const count = State.get("count"); // subscribes to "count" only
+const all = State.get(); // snapshot; subscribes to EVERY State change
 
-// Get changed keys from last digest
-const keys = State.diff(); // ReadonlySet<string>
-
-// In view setup: observe specific keys
+// In a view — no observe declarations, just read in the template:
 export default defineView((ctx) => {
-  ctx.observeState("count,title");
-  // When count or title changes via State.digest(), this view re-renders
-
-  // Auto-cleanup on view destroy (reference-counted)
+  // Reference-counted cleanup: key data dropped when the last reader dies
   State.clean("count,title")(ctx);
 
+  const template = jsxTemplate(() => (
+    <p>
+      {String(State.get("title"))}: {Number(State.get("count"))}
+    </p>
+  ));
   return { template };
 });
 ```
 
+Shallow semantics apply: `State.set({ list: sameArrayRef })` is a no-op —
+replace the reference. `State.on/off/fire` remain as a general-purpose
+pub/sub channel (unrelated to reactivity).
+
 #### createStore (Complex Reactive State)
 
-For complex state with handlers, derived data, or fine-grained subscriptions:
+For complex state with actions, derived data, and fine-grained subscriptions:
 
 ```ts
 import { createStore, computed } from "@lark.js/mvc";
@@ -585,47 +718,42 @@ const counterStore = createStore("counter", (set, get) => ({
   count: 0,
   step: 1,
 
-  // Computed: auto-recomputes when deps change
-  doubled: computed(["count"], () => get().count * 2),
+  // Derived: dependencies tracked automatically — no deps array
+  doubled: computed(() => get().count * 2),
 
   // Actions: functions attached to state
   increment() {
     set({ count: get().count + get().step });
-  },
-  decrement() {
-    set({ count: get().count - get().step });
   },
   setStep(step: number) {
     set({ step });
   },
 }));
 
-// Read state
+// Read state — getState() returns a STABLE tracked proxy: reading a key
+// inside a template subscribes that view to THAT key only.
 const state = counterStore.getState();
 console.log(state.count); // 0
 console.log(state.doubled); // 0
 
-// Update state
+// Update state — batched; Object.is-equal values are skipped
 counterStore.setState({ count: 5 });
 
-// Subscribe to changes
+// Manual subscription (zustand semantics)
 const unSub = counterStore.subscribe((state, prevState) => {
   console.log("count changed:", prevState.count, "->", state.count);
 });
 
-// Use in view
-export default defineView((ctx) => {
-  const getState = useStore(counterStore, (s) => ({
-    count: s.count,
-    doubled: s.doubled,
-  }));
-
-  const template = jsxTemplate<{ count: number; doubled: number }>(({ count, doubled }) => (
-    <button onClick={() => counterStore.getState().increment()}>
-      {count} (doubled: {doubled})
-    </button>
-  ));
-
+// Use in a view — read getState() in the template, nothing else needed:
+export default defineView(() => {
+  const template = jsxTemplate(() => {
+    const { count, doubled, increment } = counterStore.getState();
+    return (
+      <button onClick={increment}>
+        {count} (doubled: {doubled})
+      </button>
+    );
+  });
   return { template };
 });
 
@@ -634,22 +762,14 @@ unSub();
 counterStore.destroy();
 ```
 
-#### bindStore (View Lifecycle Binding)
+Notes:
 
-```ts
-import { bindStore } from "@lark.js/mvc";
-
-export default defineView((ctx) => {
-  // Auto-syncs store state to updater.data
-  // Auto-unsubscribes on view destroy
-  bindStore(ctx, counterStore, (s) => ({
-    count: s.count,
-    doubled: s.doubled,
-  }));
-
-  return { template };
-});
-```
+- `getState()` is one stable proxy — spreading it (`{ ...getState() }`)
+  produces a plain snapshot (and subscribes to all keys read).
+- Writes to computed/action keys via `setState` are silently ignored;
+  unknown keys create new state slots (zustand semantics).
+- Shallow: `setState({ list: get().list })` after an in-place `push` is a
+  no-op — build a new array.
 
 ### Service Layer
 
@@ -692,27 +812,21 @@ apiService.add({
   },
 });
 
-apiService.add({
-  name: "listUsers",
-  url: "/api/users",
-  cache: 60000,
-});
-
-// Use in a view
+// Use in a view — results land in signals
 export default defineView((ctx) => {
   const service = apiService.instance();
+  ctx.capture("api", service); // auto-destroy with the view
 
-  // Capture the service instance for auto-destroy
-  ctx.capture("api", service);
+  const userName = signal("");
 
   const loadUser = (): void => {
     service.all([{ name: "getUser", id: "123" }], (errors, payload) => {
-      ctx.updater.set({ userName: payload.get("userName") }).digest();
+      userName.value = String(payload.get("userName") ?? "");
     });
   };
 
-  const template = jsxTemplate<{ userName: string }>(({ userName }) => (
-    <button onClick={loadUser}>{userName || "Load user"}</button>
+  const template = jsxTemplate(() => (
+    <button onClick={loadUser}>{userName.value || "Load user"}</button>
   ));
 
   return { template };
@@ -746,19 +860,35 @@ export default defineView((ctx) => {
 
 All hooks are called inside the `defineView` setup function. The setup runs once on mount (not on every render like React).
 
-#### useState
+#### useSignal
 
-View-local state backed by `ctx.updater.data`. Returns a `[getter, setter]` pair.
+A keyed view-local signal. Identical to `signal(initial)` except it is stored
+on the ctx by key and **reused when the setup re-runs on the same ctx (HMR
+hot-swap)** — state survives hot updates. Use plain `signal()` when HMR
+persistence doesn't matter.
 
 ```ts
-const [getCount, setCount] = useState("count", 0);
-// getter always reads latest from updater.data (no stale closures)
-// setter writes to updater.data and triggers digest
+const count = useSignal("count", 0);
+// template: <button onClick={() => count.value++}>{count.value}</button>
+```
+
+#### useSignalEffect
+
+A reactive side effect tied to the view lifecycle: runs immediately, re-runs
+whenever any signal it read changes, disposed on view destroy (and before HMR
+re-setup). A returned function is the between-runs / final cleanup.
+
+```ts
+useSignalEffect(() => {
+  const path = Router.parse().path; // subscribe to navigation
+  untracked(() => void loadContent(path));
+});
 ```
 
 #### useEffect
 
-Register a side effect with optional cleanup. Runs synchronously during setup.
+Register a side effect with optional cleanup. Runs synchronously during setup
+and never re-runs (setup is once) — for reactive re-runs use `useSignalEffect`.
 
 ```ts
 useEffect(() => {
@@ -767,21 +897,14 @@ useEffect(() => {
 });
 ```
 
-#### useStore
-
-Bind a zustand-aligned store to the view's updater. Auto-syncs and auto-unsubscribes.
-
-```ts
-const getState = useStore(counterStore, (s) => ({ count: s.count }));
-```
-
 #### useInterval
 
 Set up an interval that is automatically cleared on view destroy.
 
 ```ts
+const time = useSignal("time", Date.now());
 useInterval(() => {
-  ctx.updater.set({ time: Date.now() }).digest();
+  time.value = Date.now();
 }, 1000);
 ```
 
@@ -815,36 +938,47 @@ useEvent("render", () => console.log("View rendered"));
 
 #### useUrlState
 
-Sync view state with URL query parameters.
+Sync view state with URL query parameters. Returns `[read, write]`; `read()`
+goes through `Router.parse()` and is therefore **tracked** — call it inside
+the template, not once in setup.
 
-```ts
-const [state, setState] = useUrlState(ctx, { page: "1", size: "20" });
-// state.page reads from URL, defaults to "1"
-// setState({ page: "2" }) updates URL via Router.to()
+```tsx
+const [readPage, writePage] = useUrlState({ page: "1", size: "20" });
+
+const template = jsxTemplate(() => (
+  <button onClick={() => writePage((prev) => ({ page: String(Number(prev.page) + 1) }))}>
+    Page {readPage().page}
+  </button>
+));
 ```
 
 ### JSX Template System
 
 Templates are written in JSX/TSX. `jsxTemplate(renderFn)` adapts a
-`(data) => JSX` function into the framework's template contract; at every
-digest the JSX tree is serialized to an HTML string and applied through the
-real-DOM keyed diff. There is no template compiler — JSX is plain JavaScript
-with real scoping, so conditionals, loops, and formatting are ordinary code.
+`() => JSX` function into the framework's template contract; the render
+function takes **no arguments** — it reads signals, `params`, `State`, and
+stores via closures, and runs inside the view's render effect (reads =
+subscriptions). On every render pass the JSX tree is serialized to an HTML
+string and applied through the real-DOM keyed diff. There is no template
+compiler — JSX is plain JavaScript with real scoping, so conditionals, loops,
+and formatting are ordinary code.
 
 ```tsx
-import { defineView, jsxTemplate, raw } from "@lark.js/mvc";
+import { defineView, jsxTemplate, raw, signal } from "@lark.js/mvc";
 
-type Data = { user: { isAdmin: boolean }; items: { id: number; name: string }[]; md: string };
+const user = signal({ isAdmin: false });
+const items = signal<{ id: number; name: string }[]>([]);
+const md = signal("");
 
-const template = jsxTemplate<Data>(({ user, items, md }) => (
+const template = jsxTemplate(() => (
   <>
-    {user.isAdmin ? <div class="admin-panel">Welcome, admin</div> : <div>Welcome</div>}
+    {user.value.isAdmin ? <div class="admin-panel">Welcome, admin</div> : <div>Welcome</div>}
     <ul>
-      {items.map((item) => (
+      {items.value.map((item) => (
         <li key={`item-${item.id}`}>{item.name}</li>
       ))}
     </ul>
-    <article>{raw(md)}</article>
+    <article>{raw(md.value)}</article>
   </>
 ));
 ```
@@ -854,6 +988,7 @@ const template = jsxTemplate<Data>(({ user, items, md }) => (
 | JSX                      | Behavior                                                            |
 | ------------------------ | ------------------------------------------------------------------- |
 | `{expr}` (string/number) | HTML-escaped text (`0` renders; `boolean/null/undefined` render "") |
+| `{sig}` (Signal)         | Auto-unwrapped to `sig.value` (tracked read)                        |
 | `{raw(html)}`            | Trusted raw HTML, no escaping — never pass untrusted input          |
 | `{cond && <div/>}`       | Conditional rendering (falsy values are dropped)                    |
 | `{list.map(...)}`        | List rendering (arrays are flattened)                               |
@@ -869,7 +1004,12 @@ const template = jsxTemplate<Data>(({ user, items, md }) => (
 | `style`               | String, or camelCase object (kebab-cased; no implicit `px`)              |
 | `id` / `key`          | Keyed-diff compare key; `key` emits as `id` when no explicit `id` is set |
 | `disabled={true}`     | Boolean attribute → `disabled=""`; `false`/nullish omit the attribute    |
+| `title={sig}`         | Signal values auto-unwrap to their current value (tracked read)          |
 | `data-x={object}`     | Object/array/function values become live refData tokens                  |
+
+Component props are the exception to signal unwrapping: a Signal passed as a
+component prop stays wrapped, so the child can subscribe to it directly
+(fine-grained cross-view updates without parent re-renders).
 
 Give loop items a stable `key` (or `id`) to get keyed reordering instead of
 in-place rewrites — ids are document-global, so keep them unique.
@@ -883,7 +1023,7 @@ variables directly:
 
 ```tsx
 {
-  items.map((item) => (
+  items.value.map((item) => (
     <button key={`del-${item.id}`} onClick={() => deleteItem(item.id)}>
       Delete
     </button>
@@ -911,6 +1051,8 @@ const validate = (e: LarkEvent) => {
 
 Notes:
 
+- Handlers run inside `batch()` — multiple signal writes in one handler
+  produce ONE render pass per affected view.
 - DOM event types are lowercase (HTML lowercases attribute names) — a
   `CustomEvent("myEvent")` cannot be delegated; use lowercase DOM types.
   Frame events (`ctx.owner.fire`) are case-sensitive and support camelCase.
@@ -936,52 +1078,27 @@ function Badge(props: { label: string; children?: JSXNode }) {
   );
 }
 
-const template = jsxTemplate<Data>(({ count }) => <Badge label="count">{count}</Badge>);
+const template = jsxTemplate(() => <Badge label="count">{count.value}</Badge>);
 ```
 
 #### Render pipeline
 
 ```
-updater.digest()
+signal write  (or ctx.render() / HMR)
     |
-jsxTemplate closure: renderFn(updater.data) -> VNode tree
+per-view render effect re-runs (sync; batched inside batch())
+    |
+jsxTemplate closure: renderFn() -> VNode tree     -- TRACKED signal reads
     |
 serialize(vnode, { viewId, refData })  -- escape text/attrs, encode events,
-    |                                     tokenize object props via refFn
+    |                                     unwrap Signals, tokenize object props
 inline handlers wired into the view's handler map (per render)
     |
 HTML string -> domGetNode() -> domSetChildNodes() keyed diff -> applyDomOps()
     |
-mountZone: mount/update embedded view components (props push + events re-sync)
+mountZone (untracked): mount new child frames / batch-write props signals /
+                       re-sync child->parent event trampolines
 ```
-
-### Updater
-
-The Updater provides per-view data binding with change detection and DOM diff triggering.
-
-```ts
-// Inside a view setup function
-ctx.updater.set({ name: "Alice", age: 30 }); // set data
-ctx.updater.get("name"); // read data
-ctx.updater.get(); // read entire data object
-ctx.updater.digest(); // trigger re-render if data changed
-ctx.updater.digest({ count: 1 }); // set + digest in one call
-ctx.updater.forceDigest(); // force re-render regardless of changes
-ctx.updater.snapshot(); // record current version
-ctx.updater.altered(); // check if version changed since snapshot
-ctx.updater.getChangedKeys(); // keys changed in current digest
-```
-
-#### Change Detection
-
-The Updater tracks changes via `setData()`: for each key in the new data, it compares against the old value. Only non-primitive, non-function values trigger comparison; primitives are always considered changed if the reference differs. Changed keys are collected into a `Set<string>` and passed through the diff pipeline.
-
-#### Rendering Pipeline
-
-1. Template function produces an HTML string
-2. `domGetNode()` parses HTML into a temporary DOM tree via `document.implementation.createHTMLDocument`
-3. `domSetChildNodes()` performs keyed diff against the live DOM
-4. `applyDomOps()` applies mutations (appendChild, removeChild, replaceChild, insertBefore)
 
 ## Bundler Integration
 
@@ -1072,18 +1189,21 @@ every matching frame — template edits included.
 
 ### State Preservation
 
-`hotSwapView` preserves the entire `ViewCtx`: `updater.data`, `resources`, `emitter`, `signature`, `id`, and `owner` all stay the same. The sequence:
+`hotSwapView` preserves the entire `ViewCtx`: `signals` (keyed `useSignal`
+state), `refData`, `resources`, `emitter`, `signature`, `id`, and `owner` all
+stay the same. The sequence:
 
-1. Run old `useEffect` cleanups
-2. Unregister old events
-3. Destroy `destroyOnRender` resources
-4. Re-run `newSetup(ctx)` against the same ctx
-5. Update template/events/assign from the new descriptor
-6. Register new events
-7. Increment signature, fire `render`, force re-render
+1. Run old `useEffect` cleanups — this disposes the old render effect and
+   unbinds delegated event types
+2. Destroy `destroyOnRender` resources
+3. Re-run `newSetup(ctx)` against the same ctx (inside `untracked()`) —
+   `useSignal(key, ...)` calls find and reuse the preserved signals
+4. Update the template from the new descriptor
+5. Create a fresh render effect — its first run re-renders with the new
+   template and re-wires inline handlers
 
-Because setup re-runs against the preserved ctx, initialize data conditionally
-(`useState` does this for you) if it must survive a hot swap.
+Plain `signal()` closures are recreated on swap; use `useSignal(key, initial)`
+for state that must survive hot updates.
 
 ### Auto-Injection
 
@@ -1123,7 +1243,8 @@ All DOM events are delegated to `document.body` in the capture phase. The
 EventDelegator walks from `event.target` up to `document.body`; at each
 element it reads the `@<type>` attribute the serializer emitted
 (`"<viewId>\x1e__jsxN"`), resolves the owning Frame by id, and calls the
-matching inline handler from the view's handler map.
+matching inline handler from the view's handler map — inside `batch()`, so
+multi-signal writes render once.
 
 There is no handler-key grammar: inline JSX functions are the only DOM event
 mechanism. Frame (child→parent) events are wired separately by `mountZone`
@@ -1140,12 +1261,13 @@ through per-frame trampolines. Window/document listeners belong in
 
 | Category  | Exports                                                                                                 |
 | --------- | ------------------------------------------------------------------------------------------------------- |
+| Reactive  | `signal`, `computed`, `effect`, `batch`, `untracked`, `Signal`, `ReadonlySignal` (type)                 |
 | Framework | `Framework`, `defineView`, `EventDelegator`                                                             |
 | JSX       | `jsxTemplate`, `raw`, `Fragment`, `isLarkView`, `JSXNode` / `VNode` / `Component` / `LarkEvent` (types) |
-| State     | `State`, `createStore`, `computed`, `bindStore`, `useUrlState`                                          |
+| State     | `State`, `createStore`, `useUrlState`                                                                   |
 | Router    | `Router`                                                                                                |
 | View      | `defineView`, `ViewCtx` / `ViewSetup` / `LarkView` / `LarkHostProps` / `ViewParams` (types)             |
-| Hooks     | `useState`, `useEffect`, `useStore`, `useInterval`, `useTimeout`, `useResource`, `useEvent`             |
+| Hooks     | `useSignal`, `useSignalEffect`, `useEffect`, `useInterval`, `useTimeout`, `useResource`, `useEvent`     |
 | Frame     | `Frame`, `createFrame`, `registerViewClass`, `invalidateViewClass`, `ensureViewName`, `resolveSetup`    |
 | Service   | `createService`, `ServiceApi`, `ServiceInstance` (types)                                                |
 | Types     | All types from `./types` via `export *`                                                                 |
@@ -1162,22 +1284,42 @@ through per-frame trampolines. Window/document listeners belong in
 | `@lark.js/mvc/rspack`          | Rspack integration (`LarkMvcPlugin`, `larkMvcLoader`)               |
 | `@lark.js/mvc/client`          | Client-side type declarations (DOM augmentations, `*.css` modules)  |
 
+## Migration from the digest era
+
+The manual-dispatch reactivity was removed completely. Old API → new pattern:
+
+| Removed                                   | Replacement                                                       |
+| ----------------------------------------- | ----------------------------------------------------------------- |
+| `ctx.updater.set({x}).digest()`           | `x.value = next` (a signal read by the template)                  |
+| `ctx.updater.get("x")`                    | `x.value` / `x.peek()`                                            |
+| setup returns `assign()`                  | derive inline in the template, or `computed()`                    |
+| `ctx.renderMethod`                        | `useSignalEffect(...)`                                            |
+| `ctx.observeState("k")`                   | read `State.get("k")` in the template                             |
+| `ctx.observeLocation(...)`                | read `Router.parse()` in the template / `useSignalEffect`         |
+| `State.digest()` / `State.diff()`         | gone — `State.set` notifies tracked readers                       |
+| `useState("k", v)` (getter/setter pair)   | `useSignal("k", v)` / `signal(v)`                                 |
+| `useStore(store, sel)` / `bindStore(...)` | read `store.getState().key` in the template                       |
+| `computed(["deps"], fn)` (store)          | `computed(fn)` — dependencies tracked automatically               |
+| `useUrlState(ctx, init)` → `[state, set]` | `useUrlState(init)` → `[read, write]` (call `read()` in template) |
+| `jsxTemplate<Data>((data) => ...)`        | `jsxTemplate(() => ...)` — read signals via closures              |
+| `Framework.task(fn)` (chunked scheduler)  | `batch(fn)` from the reactive core                                |
+
 ## Configuration
 
 ### FrameworkConfig
 
-| Key             | Type                                                    | Default     | Description                               |
-| --------------- | ------------------------------------------------------- | ----------- | ----------------------------------------- |
-| `rootId`        | `string`                                                | `"root"`    | DOM root element ID                       |
-| `routeMode`     | `"history" or "hash"`                                   | `"history"` | Routing mode                              |
-| `defaultView`   | `string or LarkView`                                    | -           | Default view when URL matches no route    |
-| `defaultPath`   | `string`                                                | `"/"`       | Default path when URL hash/query is empty |
-| `routes`        | `Record<string, string or LarkView or RouteViewConfig>` | -           | Path-to-view mapping                      |
-| `hashbang`      | `string`                                                | `"#!"`      | Hash prefix (hash mode only)              |
-| `error`         | `(error: Error) => void`                                | throws      | Global error handler                      |
-| `rewrite`       | `(path, params, routes) => string`                      | -           | Route rewriting function                  |
-| `unmatchedView` | `string or LarkView`                                    | -           | View for 404 pages                        |
-| `require`       | `(names, params?) => Promise<unknown[]>`                | -           | Async module loader (Module Federation)   |
+| Key             | Type                                                    | Default     | Description                                   |
+| --------------- | ------------------------------------------------------- | ----------- | --------------------------------------------- |
+| `rootId`        | `string`                                                | `"root"`    | DOM root element ID                           |
+| `routeMode`     | `"history" or "hash"`                                   | `"history"` | Routing mode                                  |
+| `defaultView`   | `string or LarkView`                                    | -           | Default view when URL matches no route        |
+| `defaultPath`   | `string`                                                | `"/"`       | Default path when URL hash/query is empty     |
+| `routes`        | `Record<string, string or LarkView or RouteViewConfig>` | -           | Path-to-view mapping                          |
+| `hashbang`      | `string`                                                | `"#!"`      | Hash prefix (hash mode only)                  |
+| `error`         | `(error: Error) => void`                                | throws      | Global error handler (render errors included) |
+| `rewrite`       | `(path, params, routes) => string`                      | -           | Route rewriting function                      |
+| `unmatchedView` | `string or LarkView`                                    | -           | View for 404 pages                            |
+| `require`       | `(names, params?) => Promise<unknown[]>`                | -           | Async module loader (Module Federation)       |
 
 `boot()` normalizes `LarkView` entries to internal registry-name strings, so
 Router internals stay string-based.
@@ -1231,21 +1373,21 @@ packages/lark-mvc/
   src/
     index.ts              -- public API barrel export
     types.ts              -- all shared type definitions
+    reactive.ts           -- @preact/signals-core facade (signal/computed/...)
     common.ts             -- constants, encoding helpers
-    utils.ts              -- utility functions, task scheduler
-    framework.ts          -- Framework.boot, dispatcher, task queue
-    view.ts               -- defineView, ViewCtx, mount/unmount lifecycle
+    utils.ts              -- utility functions
+    framework.ts          -- Framework.boot, route-view mount
+    view.ts               -- defineView, ViewCtx, render effect, lifecycle
     view-registry.ts      -- view setup function registry
-    frame.ts              -- Frame tree, createFrame, mount/unmount
-    router.ts             -- Router with two-phase change confirmation
-    state.ts              -- State singleton for cross-view data
-    store.ts              -- createStore, computed, bindStore
+    frame.ts              -- Frame tree, reactive params store, mountZone
+    router.ts             -- Router with two-phase change + location signal
+    state.ts              -- State singleton (per-key signals)
+    store.ts              -- createStore (per-key signals, tracked proxy)
     service.ts            -- createService, API management
-    hooks.ts              -- useState, useEffect, useStore, etc.
-    updater.ts            -- per-view data binding and digest
+    hooks.ts              -- useSignal, useSignalEffect, useEffect, etc.
     dom.ts                -- real-DOM diff engine
     event-emitter.ts      -- multi-cast event system
-    event-delegator.ts    -- DOM event delegation
+    event-delegator.ts    -- DOM event delegation (batched dispatch)
     cache.ts              -- LFU-style bounded cache
     url-state.ts          -- useUrlState hook
     module-loader.ts      -- async module loading
@@ -1260,7 +1402,7 @@ packages/lark-mvc/
     jsx-dev-runtime.ts    -- JSX automatic dev runtime entry (jsxDEV)
     jsx/
       vnode.ts            -- pure VNode model (Symbol.for markers, raw())
-      serialize.ts        -- VNode -> HTML string serializer
+      serialize.ts        -- VNode -> HTML string serializer (Signal unwrap)
       template.ts         -- jsxTemplate adapter + inline-handler wiring
   tests/                  -- vitest test suite
   dist/                   -- built output
@@ -1270,16 +1412,16 @@ packages/lark-mvc/
 
 1. Functional over OOP: All APIs use factory functions and closures. No class, this, or prototype anywhere in the framework.
 
-2. Real-DOM diff as default: String mode parses HTML into a temporary DOM tree and performs keyed comparison. This avoids the overhead of maintaining a virtual DOM for most use cases.
+2. Signals as the single reactivity mechanism: one render effect per view; State/store/router/props are per-key signals behind tracked reads. The effect IS the dirty check — no digest, no dispatcher walk, no observer declarations. Shallow (reference) comparison, documented and deliberate.
 
-3. Runtime JSX templates: JSX compiles to plain `jsx()` calls via the standard automatic runtime; the VNode tree is serialized to an HTML string per digest and applied through the keyed real-DOM diff. No template compiler, no build-time AST analysis — templates are ordinary JavaScript with real scoping.
+3. Real-DOM diff as default: the template output is parsed into a temporary DOM tree and keyed-compared against the live DOM. This avoids the overhead of maintaining a virtual DOM for most use cases.
 
-4. Two-phase routing: The Router fires a `change` event before navigation (allowing rejection) and a `changed` event after (triggering view updates). Navigation guards run asynchronously between the two phases.
+4. Runtime JSX templates: JSX compiles to plain `jsx()` calls via the standard automatic runtime; the VNode tree is serialized to an HTML string per render pass and applied through the keyed real-DOM diff. No template compiler, no build-time AST analysis — templates are ordinary JavaScript with real scoping.
 
-5. Reference-counted events: The EventDelegator uses reference counting per event type on `document.body`, ensuring a single capture-phase listener per event type regardless of how many views register handlers.
+5. Two-phase routing: The Router fires a `change` event before navigation (allowing rejection) and a `changed` event after; a location version signal makes `Router.parse()` a tracked read. Navigation guards run asynchronously between the two phases.
 
-6. LFU cache with frequency eviction: The bounded cache uses single-pass partial selection (O(n\*k)) instead of full sorting, making eviction efficient for the typical buffer size of 5.
+6. Reference-counted events: The EventDelegator uses reference counting per event type on `document.body`, ensuring a single capture-phase listener per event type regardless of how many views register handlers. Dispatch runs inside `batch()`.
 
-7. Async callback validity: The `mark`/`unmark` system and `wrapAsync` prevent stale callbacks from executing after a view is re-rendered or destroyed.
+7. LFU cache with frequency eviction: The bounded cache uses single-pass partial selection (O(n\*k)) instead of full sorting, making eviction efficient for the typical buffer size of 5.
 
-8. Cooperative time-slicing: The task scheduler in `utils.ts` processes tasks in 9ms batches, yielding to the browser via `scheduler.yield()` (Chrome 115+) or `setTimeout(0)` fallback.
+8. Async callback validity: The `mark`/`unmark` system and `wrapAsync` prevent stale callbacks from executing after a view is re-rendered or destroyed — note that every reactive re-render bumps the signature.

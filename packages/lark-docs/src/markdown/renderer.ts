@@ -28,7 +28,7 @@
  * and code blocks are highlighted at build time.
  */
 import type MarkdownIt from "markdown-it";
-import type { Token } from "markdown-it/index.js";
+import type { Token } from "markdown-it";
 
 /**
  * Render markdown-it tokens to an HTML string.

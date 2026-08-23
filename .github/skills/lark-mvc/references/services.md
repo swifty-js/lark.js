@@ -74,7 +74,7 @@ const svc = apiService.instance();
 
 svc.all([{ name: "getUser", id: "123" }, "listUsers"], (errors, p1, p2) => {
   // fires ONCE after all complete; errors is a sparse array indexed per attr
-  ctx.updater.set({ user: p1.get("userName") }).digest();
+  user.value = p1.get("userName"); // write a signal the template reads
 });
 
 svc.one(attrs, (error, payload, isLast, index) => {
@@ -104,24 +104,23 @@ an array of either. Per-call `cache` in attrs overrides the meta TTL.
 
 ### Recommended view integration
 
-```ts
+```tsx
 export default defineView((ctx) => {
   const svc = apiService.instance();
   ctx.capture("api", svc); // auto svc.destroy() on view destroy
   // or: useResource("api", svc)
-  return {
-    template,
-    events: {
-      "load<click>"() {
-        svc.all(
-          { name: "getUser", id: "123" },
-          ctx.wrapAsync((errors, p) => {
-            ctx.updater.set({ user: p.get("userName") }).digest();
-          }),
-        );
-      },
-    },
+  const user = signal("");
+
+  const load = (): void => {
+    svc.all({ name: "getUser", id: "123" }, (errors, p) => {
+      user.value = String(p.get("userName") ?? ""); // signal write → re-render
+    });
   };
+
+  const template = jsxTemplate(() => (
+    <button onClick={load}>{user.value || "Load user"}</button>
+  ));
+  return { template };
 });
 ```
 
@@ -172,8 +171,9 @@ em.off("change", handler); // or off("change") for all
 
 Semantics:
 
-- **Case-insensitive** event names (HTML attributes are lowercased; this is
-  why `e-lark-clearHistory` still matches `fire("clearHistory")`).
+- **Case-sensitive** event names (`fire("clearHistory")` only matches
+  `on("clearHistory")` — component event names travel through refData
+  tokens, never through HTML attributes, so camelCase survives exactly).
 - **Re-entrant safe**: `off()` during `fire()` defers list compaction until
   the outermost fire completes — siblings are never skipped.
 - **`on{EventName}` convention**: assigning `emitter.onDestroy = fn` makes

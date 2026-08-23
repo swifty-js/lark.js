@@ -1,7 +1,8 @@
 # Theme System, Runtime Views, Search & Dark Mode
 
-Source of truth: `src/theme/*` (5 view factories + .html templates),
-`src/runtime.ts`, `src/client.css`, `src/client.d.ts`, `src/utils/dom.ts`.
+Source of truth: `src/theme/*.tsx` (signal-based JSX components),
+`src/theme/index.ts`, `src/client.css`, `src/client.d.ts`,
+`src/utils/dom.ts`.
 
 ## registerThemeViews
 
@@ -11,141 +12,180 @@ import { registerThemeViews } from "@lark.js/docs"; // or /theme
 registerThemeViews(): void
 ```
 
-Registers five views via `registerViewClass`:
+Registers exactly **two** string-path views via `registerViewClass` — the
+ones the runtime must resolve by path:
 
-| View path            | Factory                      | Role                                                                           |
-| -------------------- | ---------------------------- | ------------------------------------------------------------------------------ |
-| `theme/docs-layout`  | `createDocsLayoutView(tpl)`  | Persistent root layout: navbar, 3-column grid, content, pager, drawer, 404     |
-| `theme/sidebar`      | `createSidebarView(tpl)`     | Collapsible nav tree with active tracking                                      |
-| `theme/toc`          | `createTocView(tpl)`         | Heading outline, scroll-spy, animated marker; inline mode via `*inline="true"` |
-| `theme/search`       | `createSearchView(tpl)`      | MiniSearch command palette                                                     |
-| `theme/theme-toggle` | `createThemeToggleView(tpl)` | Dark-mode button                                                               |
+| View path           | Factory                          | Why a registered path                                    |
+| ------------------- | -------------------------------- | --------------------------------------------------------- |
+| `theme/docs-layout` | `createDocsLayoutView()`         | `Framework.boot({ defaultView: "theme/docs-layout" })`   |
+| `theme/toc-inline`  | `createTocView({ inline: true })`| `[[toc]]` compiles to raw `<div v-lark="theme/toc-inline"></div>` |
 
-Templates are pre-compiled in string at lib-build time (via `virtual:lark-docs/*` modules exporting `__str`);
-`registerThemeViews` merely registers the templates. Call it
-**before `Framework.boot()`** so `theme/docs-layout` is registered when the
-default view mounts.
+Everything else — `createSidebarView()`, `createTocView()`,
+`createSearchView()`, `createThemeToggleView()` — returns a `LarkView`
+component that the layout **imports and embeds as JSX tags**
+(`<Sidebar />`, `<Toc />`, `<Search />`, `<ThemeToggle />`). They are NOT in
+the registry; re-registering `"theme/sidebar"` does nothing (see
+"Customizing the theme"). Factories take no template argument.
 
-## The State contract (runtime data bus)
+Call `registerThemeViews()` **before `Framework.boot()`** so
+`theme/docs-layout` is registered when the default view mounts.
 
-All cross-view communication goes through Lark `State` (values validated
-with zod at read time — bad shapes degrade gracefully):
+## The State contract (runtime data bus, per-key signals)
 
-| Key                   | Written by                                       | Read by                     |
-| --------------------- | ------------------------------------------------ | --------------------------- |
+All cross-view communication goes through Lark `State` — reads in templates
+are tracked signal reads, writes re-render readers (there is no digest).
+Values are validated with zod at read time — bad shapes degrade gracefully.
+
+| Key                   | Written by                                       | Read by (tracked)           |
+| --------------------- | ------------------------------------------------ | ---------------------------- |
 | `docsConfig`          | boot.ts                                          | layout, sidebar             |
 | `loadContent`         | boot.ts                                          | layout                      |
 | `getSearchIndex`      | boot.ts                                          | search                      |
-| `searchOpen`          | layout (⌘K / `/` / button), search (Esc/overlay) | search (observes)           |
-| `drawerOpen`          | layout, sidebar (closes on navigate)             | layout (observes)           |
-| `currentPageHeadings` | layout (after loadContent)                       | toc (observes)              |
+| `searchOpen`          | layout (⌘K / `/` / button), search (Esc/overlay) | search template             |
+| `drawerOpen`          | layout, sidebar (closes on navigate)             | layout template + effect    |
+| `currentPageHeadings` | layout (after loadContent)                       | toc template + effect       |
 | `currentPageTitle`    | layout                                           | (available to custom views) |
+| `onContentUpdate`     | dev HMR bridge                                   | layout, search (md hot reload) |
 
 ## docs-layout behavior (the interesting one)
 
-- `ctx.observeLocation([], true)` + `observeState("drawerOpen")`; navigation
-  triggers an async `ctx.renderMethod`:
-  1. `/index(.md|.html)` URLs redirect to the clean path (`Router.to(clean, {}, true)`).
-  2. Same path + only drawer changed → cheap digest, skip reload.
-  3. Else: show skeleton (`loading: true`) → `await loadContent(path)` →
-     signature-guarded → set `currentPageHeadings`/`currentPageTitle` in
-     State, `document.title = "{page} · {site}"` → compute prev/next by
-     flattening the sidebar map → digest with
-     `{ contentHtml, notFound: !content, navItems (prefix-matched active), … }`.
-  4. Post-render (setTimeout 0): replay page-in animation, **mount copy
-     buttons** on `.codeblock`s, scroll to `location.hash` element or top.
-- Keyboard: ⌘K/Ctrl+K toggles `searchOpen`; `/` opens it (unless typing in an
-  input); drawer gets Escape-close + Tab focus trap + body scroll lock.
+Content state lives in signals (`loading`, `notFound`, `contentHtml`,
+`currentPath`, `prevPage`, `nextPage`, `navItems`, `siteTitle`,
+`searchEnabled`); the template reads them plus `State.get("drawerOpen")`.
+
+- **Navigation driver** — a `useSignalEffect` reads `Router.parse().path`
+  (the only tracked read) and runs the async `navigate()` inside
+  `untracked()` (so drawer/config reads don't re-trigger navigation):
+  1. `/index(.md|.html)` URLs redirect to the clean path
+     (`Router.to(clean, {}, true)`).
+  2. Same path → return (hash-only changes handled by click handlers).
+  3. Else: close drawer + `loading.value = true` (skeleton) →
+     `await loadContent(path)` — staleness guarded by a **navigation
+     sequence counter** (`navSeq`), NOT `ctx.signature` (signature bumps on
+     every reactive render) → set `currentPageHeadings`/`currentPageTitle`
+     in State, `document.title = "{page} · {site}"` → compute prev/next from
+     the sidebar map → one `batch()` writing all content signals.
+  4. Post-render (setTimeout 0): replay page-in animation, mount copy
+     buttons, render mermaid blocks, scroll to `location.hash` or top.
+- **Drawer effect** — a second `useSignalEffect` on `State.get("drawerOpen")`
+  syncs `inert`, body scroll lock, focus return, and replays copy-button /
+  mermaid enhancements (any layout re-render's DOM diff strips
+  runtime-injected nodes).
+- Keyboard: ⌘K/Ctrl+K toggles `searchOpen`; `/` opens it (unless typing in
+  an input); drawer gets Escape-close + Tab focus trap.
 - Navbar scroll styling toggles classes directly on `#docs-navbar`
-  (bypasses updater for scroll performance).
-- Links in templates use `data-href` + `@click="navigateTo()"`; handlers walk
-  up from `e.target` via `findDataHref` (clicks may hit `<svg>`/`<span>`).
+  (bypasses rendering for scroll performance).
+- Links use `data-href` + `onClick={navigateTo}`; handlers walk up from
+  `e.target` via `findDataHref` (clicks may hit `<svg>`/`<span>`). In-article
+  clicks are delegated on the content root (`onContentClick`): `#hash` →
+  smooth scroll + pushState; `/...` same-origin → `Router.to`.
 
 ## sidebar / toc details
 
-- **sidebar**: reads `docsConfig.sidebar`, flattens nested items into
-  depth-annotated rows (padding = `14 + depth*14`px). Collapse state lives in
-  closures keyed by group path, so it survives re-renders; a group
-  auto-expands only on the _transition_ to containing the active route
+- **sidebar**: the template calls `buildGroups()` — tracked reads of
+  `State.get("docsConfig")`, `Router.parse()` (active route), and a local
+  `collapseVersion` signal. Collapse state lives in closure Maps keyed by
+  group path (toggle handlers mutate the Map and bump `collapseVersion`); a
+  group auto-expands only on the _transition_ to containing the active route
   (users can re-collapse it). Clicking a link `Router.to(href)` and closes
-  the mobile drawer.
-- **toc**: observes `currentPageHeadings`; IntersectionObserver scroll-spy
-  marks the last heading whose top ≤ 96px; an animated `--primary` marker is
-  positioned beside the active item; clicking pushes `#slug` history state
-  and smooth-scrolls. Inline mode (`[[toc]]`) adds a bordered card wrapper.
+  the mobile drawer (`State.set({ drawerOpen: false })`).
+- **toc** (`createTocView(options?: { inline?: boolean })`): the template
+  reads `State.get("currentPageHeadings")` + local `activeSlug` /
+  `markerTop` / `markerHeight` / `markerShow` signals. Scroll-spy is
+  rAF-throttled scroll/resize + ResizeObserver recompute (NOT
+  IntersectionObserver): the last heading whose top ≤ 97px is active; at
+  page bottom the last heading wins. A `useSignalEffect` re-runs the spy and
+  marker when the page's headings change. Clicking pushes `#slug` history
+  state and smooth-scrolls. The inline variant (`[[toc]]` →
+  `theme/toc-inline`) adds a bordered card wrapper.
 
 ## Search (MiniSearch)
 
-- Lazy: first keystroke calls `State.get("getSearchIndex")()` and builds a
-  `MiniSearch({ fields: ["title","headings","excerpt"], searchOptions:
-{ prefix: true, fuzzy: 0.2, boost: { title: 2, headings: 1.5 } } })`.
-- Max 12 results; matched terms wrapped in `<mark>` (all text HTML-escaped
-  first — safe for the `{{!}}` raw output the template uses).
-- Keyboard: ↑/↓ wrap-around, Enter opens (IME-composing Enter ignored),
-  Esc closes from anywhere; results are race-safe via a sequence counter.
-- Open/close purely via `State.searchOpen`. `search: false` in DocsConfig
-  removes the button and the `v-lark="theme/search"` mount.
+- Signal state: `results`, `hasSearched`, `query`, `activeIndex`,
+  `indexSize`; open/close is `State.get("searchOpen")` read in the template.
+- Lazy: first keystroke calls `State.get("getSearchIndex")()` and builds
+  **section-level** docs (`buildSectionDocs` splits each page's compiled
+  HTML at h1–h3 boundaries; results deep-link to `/path#slug` with a
+  hierarchical crumb). `MiniSearch({ fields: ["title","pageTitle","text"],
+  tokenize: cjkTokenize, searchOptions: { prefix: true, fuzzy: 0.2,
+  boost: { title: 2, pageTitle: 1.5 } } })`.
+- Caps: 3 results per page, 12 total; matched terms wrapped in `<mark>`
+  (all text HTML-escaped first — safe for the `raw()` output the template
+  uses). Race-safe via a sequence counter; md hot updates invalidate the
+  index (generation counter).
+- A `useSignalEffect` on `searchOpen` focuses the input on open and resets
+  query state on close; Esc closes from anywhere; ↑/↓ wrap around; Enter
+  opens (IME-composing Enter ignored).
+- `search: false` in DocsConfig removes the button and the `<Search />`
+  mount.
 
 ## Dark mode & theming
 
 - Toggle mechanism: `.dark` class on `document.documentElement` +
   `localStorage["lark-docs-theme"]` (`"dark"`/`"light"`; absent = system
-  preference). The toggle view syncs across instances with a
-  MutationObserver. Put the no-FOUC snippet in `index.html`.
+  preference). The toggle view holds a `dark` signal synced across instances
+  with a MutationObserver. Put the no-FOUC snippet in `index.html`. Mermaid
+  diagrams re-render on theme flips (another MutationObserver in the layout).
 - `client.css` (Tailwind CSS v4, CSS-first config): shadcn-style semantic
   tokens (`--background --foreground --primary --primary-foreground
 --secondary --secondary-foreground --muted --muted-foreground --accent
 --accent-foreground --destructive --radius`) declared on `:root` and
   flipped under `.dark`, mapped into Tailwind via `@theme inline` so
-  `bg-background` / `text-primary` utilities work. The default palette is
-  Vercel-style: zero-chroma black/white neutrals (`oklch(1 0 0)` /
-  `oklch(0.145 0 0)`) with a React-blue primary (`oklch(0.55 0.19 258)`
-  light / `oklch(0.72 0.14 255)` dark); `--radius: 0.5rem`; `--font-sans` /
-  `--font-display` default to a Geist-style sans stack, `--font-mono` to a
-  mono stack. There are **no** `--card`, `--card-foreground`, `--border`,
-  `--input`, `--ring`, `--sidebar`, `--code`, `--callout-warning`, or
-  `--callout-danger` tokens — those roles reuse the tokens above: borders
-  and code surfaces use `--muted` (`border-muted` / `bg-muted`; the base
-  `border-color` reset is `var(--muted)`), focus rings and input focus use
-  `--primary`, card/drawer/dialog surfaces use `--background`, callout tip
-  and warning accents use `--primary`, and callout danger uses
-  `--destructive`. Includes typography-plugin
-  prose overrides, `.codeblock`/`.callout` chrome, `docs-grid` /
-  `sidebar-scroll` / `skeleton` utilities, entry animations, and a
-  `prefers-reduced-motion` guard.
+  `bg-background` / `text-primary` utilities work. Borders and code surfaces
+  reuse `--muted`, focus rings use `--primary`, card/drawer/dialog surfaces
+  use `--background`, callout danger uses `--destructive` — there are no
+  separate `--card`/`--border`/`--ring`/`--sidebar` tokens. Includes
+  typography-plugin prose overrides, `.codeblock`/`.callout` chrome,
+  `docs-grid`/`sidebar-scroll`/`skeleton` utilities, entry animations, and a
+  `prefers-reduced-motion` guard. The packaged `dist/client.css` already
+  `@import`s tailwindcss and `@source`-scans `dist/theme-chunk.js`.
 - **Customize colors** by overriding the CSS variables on `:root` / `.dark`
   after importing `client.css` — no Tailwind config needed.
-- Consumer Tailwind setup must `@source` the theme bundle so utility classes
-  used in theme templates are generated:
-  `@source "../node_modules/@lark.js/docs/dist/theme.js";`
 
 ## Icons
 
-`icons` (exported from the main entry / `theme`) is a map of raw lucide SVG
+`icons` (exported from the main entry / `/theme`) is a map of raw lucide SVG
 strings (`search menu x sun moon chevronDown chevronRight copy check list
 arrowUpRight arrowLeft arrowRight compass info triangleAlert octagonAlert`),
-plus `clockIcons[12]` (the hour-aware navbar logo). Render with `{{!icons.x}}`;
-size/color via the wrapper span (`[&>svg]:size-full`, `text-primary`).
+plus `clockIcons[12]` (the hour-aware navbar logo). Render with
+`{raw(icons.x)}`; size/color via the wrapper span (`[&>svg]:size-full`,
+`text-primary`).
 
-## Overriding theme views
+## Customizing the theme
 
-Two levels:
+Three levels:
 
 1. **CSS only** — override token variables and/or prose rules.
-2. **Replace a view** — after `registerThemeViews()`, re-register any path
-   with your own setup (last registration wins), reusing a factory with a
-   custom template or writing a fresh `defineView`:
+2. **Replace the layout** — after `registerThemeViews()`, re-register
+   `"theme/docs-layout"` with your own `LarkView` (last registration wins).
+   Because Sidebar/Toc/Search/ThemeToggle are plain exported factories, a
+   custom layout composes them as JSX tags:
 
-```ts
-import { registerThemeViews, createSidebarView } from "@lark.js/docs";
-import { registerViewClass } from "@lark.js/mvc";
-import mySidebarTpl from "./my-sidebar.html";
+```tsx
+import { createSidebarView, createSearchView, icons } from "@lark.js/docs";
+import { defineView, jsxTemplate, registerViewClass, State, raw } from "@lark.js/mvc";
 
-registerThemeViews();
-registerViewClass("theme/sidebar", createSidebarView(mySidebarTpl));
+const Sidebar = createSidebarView();
+const Search = createSearchView();
+
+registerViewClass(
+  "theme/docs-layout",
+  defineView(() => ({
+    template: jsxTemplate(() => (
+      <div>
+        <Sidebar />
+        {!!State.get("searchOpen") && <Search />}
+        {raw(icons.menu)}
+        {/* ... your layout ... */}
+      </div>
+    )),
+  })),
+);
 ```
 
-Keep the State contract (read `docsConfig`, honor `searchOpen`/`drawerOpen`,
-navigate via `data-href` + `Router.to`) so the other stock views keep
-working. `@lark.js/docs/runtime` exports the browser-safe `slugify` for
-custom TOC/anchor logic.
+3. **Fork a component** — the stock components read the State contract
+   (`docsConfig`, `searchOpen`, `drawerOpen`, `currentPageHeadings`) via
+   tracked `State.get` reads and navigate via `data-href` + `Router.to`;
+   keep the same channel so the rest of the theme keeps working.
+   `@lark.js/docs/runtime` exports the browser-safe `slugify` for custom
+   TOC/anchor logic; `renderMermaidBlocks` is exported for custom layouts.

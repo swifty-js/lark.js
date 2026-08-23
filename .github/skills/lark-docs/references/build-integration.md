@@ -13,8 +13,9 @@ Source of truth: `src/vite.ts`, `src/webpack.ts`, `src/rspack.ts`,
 | `@lark.js/docs/rspack`   | `larkDocsLoader` (Promise style), `LarkDocsPlugin`, + same re-exports                                                                                                                                                                                                      | Node         |
 | `@lark.js/docs/compiler` | `compileMarkdown`, `CompileMarkdownOptions`                                                                                                                                                                                                                                | Node         |
 | `@lark.js/docs/runtime`  | `slugify` only (zero build deps)                                                                                                                                                                                                                                           | Browser-safe |
-| `@lark.js/docs/theme`    | `registerThemeViews`, 5 `create*View` factories, `icons`                                                                                                                                                                                                                   | Browser      |
-| `@lark.js/docs/client`   | Types only: `declare module "@lark-docs/generated"` and `*.html`                                                                                                                                                                                                           | d.ts         |
+| `@lark.js/docs/theme`    | `registerThemeViews` (registers `theme/docs-layout` + `theme/toc-inline`), 5 `create*View` factories (LarkView components), `icons`, `renderMermaidBlocks`                                                                                                                 | Browser      |
+| `@lark.js/docs/client`   | Types only: `declare module "@lark-docs/generated"`                                                                                                                                                                                                                        | d.ts         |
+| `@lark.js/docs/client.css` | Packaged theme stylesheet — `@import`s tailwindcss + typography and `@source`-scans `dist/theme-chunk.js`                                                                                                                                                                | CSS          |
 
 Import `defineConfig` from `/vite` (or `/webpack`, `/rspack`) rather than the
 main entry in Node contexts — the main entry pulls in lucide `?raw` SVG
@@ -32,12 +33,13 @@ import { larkDocsPlugin } from "@lark.js/docs/vite";
 plugins: [larkDocsPlugin({ config: docsConfig })];
 ```
 
-Returns **an array of two plugins**: `lark-docs` (enforce pre; `resolveId`
+Returns **an array of plugins**: `lark-docs` (enforce pre; `resolveId`
 tags `.md` imports with `?lark-docs` — node_modules markdown is skipped;
-`load` reads + `compileMarkdown`s) and the embedded `larkMvcPlugin` for
-`.html` templates. Do **not** add `larkMvcPlugin` separately. Editing an existing `.md`
-hot-reloads through the normal Vite pipeline; adding/renaming files requires
-re-running `defineConfig` (dev-server restart).
+`load` reads + `compileMarkdown`s) plus the embedded `larkMvcPlugin` (oxc
+JSX defaults + auto view HMR). Do **not** add `larkMvcPlugin` separately.
+Editing an existing `.md` hot-reloads through the normal Vite pipeline;
+adding/renaming files requires re-running `defineConfig` (dev-server
+restart).
 
 ## Webpack / Rspack
 
@@ -50,8 +52,9 @@ plugins: [new LarkDocsPlugin({ config: docsConfig })];
 The plugin pushes a `.md` loader rule referencing itself via `__filename`
 (ESM shim injected at build). Loader difference: webpack uses
 `this.callback()`, rspack returns the Promise. You still need lark-mvc's
-`LarkMvcPlugin` (from `@lark.js/mvc/webpack|rspack`) for `.html` theme
-templates in these bundlers — only the Vite plugin bundles both.
+`LarkMvcPlugin` (from `@lark.js/mvc/webpack|rspack`) for view HMR in these
+bundlers (JSX comes from your TS/SWC loader) — only the Vite plugin bundles
+both.
 
 ## Required project wiring (any bundler)
 
@@ -61,7 +64,7 @@ project/
   docs/**/*.md             content
   app/index.html           <div id="app"> + no-FOUC dark-mode script
   app/boot.ts              registerThemeViews → State.set → Framework.boot
-  app/main.css             @import "tailwindcss" + client.css + @source theme.js
+  app/main.css             @import "@lark.js/docs/client.css" (self-contained)
   shims.d.ts               /// <reference types="@lark.js/docs/client" />
   .lark-docs/generated/   generated (gitignore)
 ```
@@ -99,8 +102,7 @@ tests.
 | `pnpm typecheck`  | `tsc -p tsconfig.build.json --noEmit`                                                                                             |
 
 The repo's own `vite.config.ts` is the reference for advanced setups: dual
-lib/docs modes, the `themeDualMode` virtual-module plugin (compiles each
-theme `.html` in string),
+lib/docs modes,
 CJS `__filename` shims for the self-referencing loaders, and dev aliases
 (`@lark.js/docs → src`, `@lark.js/mvc → ../lark-mvc/dist`).
 

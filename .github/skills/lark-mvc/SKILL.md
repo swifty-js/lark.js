@@ -1,124 +1,118 @@
 ---
 name: lark-mvc
 description: >-
-  Authoritative reference for @lark.js/mvc (v0.0.19), the functional-first
-  TypeScript frontend framework located at packages/lark-mvc — views via
-  defineView() + ViewCtx + hooks, Frame tree, two-phase Router, State
-  singleton, zustand-aligned createStore/computed/bindStore, createService
-  request layer, compile-time .html templates ({{=}}/{{!}}/{{@}}/{{forOf}}),
-  v-lark child views with *prop/@event bindings, real-DOM diff rendering,
-  Vite/Webpack/Rspack plugins with
-  auto-injected HMR, and the Frame Devtool Bridge. Use this skill whenever the
-  user reads, writes, debugs, reviews, or extends code that imports from
-  "@lark.js/mvc" (or any sub-path like /vite, /webpack, /rspack, /runtime,
-  /compiler, /devtool, /client), works under packages/lark-mvc,
-  or packages/lark-docs, or mentions any of these
-  symbols and concepts — Framework.boot, defineView, ViewCtx, ViewSetup,
-  useState, useEffect, useStore, useUrlState, useInterval, useTimeout,
-  useResource, useEvent, createStore, computed, bindStore, State, Router,
-  Router.to, Router.beforeEach, Frame, createFrame, registerViewClass,
-  createService, PayloadApi, updater.set().digest(), ctx.owner.fire,
-  mountZone, mountView, v-lark, p-lark-, e-lark-, larkMvcPlugin,
-  LarkMvcPlugin, larkMvcLoader, hotSwapByTemplate, hotSwapByView,
-  EventDelegator, compileTemplate, extractGlobalVars,
-  "handler<click>" event maps, or Lark template syntax in .html files. Even
-  if the user just says "add a page/view/component to the Lark app", consult
-  this skill first. Do NOT use for the legacy class-based Lark (View.extend)
-  or for unrelated React/Vue projects.
+  Authoritative reference for @lark.js/mvc (v0.0.28+), the functional-first
+  TypeScript frontend framework located at packages/lark-mvc — signals
+  reactivity via @preact/signals-core (signal/computed/effect/batch/untracked,
+  per-view render effects, shallow reference comparison), React-style JSX view
+  components (defineView returns a LarkView used as a JSX tag, jsxTemplate,
+  inline event closures, reactive params props), Frame tree, two-phase Router
+  with tracked Router.parse(), per-key-signal State singleton,
+  zustand-aligned createStore with auto-tracked computed, createService
+  request layer, real-DOM diff rendering, and Vite/Webpack/Rspack plugins
+  with auto-injected state-preserving HMR. Use this skill whenever the user
+  reads, writes, debugs, reviews, or extends code that imports from
+  "@lark.js/mvc" (or any sub-path like /vite, /webpack, /rspack,
+  /jsx-runtime, /client), works under packages/lark-mvc, packages/lark-docs,
+  or packages/lark-storybook, or mentions any of these symbols and concepts —
+  Framework.boot, defineView, LarkView, ViewCtx, jsxTemplate, signal,
+  computed, effect, batch, untracked, useSignal, useSignalEffect, useEffect,
+  useUrlState, useInterval, useTimeout, useResource, useEvent, createStore,
+  State, Router, Router.to, Router.beforeEach, Frame, createFrame,
+  registerViewClass, ensureViewName, createService, PayloadApi,
+  ctx.owner.fire, mountZone, mountView, v-lark, p-lark, larkMvcPlugin,
+  LarkMvcPlugin, hotSwapByView, EventDelegator, or "why doesn't my view
+  re-render". Even if the user just says "add a page/view/component to the
+  Lark app", consult this skill first. Do NOT use for the legacy digest-era
+  API (updater.set().digest(), events maps like "handler<click>", .html
+  templates, observeState/observeLocation — all removed) or for unrelated
+  React/Vue projects.
 ---
 
 # Lark Mvc Framework (`@lark.js/mvc`)
 
 A lightweight, functional-first TypeScript framework for SPAs and
-micro-frontends. Source: `packages/lark-mvc` (v0.0.19, ESM+CJS dual build,
-zero runtime dependencies — Babel/htmlparser2 are build-time only).
+micro-frontends. Source: `packages/lark-mvc` (v0.0.28+, ESM+CJS dual build,
+one runtime dependency: `@preact/signals-core`).
 
 Core philosophy: **no `class`, no `this`, no `prototype`, no mixin**. Every
-API is a factory function + closures. Templates are `.html` files compiled at
-build time into render functions. Data changes are **explicit**: nothing
-re-renders until you call `.digest()` (or a hook/store does it for you).
+API is a factory function + closures. Views are React-style JSX components;
+reactivity is **signals** — reading a signal inside a template subscribes the
+view, writing it re-renders synchronously. There is **no digest, no events
+map, no observe declarations, no .html templates** (all removed in the
+signals/JSX refactors — if you see them in code, that code predates v0.0.28
+and must be migrated).
 
 ## Package entry points
 
-| Import                  | Provides                                                                                                                                                                                        |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@lark.js/mvc`          | Runtime: `Framework`, `defineView`, hooks, `State`, `Router`, `Frame`, `createStore`, `computed`, `bindStore`, `createService`, `useUrlState`, `EventDelegator`, `registerViewClass`, all types |
-| `@lark.js/mvc/vite`     | `larkMvcPlugin()`                                                                                                                                                                               |
-| `@lark.js/mvc/webpack`  | `larkMvcLoader`, `LarkMvcPlugin` (auto-registers loader)                                                                                                                                        |
-| `@lark.js/mvc/rspack`   | `larkMvcLoader`, `LarkMvcPlugin`                                                                                                                                                                |
-| `@lark.js/mvc/runtime`  | Template helpers (`encHtml`, `strSafe`, `encUri`, `encQuote`, `refFn`) — imported by compiled templates, not by app code                                                                        |
-| `@lark.js/mvc/compiler` | Build-time `compileTemplate`, `extractGlobalVars`                                                                                                                                               |
-| `@lark.js/mvc/devtool`  | `installFrameDevtoolBridge`, frame-tree serialization types                                                                                                                                     |
-| `@lark.js/mvc/client`   | Ambient types: `*.html` / `*.css` module declarations, DOM augmentations                                                                                                                        |
+| Import                         | Provides                                                                                                                                                                                                                     |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@lark.js/mvc`                 | Runtime: `signal`, `computed`, `effect`, `batch`, `untracked`, `Signal`, `Framework`, `defineView`, `jsxTemplate`, `raw`, hooks, `State`, `Router`, `Frame`, `createStore`, `createService`, `useUrlState`, `EventDelegator`, `registerViewClass`, all types |
+| `@lark.js/mvc/jsx-runtime`     | JSX automatic runtime (`jsx`/`jsxs`, `Fragment`, `raw`, JSX types) — referenced by `jsxImportSource`, not imported by hand                                                                                                    |
+| `@lark.js/mvc/jsx-dev-runtime` | `jsxDEV` dev runtime                                                                                                                                                                                                          |
+| `@lark.js/mvc/vite`            | `larkMvcPlugin()` — oxc JSX defaults + auto view HMR                                                                                                                                                                          |
+| `@lark.js/mvc/webpack`         | `LarkMvcPlugin` (recommended), `larkMvcLoader`                                                                                                                                                                                |
+| `@lark.js/mvc/rspack`          | `LarkMvcPlugin`, `larkMvcLoader`                                                                                                                                                                                              |
+| `@lark.js/mvc/client`          | Ambient types: `*.css` module declarations, DOM augmentations                                                                                                                                                                 |
+
+tsconfig: `"jsx": "react-jsx"`, `"jsxImportSource": "@lark.js/mvc"`.
 
 ## The 60-second mental model
 
 ```
-Framework.boot(config)          // creates root Frame, binds Router + State
+Framework.boot(config)     // root Frame; Router CHANGED → route-view mount
         │
-Router/State "changed" ──> dispatcher walks Frame tree ──> re-render observers
+frame.mountView(...) ──> setup runs ONCE (untracked) ──> { template }
         │
-frame.mountView(path) ──> setup runs ONCE ──> { template, events, assign? }
+createRenderEffect(ctx)    // ONE @preact/signals-core effect per view
         │
-ctx.updater.set(data).digest() ──> template(data) ──> DOM diff ──> endUpdate
-        │                                                       │
-        │                                    mountZone scans [v-lark] elements
-        │                                    ──> mounts child views with props
-events: delegated once to document.body (capture phase, ref-counted)
+effect run:  template()  ── TRACKED: every signal read subscribes the view
+        │                    (local signals, params.key, State.get(key),
+        │                     store.getState().key, Router.parse())
+   real-DOM keyed diff
+        │
+   endUpdate → mountZone ── UNTRACKED: mounts <Child/> hosts, batch-writes
+                             child params signals, re-syncs event trampolines
+signal write ──> subscribed render effects re-run synchronously
+                 (writes inside batch() coalesce; DOM handlers auto-batch)
 ```
 
-A **view** is `defineView((ctx, params) => ({ template, events, assign? }))`.
-The setup runs **once per mount** (unlike React). `useState` returns a
-`[getter, setter]` pair so event handlers never see stale closures. The
-compiled template reads from `ctx.updater.data` independently of setup
-closures — template variables are auto-extracted at build time (zero config).
+A **view** is `defineView<P>((ctx, params) => ({ template }))` — the result
+is a `LarkView` used directly as a JSX tag (`<MyView x={1} onSave={fn}/>`),
+never called as a function. Setup runs **once per mount**; per-render logic
+lives in the template body (it re-runs per render) or in `computed()`.
 
 ## Quick start (canonical shape)
 
-```ts
-// src/views/home.ts
-import { defineView, useState, Router } from "@lark.js/mvc";
-import template from "./home.html"; // compiled by the bundler plugin
-import styles from "./home.module.css"; // CSS modules via updater data
+```tsx
+// src/views/home.tsx
+import { defineView, jsxTemplate, signal, Router } from "@lark.js/mvc";
+import styles from "./home.module.css";
 
-export default defineView((ctx, params) => {
-  ctx.updater.set({ styles });
-  const [getCount, setCount] = useState("count", 0);
-  return {
-    template,
-    events: {
-      "increment<click>": () => setCount(getCount() + 1),
-      "goAbout<click>": () => Router.to("/about", { from: "home" }),
-    },
-  };
+export default defineView(() => {
+  const count = signal(0);
+  const template = jsxTemplate(() => (
+    <div class={styles["home"]}>
+      <p>Count: {count.value}</p>
+      <button onClick={() => count.value++}>+1</button>
+      <button onClick={() => Router.to("/about", { from: "home" })}>About</button>
+    </div>
+  ));
+  return { template };
 });
-```
-
-```html
-<!-- src/views/home.html -->
-<div class="{{=styles['home']}}">
-  <p>Count: {{=count}}</p>
-  <button @click="increment()">+1</button>
-  <button @click="goAbout()">About</button>
-</div>
 ```
 
 ```ts
 // src/boot.ts
 import { Framework } from "@lark.js/mvc";
+import HomeView from "./views/home";
+import AboutView from "./views/about";
 Framework.boot({
   rootId: "app",
   routeMode: "history", // or "hash" (#! prefix)
   defaultPath: "/home",
-  defaultView: "home",
-  routes: { "/home": "home", "/about": "about" },
-  unmatchedView: "404",
-  require: async (
-    names, // lazy view loading (chunk-split / MF)
-  ) =>
-    Promise.all(
-      names.map((n) => import(`./views/${n}`).then((m) => m.default)),
-    ),
+  defaultView: HomeView, // imported components OR registered path strings
+  routes: { "/home": HomeView, "/about": AboutView },
 });
 ```
 
@@ -128,60 +122,56 @@ import { larkMvcPlugin } from "@lark.js/mvc/vite";
 export default defineConfig({ plugins: [larkMvcPlugin()] });
 ```
 
-HTML entry needs `<div id="app"></div>` matching `rootId`. HMR for both
-`.html` and `.ts` view files is auto-injected — never write `import.meta.hot`
-boilerplate by hand.
+HTML entry needs `<div id="app"></div>` matching `rootId`. View HMR is
+auto-injected — never write `import.meta.hot` boilerplate by hand.
 
 ## Critical rules (violating these causes the classic bugs)
 
-1. **Explicit digest** — `ctx.updater.set(data)` alone does NOT re-render.
-   Chain `.digest()`: `ctx.updater.set({ count }).digest()` (or
-   `ctx.updater.digest({ count })`). `useState` setters and `bindStore` call
-   digest for you.
-2. **Event map keys carry the DOM event type**: `"handler<click>"`, multi
-   `"handler<click,mousedown>"`, selector `"$mySelector<click>"`, global
-   `"$window<resize>"` / `"$document<keydown>"`, modifier
-   `"name<click><ctrl>"`. Template side uses `@click="handler()"` — parens
-   required for view-event handlers; `@event="name"` (no parens) on a
-   `v-lark` element is a child→parent event binding instead.
-3. **Dynamic event-handler arguments MUST be interpolated with `{{=expr}}`** —
-   the compiler's `@event` rewrite (`processViewEvents` → `jsObjectToUrlParams`)
-   is a purely **textual** transform that never evaluates identifiers. A bare
-   expression such as `@click="pick({index: cell.index})"` compiles to the
-   literal `pick(index=cell.index)`, so at runtime `e.params.index` is the
-   string `"cell.index"` (`Number(...)` → `NaN`) and the handler silently
-   misbehaves — no compile error, no console error. Write
-   `@click="pick({index: {{=cell.index}}})"` instead: art-syntax conversion
-   (Phase 2) runs **before** event processing (Phase 3), so the value is
-   rendered into the attribute (e.g. `pick(index=112)`) and delivered via
-   `e.params` (stringified). Only static literals (`{mode: 'soft'}`) may be
-   written without interpolation.
-4. **Hooks only inside setup** — they read a module-level `currentCtx`; calling
-   them in event handlers or async callbacks throws.
-5. **Setup runs once** — no re-execution on render. Put per-render data logic
-   in the optional `assign()` (pattern: `updater.snapshot()` → `set(...)` →
-   `return updater.altered()`), and call it once manually for the first render.
-6. **Pass objects to children with `{{@expr}}`** (ref token), strings with
-   `{{=expr}}`. Child receives them in `params`; later parent renders push
-   updated props via `mountZone` automatically.
-7. **Guard async work** with `ctx.wrapAsync(fn)` (signature-guarded; stale
-   callbacks after re-render/destroy are dropped) or check inside `useEffect`
-   cleanup flags. `useEffect` runs synchronously during setup — the DOM does
-   not exist yet; defer DOM access with `setTimeout(..., 0)`.
-8. **State needs digest too**: `State.set({...}); State.digest();` and views
-   only react if they declared `ctx.observeState("key1,key2")`. Use
-   `State.clean("keys")(ctx)` for reference-counted cleanup.
-9. View paths are extension-less and relative to the app source root
-   (`"components/counter-store"`), used consistently in `routes`, `v-lark`,
-   `registerViewClass`, and the `require` loader.
+1. **Reads subscribe only inside tracked regions** — the template body,
+   `computed(fn)`, and `useSignalEffect(fn)`. Reading a signal in the setup
+   body or an event handler is a plain snapshot (setup even runs inside
+   `untracked()`). Read props/State/stores **in the template**, React-style.
+2. **Shallow reactivity** — signals compare by reference (`===`).
+   `list.value.push(x)` renders nothing; write `list.value = [...list.value, x]`.
+   Same rule for `State.set`, `store.setState`, and props.
+3. **Never write a signal the same template/computed reads** — that is a
+   cycle (`@preact/signals-core` throws `Cycle detected`). Derive with
+   `computed`; write from event handlers or `useSignalEffect` with disjoint
+   reads.
+4. **Events are inline JSX functions only** (`onClick={() => ...}`) —
+   camelCase `on` + Capitalized DOM type; string values are rejected. DOM
+   handlers and child→parent trampolines run inside `batch()` (multi-writes
+   render once). Window/document listeners: `useEffect` + `addEventListener`.
+5. **Child components are imported and used as JSX tags** —
+   `<Child rows={rows} onSelect={fn}/>`. `on[A-Z]`-prefixed function props
+   become child→parent events (child fires `ctx.owner.fire("select", data)`;
+   names are case-sensitive). Everything else lands in the child's reactive
+   `params` proxy. `children` are not supported on component tags.
+6. **Hooks only inside setup** — they read a module-level `currentCtx`;
+   calling them in event handlers or async callbacks throws. `useEffect` runs
+   synchronously during setup — the DOM does not exist yet; defer DOM access
+   with `setTimeout(..., 0)`.
+7. **Guard async work** with `ctx.wrapAsync(fn)` (signature-guarded) — but
+   note EVERY reactive re-render bumps `signature`, so wrapped callbacks die
+   on any re-render. For async flows that must survive re-renders, use your
+   own sequence counter (see the docs-layout `navSeq` pattern).
+8. **`useSignal(key, initial)` vs `signal(initial)`** — both are view-local;
+   only `useSignal` survives HMR re-setup (keyed on `ctx.signals`).
+9. **Keyed lists**: give loop items a stable `key` (or `id`) — it becomes the
+   DOM id / compare key. On component tags, `key` preserves the child frame
+   (and its state) across reorders. Ids are document-global; keep them unique.
+10. Route/`registerViewClass` path strings are extension-less and
+    source-root-relative; imported components auto-register (`ensureViewName`
+    → `__vN_Name`). Raw `<div v-lark="path"></div>` HTML still mounts
+    registered paths (markdown pipelines).
 
 ## Reference files — read on demand
 
-| File                                                                   | Read when working on                                                                                                                                              |
-| ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [references/views.md](references/views.md)                             | `defineView`, full `ViewCtx` API, lifecycle, all hooks, child views (`v-lark` / `*prop` / `@event`), Frame tree, event delegation & handler naming                |
-| [references/templates.md](references/templates.md)                     | Template syntax (`{{=}} {{!}} {{@}} {{:}}`, `if/forOf/forIn/for/set`), event attributes, compilation pipeline, compiler options                                   |
-| [references/state-routing.md](references/state-routing.md)             | `State`, `createStore`/`computed`/`bindStore`/`useStore`, `Router` (parse/to/diff/beforeEach, history vs hash), `useUrlState`                                     |
-| [references/services.md](references/services.md)                       | `createService`, endpoint metadata, caching/dedup/queueing, `PayloadApi`, `createCache`, `createEmitter`                                                          |
-| [references/build-and-hmr.md](references/build-and-hmr.md)             | Vite/Webpack/Rspack integration, `FrameworkConfig` (full table), lazy loading & Module Federation, HMR internals, Devtool Bridge, project scaffolding conventions |
-| [references/rendering-internals.md](references/rendering-internals.md) | Updater/digest semantics, real-DOM diff, keyed diff (`id`/`#` compare keys), task scheduler — read when rendering/perf                                            |
+| File                                                                   | Read when working on                                                                                                                                        |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| [references/views.md](references/views.md)                             | `defineView`/`LarkView`, full `ViewCtx` API, lifecycle, all hooks, component props & events (reactive params, trampolines), Frame tree, event delegation    |
+| [references/templates.md](references/templates.md)                     | JSX template system: `jsxTemplate`, output/attribute semantics, Signal unwrapping, event props, functional components, `raw()`                              |
+| [references/state-routing.md](references/state-routing.md)             | Signals API, `State` (per-key signals), `createStore`/auto-tracked `computed`, `Router` (tracked parse/to/diff/beforeEach), `useUrlState`                    |
+| [references/services.md](references/services.md)                       | `createService`, endpoint metadata, caching/dedup/queueing, `PayloadApi`, `createCache`, `createEmitter`                                                     |
+| [references/build-and-hmr.md](references/build-and-hmr.md)             | Vite/Webpack/Rspack integration, `FrameworkConfig` (full table), lazy loading & Module Federation, HMR internals, project scaffolding conventions            |
+| [references/rendering-internals.md](references/rendering-internals.md) | Render-effect pipeline, batching, real-DOM keyed diff (`id`/`v-lark` compare keys), refData tokens — read when debugging renders/perf                        |

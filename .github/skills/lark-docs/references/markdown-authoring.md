@@ -103,9 +103,12 @@ the `--primary` token, danger uses `--destructive`, details uses muted.
 ## [[toc]]
 
 `[[toc]]` anywhere in a page compiles to
-`<div v-lark="theme/toc" *inline="true"></div>` — an inline TOC child view
-reading `State.currentPageHeadings`. The right rail already shows a TOC on
-`xl+` screens, so inline `[[toc]]` is only for in-content tables of contents.
+`<div v-lark="theme/toc-inline"></div>` — raw registered-path HTML mounting
+the inline TOC variant (`createTocView({ inline: true })`, registered by
+`registerThemeViews()`; raw hosts carry no props, so the flag is baked into
+the factory). It reads `State.currentPageHeadings` reactively. The right
+rail already shows a TOC on `xl+` screens, so inline `[[toc]]` is only for
+in-content tables of contents.
 
 ## Code fences
 
@@ -129,14 +132,21 @@ const x: number = 42;
 - `${...}` inside content is emitted literally (contentHtml is a JSON string
   literal — never template-interpolated).
 
+## Mermaid diagrams
+
+A ` ```mermaid ` fence bypasses Shiki and compiles to
+`<div class="mermaid-block" data-mermaid="<encoded source>"></div>`. The
+layout hydrates these at runtime (`renderMermaidBlocks`), re-rendering on
+navigation, on md hot updates, and on dark-mode flips (theme-aware).
+
 ## Links
 
-| Form                          | Behavior                                                                                                                |
-| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `[Guide](/lark/guide/config)` | Internal (starts with `/`): `lark-docs-nav="true"`, SPA navigation via Router. **Use the full path including baseUrl.** |
-| `[Section](#安装)`            | Hash link — also internal                                                                                               |
-| `[GitHub](https://…)`         | External: `target="_blank" rel="noopener noreferrer"`                                                                   |
-| bare `https://example.com`    | Auto-linked (linkify)                                                                                                   |
+| Form                          | Behavior                                                                                                                                  |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `[Guide](/lark/guide/config)` | Internal (starts with `/`): plain anchor; the layout's delegated click handler routes it through `Router.to` (SPA). **Use the full path including baseUrl.** |
+| `[Section](#安装)`            | Hash link — layout handler smooth-scrolls + pushes a deduped history entry                                                                |
+| `[GitHub](https://…)`         | External: compiler adds `target="_blank" rel="noopener noreferrer"`; never intercepted                                                    |
+| bare `https://example.com`    | Auto-linked (linkify)                                                                                                                     |
 
 ## Compiled output
 

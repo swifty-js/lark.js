@@ -152,9 +152,12 @@ function attachViewAndPath(loc: Location): void {
   if (!frameworkConfig) return;
 
   if (!cachedRoutes) {
-    cachedRoutes = frameworkConfig.routes || {};
-    cachedUnmatchedView = frameworkConfig.unmatchedView;
-    cachedDefaultView = frameworkConfig.defaultView;
+    // Framework.boot normalizes LarkView entries (routes / unmatchedView /
+    // defaultView) to registry-name strings before Router._setConfig runs,
+    // so the router only ever sees string view paths.
+    cachedRoutes = (frameworkConfig.routes || {}) as Record<string, string | RouteViewConfig>;
+    cachedUnmatchedView = frameworkConfig.unmatchedView as string | undefined;
+    cachedDefaultView = frameworkConfig.defaultView as string | undefined;
     cachedDefaultPath = frameworkConfig.defaultPath || "/";
     cachedRewrite = frameworkConfig.rewrite;
   }
@@ -173,9 +176,9 @@ function attachViewAndPath(loc: Location): void {
     }
     const viewEntry = cachedRoutes[path] || cachedUnmatchedView || cachedDefaultView;
     loc["path"] = path;
-    loc.view = typeof viewEntry === "string" ? viewEntry : viewEntry?.view || "";
+    loc.view = typeof viewEntry === "string" ? viewEntry : (viewEntry?.view as string) || "";
     if (typeof viewEntry === "object" && viewEntry) {
-      assign(loc, viewEntry);
+      assign(loc, viewEntry as Partial<Location>);
     }
   }
 }

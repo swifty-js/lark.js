@@ -33,19 +33,19 @@
  *
  * Inline functions (`onClick={() => ...}`) are collected during serialization
  * under per-render generated names (`__jsx1`, `__jsx2`, ... — the counter
- * resets every render, and the events map swap + DOM diff complete
+ * resets every render, and the handler-map swap + DOM diff complete
  * synchronously inside the same digest, so names never go stale):
  *
- * 1. Each render, stale `__jsx*` keys are removed from the view's events map
- *    and the fresh handlers are merged in (the delegator reads the map lazily
- *    per dispatch, so this is safe).
+ * 1. Each render, stale `__jsx*` keys are removed from the view's handler
+ *    map and the fresh handlers are merged in (the delegator reads the map
+ *    lazily per dispatch, so this is safe). Inline handlers are the ONLY
+ *    event mechanism — the map contains nothing else.
  * 2. Each event type used by an inline handler is bound ONCE per view via
- *    `EventDelegator.bind` (bind-for-life, mirroring `registerEvents`).
+ *    `EventDelegator.bind` (bind-for-life).
  * 3. A single cleanup pushed into `ctx.cleanups` unbinds those types and
- *    strips `__jsx*` keys. Cleanups run BEFORE `unregisterEvents` in both
- *    `unmountCtx` (src/view.ts) and `hotSwapView` (src/hmr.ts), so
- *    `unregisterEvents` never double-unbinds generated keys, and HMR re-wires
- *    from scratch on the post-swap `forceDigest`.
+ *    strips `__jsx*` keys — the sole unbinder, running in `unmountCtx`
+ *    (src/view.ts) and `hotSwapView` (src/hmr.ts); HMR re-wires from
+ *    scratch on the post-swap `forceDigest`.
  */
 
 import { Frame } from "../frame";
@@ -73,13 +73,12 @@ const jsxWiring = new WeakMap<ViewCtx, { boundTypes: Set<string> }>();
  * const template = jsxTemplate<Data>(({ count }) => (
  *   <div>
  *     <p>Count: {count}</p>
- *     <button onClick="increment">+1</button>
- *     <button onClick={() => console.log(count)}>log</button>
+ *     <button onClick={() => setCount(count + 1)}>+1</button>
  *   </div>
  * ));
  * export default defineView((ctx) => {
- *   ctx.updater.set({ count: 0 });
- *   return { template, events: { "increment<click>": () => ... } };
+ *   const [, setCount] = useState("count", 0);
+ *   return { template };
  * });
  * ```
  */
@@ -147,10 +146,10 @@ function wireInlineHandlers(viewId: string, sctx: SerializeCtx): void {
     state = tracked;
     jsxWiring.set(view, tracked);
 
-    // Runs before unregisterEvents in both unmountCtx and hotSwapView:
-    // strip generated keys (so unregisterEvents only sees static keys) and
-    // release exactly the types this view bound. Deleting the WeakMap entry
-    // lets a post-HMR render re-wire with a fresh cleanup.
+    // Runs during unmountCtx / hotSwapView cleanups — the SOLE unbinder of
+    // delegated event types: strip generated keys and release exactly the
+    // types this view bound. Deleting the WeakMap entry lets a post-HMR
+    // render re-wire with a fresh cleanup.
     view.cleanups.push(() => {
       const ev = view.getEvents();
       if (ev) {
@@ -161,7 +160,7 @@ function wireInlineHandlers(viewId: string, sctx: SerializeCtx): void {
         }
       }
       for (const type of tracked.boundTypes) {
-        EventDelegator.unbind(type, false);
+        EventDelegator.unbind(type);
       }
       tracked.boundTypes.clear();
       jsxWiring.delete(view);
@@ -169,11 +168,10 @@ function wireInlineHandlers(viewId: string, sctx: SerializeCtx): void {
   }
 
   // Bind newly seen event types once per view (bind-for-life; a type that a
-  // later render stops using stays bound until destroy, matching the
-  // registerEvents semantics).
+  // later render stops using stays bound until destroy).
   for (const type of sctx.eventTypes) {
     if (!state.boundTypes.has(type)) {
-      EventDelegator.bind(type, false);
+      EventDelegator.bind(type);
       state.boundTypes.add(type);
     }
   }

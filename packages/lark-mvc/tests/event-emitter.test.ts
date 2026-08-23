@@ -38,6 +38,19 @@ describe("EmitterApi", () => {
     expect(fn).toHaveBeenCalledTimes(1); // should not trigger again
   });
 
+  it("event names are case-sensitive", () => {
+    const emitter = createEmitter();
+    const fn = vi.fn();
+
+    emitter.on("myEvent", fn);
+    emitter.fire("myevent");
+    emitter.fire("MYEVENT");
+    expect(fn).not.toHaveBeenCalled();
+
+    emitter.fire("myEvent");
+    expect(fn).toHaveBeenCalledTimes(1);
+  });
+
   it("off - removes all handlers for event when no handler provided", () => {
     const emitter = createEmitter();
     const fn1 = vi.fn();

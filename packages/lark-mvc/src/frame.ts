@@ -28,7 +28,7 @@
  * with closure-based methods. The `Frame` singleton provides static-like
  * registry methods (get, getAll, getRoot, createRoot, on, off, fire).
  */
-import { SPLITTER, LARK_VIEW, LARK_PROP_PREFIX, LARK_EVENT_PREFIX } from "./common";
+import { SPLITTER, LARK_VIEW, LARK_PROP } from "./common";
 import {
   hasOwnProperty,
   parseUri,
@@ -45,6 +45,9 @@ import type { ViewSetup } from "./types";
 import { use, config as frameworkConfig } from "./module-loader";
 import { getViewClass, registerViewClass } from "./view-registry";
 import type { AnyFunc, FrameObj, FrameInvokeEntry } from "./types";
+
+/** Component props matching `on` + Capitalized are child→parent event handlers. */
+const VIEW_EVENT_PROP_REGEXP = /^on[A-Z]/;
 
 // ============================================================
 // Internal state
@@ -261,7 +264,7 @@ export function createFrame(id: string, parentId?: string): FrameObj {
       // Hold fire created event
       frame.holdFireCreated = 1;
 
-      // Find all v-lark elements in zone
+      // Find all child-view host elements in zone
       const rootEl = document.getElementById(targetZone);
       if (!rootEl) return;
 
@@ -271,86 +274,102 @@ export function createFrame(id: string, parentId?: string): FrameObj {
       const mountList: Array<{
         frameId: string;
         viewPathArg: string;
-        props: Record<string, unknown>;
-        events: Record<string, string>;
+        data: Record<string, unknown>;
+        handlers: Record<string, AnyFunc>;
       }> = [];
 
-      // Helper: read p-lark-* from a v-lark element, resolving ref tokens
+      // Helper: resolve the single `p-lark` props token into the props
+      // object the parent serialized this render. Prop names never pass
+      // through HTML attribute names, so camelCase arrives exactly.
       const readProps = (el: Element): Record<string, unknown> => {
-        const props: Record<string, unknown> = {};
+        const token = getAttribute(el, LARK_PROP);
+        if (!token) return {};
         const parentUpdater = frame.view?.updater;
-        for (const attr of el.attributes) {
-          if (attr.name.startsWith(LARK_PROP_PREFIX)) {
-            const propName = attr.name.slice(LARK_PROP_PREFIX.length);
-            props[propName] = parentUpdater ? parentUpdater.translate(attr.value) : attr.value;
+        const resolved = parentUpdater ? parentUpdater.translate(token) : undefined;
+        return resolved && typeof resolved === "object"
+          ? (resolved as Record<string, unknown>)
+          : {};
+      };
+
+      // Helper: split the props object into child data vs child→parent event
+      // handlers (`on` + Capitalized, function value → event "xxx").
+      const splitProps = (
+        all: Record<string, unknown>,
+      ): { data: Record<string, unknown>; handlers: Record<string, AnyFunc> } => {
+        const data: Record<string, unknown> = {};
+        const handlers: Record<string, AnyFunc> = {};
+        for (const key of Object.keys(all)) {
+          const value = all[key];
+          if (VIEW_EVENT_PROP_REGEXP.test(key) && typeof value === "function") {
+            handlers[key[2].toLowerCase() + key.slice(3)] = value as AnyFunc;
+          } else {
+            data[key] = value;
           }
         }
-        return props;
+        return { data, handlers };
+      };
+
+      // Helper: (re)wire child→parent event handlers via stable trampolines.
+      // The frame emitter subscribes ONE wrapper per event name; each parent
+      // render swaps `.current`, so inline closures never go stale. A handler
+      // prop removed by the parent parks the trampoline (`current=undefined`).
+      const syncHostEvents = (child: FrameObj, handlers: Record<string, AnyFunc>): void => {
+        let map = child.hostEvents;
+        if (!map && Object.keys(handlers).length === 0) return;
+        if (!map) {
+          map = {};
+          child.hostEvents = map;
+        }
+        for (const name of Object.keys(map)) {
+          if (!handlers[name]) map[name].current = undefined;
+        }
+        for (const name of Object.keys(handlers)) {
+          let holder = map[name];
+          if (!holder) {
+            holder = map[name] = {};
+            const h = holder;
+            child.on(name, (data?: Record<string, unknown>) => {
+              if (h.current) funcWithTry(h.current, data ? [data] : [], frame.view, noop);
+            });
+          }
+          holder.current = handlers[name];
+        }
       };
 
       viewElements.forEach((el) => {
         if (!(el instanceof HTMLElement)) return;
         const elId = el.id || ensureElementId(el, "frame_");
 
-        // Already-bound v-lark element: update props on the existing child view
+        // Already-bound host element: re-sync events and push props into the
+        // existing child view with a full render (assign re-runs).
         if (htmlElIsBound(el)) {
           const childFrame = Frame.get(elId);
           const childView = childFrame?.view;
-          if (childView && childView.signature.value > 0) {
-            const props = readProps(el);
-            if (Object.keys(props).length > 0) {
-              childView.updater.set(props).digest();
+          if (childFrame && childView && childView.signature.value > 0) {
+            const { data, handlers } = splitProps(readProps(el));
+            syncHostEvents(childFrame, handlers);
+            if (Object.keys(data).length > 0) {
+              childView.updater.set(data);
+              childView.render();
             }
           }
           return;
         }
 
-        // New v-lark element: mount with props and events
+        // New host element: mount with props and wire events
         Reflect.set(el, "frameBound", 1);
         const viewPathArg = getAttribute(el, LARK_VIEW);
         if (!viewPathArg) return;
 
-        const props = readProps(el);
-
-        // Read e-lark-* attributes → child-to-parent event bindings
-        // HTML lowercases attribute names; emitter matches case-insensitively
-        const events: Record<string, string> = {};
-        for (const attr of el.attributes) {
-          if (attr.name.startsWith(LARK_EVENT_PREFIX)) {
-            const eventName = attr.name.slice(LARK_EVENT_PREFIX.length);
-            events[eventName] = attr.value;
-          }
-        }
-
-        mountList.push({ frameId: elId, viewPathArg, props, events });
+        const { data, handlers } = splitProps(readProps(el));
+        mountList.push({ frameId: elId, viewPathArg, data, handlers });
       });
 
-      // Mount each frame with props
-      for (const { frameId, viewPathArg, props, events } of mountList) {
-        const childFrame = frame.mountFrame(frameId, viewPathArg, props);
-
-        // Wire child-to-parent event bindings:
-        // e-lark-increment="increment" → childFrame.on("increment", parentHandler)
-        // The parent handler is found by matching the name prefix in the parent's events map
-        const parentEvents = frame.view?.getEvents();
-        if (parentEvents) {
-          for (const eventName in events) {
-            const handlerName = events[eventName];
-            // Find parent handler: key starts with `${handlerName}<`
-            const prefix = handlerName + "<";
-            let handler: AnyFunc | undefined;
-            for (const key in parentEvents) {
-              if (key.startsWith(prefix)) {
-                handler = parentEvents[key];
-                break;
-              }
-            }
-            if (handler && childFrame) {
-              childFrame.on(eventName, (data?: Record<string, unknown>) => {
-                funcWithTry(handler!, data ? [data] : [], frame.view, noop);
-              });
-            }
-          }
+      // Mount each frame with props, then wire child→parent events
+      for (const { frameId, viewPathArg, data, handlers } of mountList) {
+        const childFrame = frame.mountFrame(frameId, viewPathArg, data);
+        if (childFrame) {
+          syncHostEvents(childFrame, handlers);
         }
       }
 

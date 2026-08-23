@@ -44,16 +44,20 @@
  * only executes if `signature` still matches — stale callbacks after a view
  * re-render or destroy are silently dropped.
  */
-import { VIEW_EVENT_METHOD_REGEXP } from "./common";
 import { hasOwnProperty, funcWithTry, noop } from "./utils";
 import { createEmitter } from "./event-emitter";
-import { EventDelegator } from "./event-delegator";
 import { createUpdater } from "./updater";
 import { setCurrentCtx } from "./hooks";
+import { VIEW_MARK } from "./jsx/vnode";
+import { resolveSetup } from "./view-registry";
 import type {
   AnyFunc,
+  AnyLarkView,
+  LarkView,
   ViewCtx,
+  ViewParams,
   ViewSetup,
+  ViewSetupResult,
   FrameObj,
   ViewLocationObserved,
   ViewResourceEntry,
@@ -61,40 +65,52 @@ import type {
 } from "./types";
 
 // ============================================================
-// Global event targets — maps 'window'/'document' to the DOM objects
-// ============================================================
-
-/** Maps global selector names (`window`, `document`) to their DOM objects. */
-const VIEW_GLOBALS: Record<string, EventTarget> = {};
-if (typeof window !== "undefined") {
-  VIEW_GLOBALS["window"] = window;
-}
-if (typeof document !== "undefined") {
-  VIEW_GLOBALS["document"] = document;
-}
-
-// ============================================================
 // defineView — the public API for defining views
 // ============================================================
 
+let warnedDirectCall = false;
+
 /**
- * Define a view via a setup function (hooks style).
+ * Define a view component via a setup function (hooks style).
  *
- * The setup function runs once on mount, receives a `ViewCtx`, and returns
- * `{ template, events, assign? }`. Hooks (`useState`, `useEffect`, etc.)
- * can be called inside setup to manage state and side effects.
+ * The setup function runs once on mount, receives a `ViewCtx` and the props
+ * passed at the JSX usage site, and returns `{ template, assign? }`. Hooks
+ * (`useState`, `useEffect`, etc.) can be called inside setup. Events are
+ * inline functions in the template JSX.
+ *
+ * The returned `LarkView` is used directly as a JSX tag — the serializer
+ * intercepts it and mounts the view through the Frame tree. Calling it like
+ * a plain function renders nothing (dev warning).
  *
  * @example
- * const HomeView = defineView((ctx, params) => {
- *   const [getCount, setCount] = useState('count', 0);
- *   return {
- *     template,
- *     events: { "incr<click>": (e) => setCount(getCount() + 1) },
- *   };
- * });
+ * const Counter = defineView<{ step: number; onChange: (d?: object) => void }>(
+ *   (ctx, params) => {
+ *     const [getCount, setCount] = useState("count", 0);
+ *     const template = jsxTemplate<{ count: number }>(({ count }) => (
+ *       <button onClick={() => setCount(getCount() + (params?.step ?? 1))}>{count}</button>
+ *     ));
+ *     return { template };
+ *   },
+ * );
+ * // Parent: <Counter step={2} onChange={(d) => ...} key="c1" class="mx-2" />
  */
-export function defineView(setup: ViewSetup): ViewSetup {
-  return setup;
+export function defineView<P extends object = object>(
+  setup: (ctx: ViewCtx, params?: ViewParams<P> & Record<string, unknown>) => ViewSetupResult,
+): LarkView<P> {
+  const view = (() => {
+    if (!warnedDirectCall) {
+      warnedDirectCall = true;
+      // eslint-disable-next-line no-console
+      console.warn(
+        "[lark-mvc] A defineView component was invoked as a function. " +
+          "Use it as a JSX tag (<MyView .../>) so the framework can mount it.",
+      );
+    }
+    return null;
+  }) as unknown as LarkView<P>;
+  view.$$ = VIEW_MARK;
+  view.setup = setup as ViewSetup;
+  return view;
 }
 
 // ============================================================
@@ -374,128 +390,6 @@ export function createCtx(frame: FrameObj): ViewCtx {
 }
 
 // ============================================================
-// Event registration
-// ============================================================
-
-/**
- * Parse event method names like "handler<click>" or "$selector<click>"
- * and register them with the EventDelegator.
- *
- * Called after setup returns, with the `events` map from the setup result.
- */
-export function registerEvents(ctx: ViewCtx): void {
-  const events = ctx.getEvents();
-  if (!events) return;
-
-  for (const key of Object.keys(events)) {
-    if (!hasOwnProperty(events, key)) continue;
-    const handler = events[key];
-    if (typeof handler !== "function") continue;
-
-    const matches = key.match(VIEW_EVENT_METHOD_REGEXP);
-    if (!matches) continue;
-
-    const isSelector = matches[1];
-    const selectorOrCallback = matches[2];
-    const eventTypes = matches[3];
-    const modifiers = matches[4];
-
-    const mod: Record<string, boolean> = {};
-    if (modifiers) {
-      for (const item of modifiers.split(",")) {
-        mod[item] = true;
-      }
-    }
-
-    for (const eventType of eventTypes.split(",")) {
-      const globalNode: EventTarget | undefined = VIEW_GLOBALS[selectorOrCallback];
-
-      if (isSelector && globalNode) {
-        // Global event (window/document)
-        registerGlobalEvent(ctx, globalNode, eventType, handler, mod);
-      } else if (isSelector) {
-        // Selector event
-        EventDelegator.bind(eventType, true);
-      } else {
-        // Root event
-        EventDelegator.bind(eventType, false);
-      }
-    }
-  }
-}
-
-/**
- * Unregister all events for a ctx. Called on destroy.
- */
-export function unregisterEvents(ctx: ViewCtx): void {
-  const events = ctx.getEvents();
-  if (!events) return;
-
-  for (const key of Object.keys(events)) {
-    if (!hasOwnProperty(events, key)) continue;
-    const matches = key.match(VIEW_EVENT_METHOD_REGEXP);
-    if (!matches) continue;
-
-    const isSelector = matches[1];
-    const selectorOrCallback = matches[2];
-    const eventTypes = matches[3];
-
-    for (const eventType of eventTypes.split(",")) {
-      const globalNode: EventTarget | undefined = VIEW_GLOBALS[selectorOrCallback];
-
-      if (isSelector && globalNode) {
-        // Global event (window/document): cleanup is handled by the
-        // ctx.on("destroy") callback registered in registerGlobalEvent,
-        // so no explicit unregistration is needed here.
-      } else if (isSelector) {
-        EventDelegator.unbind(eventType, true);
-      } else {
-        EventDelegator.unbind(eventType, false);
-      }
-    }
-  }
-}
-
-/** Register a global (window/document) event listener */
-function registerGlobalEvent(
-  ctx: ViewCtx,
-  element: EventTarget,
-  eventName: string,
-  handler: AnyFunc,
-  modifiers: Record<string, boolean>,
-): void {
-  const listener: EventListenerObject = {
-    handleEvent(domEvent: Event): void {
-      // Attach the delegated target for consumer access via event delegation
-      Reflect.set(domEvent, "eventTarget", element);
-      if (modifiers) {
-        // Check keyboard modifiers via runtime property inspection (type-safe)
-        const ctrlKey = Reflect.get(domEvent, "ctrlKey");
-        const shiftKey = Reflect.get(domEvent, "shiftKey");
-        const altKey = Reflect.get(domEvent, "altKey");
-        const metaKey = Reflect.get(domEvent, "metaKey");
-        if (
-          (modifiers["ctrl"] && !ctrlKey) ||
-          (modifiers["shift"] && !shiftKey) ||
-          (modifiers["alt"] && !altKey) ||
-          (modifiers["meta"] && !metaKey)
-        ) {
-          return;
-        }
-      }
-      funcWithTry(handler, [domEvent], ctx, noop);
-    },
-  };
-
-  element.addEventListener(eventName, listener);
-
-  // Store for cleanup on destroy
-  ctx.on("destroy", () => {
-    element.removeEventListener(eventName, listener);
-  });
-}
-
-// ============================================================
 // Resource management
 // ============================================================
 
@@ -563,35 +457,39 @@ export function runInvokes(frame: FrameObj): void {
 // ============================================================
 
 /**
- * Mount a view: create ctx, run setup, register events, render.
+ * Mount a view: create ctx, run setup, render.
  *
  * Called by `frame.mountView` (via `doMountView`) after the setup function
  * is loaded. Steps:
  * 1. Create a `ViewCtx` via `createCtx(frame)`
  * 2. Set it as the current hooks context (`setCurrentCtx`) so `useState` /
  *    `useEffect` / `useStore` can access it during setup
- * 3. Run `setup(ctx, params)` — returns `{ template, events, assign? }`
- * 4. Wire template/events/assign onto the ctx
+ * 3. Run `setup(ctx, params)` — returns `{ template, assign? }`
+ * 4. Wire template/assign onto the ctx
  * 5. Activate: `signature.value = 1`, `frame.view = ctx`
- * 6. Register events via `registerEvents(ctx)`
- * 7. Render via `ctx.render()` (or `ctx.endUpdate()` if no template)
+ * 6. Render via `ctx.render()` (or `ctx.endUpdate()` if no template) —
+ *    inline JSX handlers are wired during render by `jsxTemplate`
  */
-export function mountCtx(frame: FrameObj, setup: ViewSetup, params?: unknown): ViewCtx {
+export function mountCtx(
+  frame: FrameObj,
+  setup: ViewSetup | AnyLarkView,
+  params?: unknown,
+): ViewCtx {
   const ctx = createCtx(frame);
+  const setupFn = resolveSetup(setup);
 
   // Set currentCtx so hooks (useState, useEffect, etc.) can access the ctx
   // during setup execution. Must be reset to null after setup completes.
   setCurrentCtx(ctx);
-  let descriptor: ReturnType<ViewSetup>;
+  let descriptor: ViewSetupResult;
   try {
-    // Run setup — returns { template, events, assign? }
-    descriptor = setup(ctx, params);
+    // Run setup — returns { template, assign? }
+    descriptor = setupFn(ctx, params);
   } finally {
     setCurrentCtx(null);
   }
 
   ctx.setTemplate(descriptor.template);
-  ctx.setEvents(descriptor.events);
   if (descriptor.assign) {
     ctx.setAssign(descriptor.assign);
   }
@@ -604,9 +502,6 @@ export function mountCtx(frame: FrameObj, setup: ViewSetup, params?: unknown): V
   // `const view = frame?.view` is undefined and the render is a no-op
   frame.view = ctx;
 
-  // Register events
-  registerEvents(ctx);
-
   // Render
   if (ctx.getTemplate()) {
     ctx.render();
@@ -618,8 +513,9 @@ export function mountCtx(frame: FrameObj, setup: ViewSetup, params?: unknown): V
 }
 
 /**
- * Unmount a view: run `useEffect` cleanups, unregister events, destroy
- * resources, fire `destroy`, and set `signature = 0`.
+ * Unmount a view: run `useEffect` cleanups (which include the JSX event
+ * wiring cleanup — it unbinds delegated event types), destroy resources,
+ * fire `destroy`, and set `signature = 0`.
  *
  * Called by `frame.unmountView`.
  */
@@ -630,9 +526,6 @@ export function unmountCtx(ctx: ViewCtx): void {
     funcWithTry(cleanup, [], null, noop);
   }
   ctx.cleanups.length = 0;
-
-  // Unregister events
-  unregisterEvents(ctx);
 
   // Destroy all resources
   destroyAllResources(ctx, true);

@@ -30,7 +30,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { hotSwapByView } from "../src/hmr";
 import { defineView } from "../src/view";
 import { Frame, createFrame, registerViewClass, invalidateViewClass } from "../src/frame";
-import { getViewClassRegistry } from "../src/view-registry";
+import { getViewClassRegistry, ensureViewName } from "../src/view-registry";
 import { EventDelegator } from "../src/event-delegator";
 import { jsxTemplate } from "../src/jsx/template";
 import type { FrameObj } from "../src/types";
@@ -109,7 +109,7 @@ describe("JSX views + HMR", () => {
     expect(frame.view!.updater.get<number>("count")).toBe(9);
     expect(document.querySelector("#jsx-hmr .gen-new")).toBeTruthy();
     expect(document.querySelector("#jsx-hmr .gen-old")).toBeNull();
-    expect(getViewClassRegistry()["jsx/hmr"]).toBe(NewView);
+    expect(getViewClassRegistry()["jsx/hmr"]).toBe(NewView.setup);
 
     // Inline handler re-wired to the new generation
     click(document.querySelector("#jsx-hmr [data-role='hit']")!);
@@ -187,8 +187,47 @@ describe("JSX views + HMR", () => {
     input.dispatchEvent(new Event("input", { bubbles: true }));
     expect(seen).toEqual(["input"]);
 
-    // Old generation's key must be gone from the events map
+    // Old generation's key must be gone from the handler map
     const keys = Object.keys(frame.view!.getEvents() || {});
-    expect(keys.filter((k) => k.startsWith("__jsx"))).toEqual(["__jsx1<input>"]);
+    expect(keys.filter((k) => k.startsWith("__jsx"))).toEqual(["__jsx1"]);
+  });
+
+  it("aliases the new component to the old auto-registered name (stale parent imports keep matching)", async () => {
+    const Old = defineView((ctx) => {
+      ctx.updater.set({});
+      return { template: jsxTemplate(() => <i data-role="gen">old</i>) };
+    });
+    // Auto-register by serializing through a parent template once
+    registerViewClass(
+      "jsx/hmr-alias-parent",
+      defineView((ctx) => {
+        ctx.updater.digest({});
+        return { template: jsxTemplate(() => <Old id="alias-child" />) };
+      }),
+    );
+    const frame = makeFrame("jsx-hmr-alias");
+    frame.mountView("jsx/hmr-alias-parent");
+    await flush();
+
+    const nameBefore = ensureViewName(Old);
+    const childBefore = Frame.get("alias-child");
+    expect(childBefore?.view).toBeTruthy();
+
+    const New = defineView((ctx) => {
+      ctx.updater.set({});
+      return { template: jsxTemplate(() => <i data-role="gen">new</i>) };
+    });
+    hotSwapByView(Old, New);
+    await flush();
+
+    // Same internal name for the replacement — parents holding the stale
+    // import re-serialize to the same v-lark path and frame identity.
+    expect(ensureViewName(New)).toBe(nameBefore);
+    expect(document.querySelector("#jsx-hmr-alias [data-role='gen']")!.textContent).toBe("new");
+
+    // Parent re-render must not remount the child frame
+    frame.view!.updater.set({ tick: 1 }).digest();
+    await flush();
+    expect(Frame.get("alias-child")).toBe(childBefore);
   });
 });

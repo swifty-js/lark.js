@@ -23,6 +23,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { defineView, createCtx, mountCtx, unmountCtx } from "../src/view";
 import { Frame, createFrame } from "../src/frame";
+import { isLarkView } from "../src/jsx/vnode";
 import type { AnyFunc, FrameObj, ViewCtx, ViewSetup } from "../src/types";
 
 /**
@@ -46,10 +47,11 @@ function cleanupFrame(frame: FrameObj): void {
 
 describe("View (functional)", () => {
   describe("defineView", () => {
-    it("returns the setup function as-is", () => {
+    it("returns a branded component carrying the setup", () => {
       const setup: ViewSetup = () => ({ template: () => "" });
       const result = defineView(setup);
-      expect(result).toBe(setup);
+      expect(result.setup).toBe(setup);
+      expect(isLarkView(result)).toBe(true);
       expect(typeof result).toBe("function");
     });
 
@@ -75,16 +77,12 @@ describe("View (functional)", () => {
       cleanupFrame(frame);
     });
 
-    it("events returned by setup are accessible via getEvents", () => {
+    it("getEvents starts undefined — handlers are wired by the JSX layer only", () => {
       const frame = createTestFrame("test-frame-2");
-      const handler = vi.fn();
-      const setup = defineView(() => ({
-        template: () => "",
-        events: { "btn<click>": handler },
-      }));
+      const setup = defineView(() => ({ template: () => "" }));
 
       const ctx = mountCtx(frame, setup);
-      expect(ctx.getEvents()).toEqual({ "btn<click>": handler });
+      expect(ctx.getEvents()).toBeUndefined();
 
       unmountCtx(ctx);
       cleanupFrame(frame);

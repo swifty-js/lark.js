@@ -53,21 +53,14 @@ export type { Component, JSXNode, VNode };
 export type LarkEvent = Event & {
   /** The original hit element (event delegation target). */
   eventTarget?: EventTarget | null;
-  /** Params parsed from the event attribute (always strings). */
-  params?: Record<string, string>;
 };
 
 /**
- * Accepted values for `onXxx` JSX event props:
- *
- * - `string` — the name of a handler declared in the view's `events` map
- *   (`"save"` → events key `"save<click>"`). On a `v-lark` element this
- *   becomes an `e-lark-*` child→parent event binding instead.
- * - `function` — an inline handler, auto-registered per render by
- *   `jsxTemplate()`. Closures capture loop variables directly — no
- *   `e.params` round-trip needed.
+ * Value for `onXxx` JSX event props: an inline handler function,
+ * auto-registered per render by `jsxTemplate()`. Closures capture loop
+ * variables directly.
  */
-export type JsxEventValue = string | ((e: LarkEvent) => unknown);
+export type JsxEventValue = (e: LarkEvent) => unknown;
 
 /**
  * Create a JSX element (automatic runtime entry, static children).
@@ -98,8 +91,6 @@ export const jsxs = jsx;
 export interface LarkAttributes {
   /** Permissive catch-all — any attribute is serialized (escaped). */
   [attr: string]: unknown;
-  /** Child-view props on `v-lark` elements: `prop:rows={rows}` → `p-lark-rows`. */
-  [prop: `prop:${string}`]: unknown;
   /** Stable element id — doubles as the keyed-diff compare key. */
   id?: string | number;
   /** `key` — emitted as `id` when no explicit `id` is set (keyed diff). */
@@ -110,8 +101,6 @@ export interface LarkAttributes {
   className?: string | Array<string | false | null | undefined> | Record<string, unknown>;
   /** Inline style: raw string or camelCase object (no implicit `px`). */
   style?: string | Record<string, string | number>;
-  /** Child-view mount point: extension-less view path (e.g. "components/panel"). */
-  "v-lark"?: string;
   children?: JSXNode;
   // Common DOM events (any `on` + capitalized-type prop works, e.g. onPointerdown)
   onClick?: JsxEventValue;

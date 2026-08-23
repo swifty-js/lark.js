@@ -31,26 +31,29 @@
  * - text / attribute values      → `encodeHTML` (escaped)
  * - `raw()` children             → `strSafe`, unescaped (trusted HTML)
  * - object / function values     → `refFn` token (live reference in refData)
- * - `onXxx` string handler       → `@type="<viewId>\x1ename()"` attribute
- *                                  (`e-lark-type="name"` on `v-lark` elements)
- * - `onXxx` function handler     → generated `__jsxN` name, collected into
- *                                  `SerializeCtx.handlers` for the wiring layer
- * - `prop:name` child-view props → `p-lark-name` (escaped string or ref token)
+ * - `onXxx` inline function      → generated `__jsxN` name, collected into
+ *                                  `SerializeCtx.handlers`, emitted as
+ *                                  `@type="<viewId>\x1e__jsxN"`
+ * - view component tags          → host `<div v-lark="__vN" p-lark="token">`
+ *                                  (single refData token carrying ALL props;
+ *                                  consumed by `mountZone`)
  *
- * This module is pure: no framework state, everything flows through the
- * caller-provided `SerializeCtx`.
+ * Aside from the view-name auto-registration (`ensureViewName`), everything
+ * flows through the caller-provided `SerializeCtx`.
  */
 
+import { encodeHTML, strSafe, refFn, SPLITTER, LARK_VIEW, LARK_PROP } from "../common";
+import { ensureViewName } from "../view-registry";
 import {
-  encodeHTML,
-  strSafe,
-  refFn,
-  SPLITTER,
-  LARK_VIEW,
-  LARK_PROP_PREFIX,
-  LARK_EVENT_PREFIX,
-} from "../common";
-import { Fragment, isRawHTML, isVNode, type Component, type JSXNode, type VNode } from "./vnode";
+  Fragment,
+  isLarkView,
+  isRawHTML,
+  isVNode,
+  type Component,
+  type JSXNode,
+  type LarkViewBrand,
+  type VNode,
+} from "./vnode";
 import type { AnyFunc } from "../types";
 
 /** Per-render serialization context (built fresh by `jsxTemplate` each render). */
@@ -122,10 +125,6 @@ const EVENT_PROP_REGEXP = /^on[A-Z]/;
 /** Native inline-handler names (`onclick`) — rejected to avoid an XSS channel. */
 const NATIVE_EVENT_PROP_REGEXP = /^on[a-z]/;
 
-/** Handler-name references must be plain identifiers (delegator parses `name(`;
- *  `$`-prefixed names carry selector semantics in events-map keys). */
-const HANDLER_NAME_REGEXP = /^\w+$/;
-
 /** camelCase → kebab-case for style object keys. */
 const STYLE_KEY_REGEXP = /[A-Z]/g;
 
@@ -137,12 +136,6 @@ function devWarn(message: string): void {
   warned.add(message);
   // eslint-disable-next-line no-console
   console.warn(`[lark-mvc/jsx] ${message}`);
-}
-
-/** Null-safe primitive check for values embeddable as plain attribute text. */
-function isPrimitive(value: unknown): value is string | number | boolean {
-  const t = typeof value;
-  return t === "string" || t === "number" || t === "boolean";
 }
 
 /** Normalize a `class` / `className` value to a class string. */
@@ -231,6 +224,12 @@ function serializeVNode(vnode: VNode, ctx: SerializeCtx): string {
     return serializeNode(props["children"] as JSXNode, ctx);
   }
 
+  // View component (defineView result) — mounted through the Frame tree,
+  // never invoked: serialize a host element for mountZone to pick up.
+  if (isLarkView(type)) {
+    return serializeViewTag(type, vnode, ctx);
+  }
+
   // Functional component — invoked lazily; forward key to a keyless single root
   if (typeof type === "function") {
     let result = (type as Component)(props);
@@ -249,9 +248,49 @@ function serializeVNode(vnode: VNode, ctx: SerializeCtx): string {
   return "";
 }
 
+/**
+ * Serialize a view component tag (`<MyView .../>`) into its mount-zone host:
+ *
+ * ```html
+ * <div [id] [class] [style] v-lark="__vN[_name]" p-lark="\x1eK"></div>
+ * ```
+ *
+ * - `id` / `key` / `class` / `className` / `style` go to the host element
+ *   (`key` becomes the id via the shared `serializeElement` fallback).
+ * - Every other prop is packed into ONE props object stored as a refData
+ *   token (`p-lark`); `mountZone` translates it — prop names never pass
+ *   through HTML, so camelCase survives exactly. Omitted when empty.
+ * - `children` are not supported on view tags.
+ */
+function serializeViewTag(view: LarkViewBrand, vnode: VNode, ctx: SerializeCtx): string {
+  const props = vnode.props;
+  const host: Record<string, unknown> = { [LARK_VIEW]: ensureViewName(view) };
+  const child: Record<string, unknown> = {};
+
+  for (const name of Object.keys(props)) {
+    const value = props[name];
+    if (name === "children") {
+      if (value != null && !(Array.isArray(value) && value.length === 0)) {
+        devWarn("Ignored children on a view component tag — views render their own template.");
+      }
+      continue;
+    }
+    if (name === "id" || name === "class" || name === "className" || name === "style") {
+      host[name] = value;
+      continue;
+    }
+    child[name] = value;
+  }
+
+  if (Object.keys(child).length > 0) {
+    host[LARK_PROP] = refToken(ctx, child);
+  }
+
+  return serializeElement("div", { ...vnode, type: "div", props: host }, ctx);
+}
+
 function serializeElement(tag: string, vnode: VNode, ctx: SerializeCtx): string {
   const props = vnode.props;
-  const isVLark = props[LARK_VIEW] != null;
 
   // id precedence: explicit `id` prop, else `key` (keyed-diff compare key)
   const rawId = props["id"];
@@ -284,7 +323,7 @@ function serializeElement(tag: string, vnode: VNode, ctx: SerializeCtx): string 
 
     // Events: on + Capitalized type (onClick → click)
     if (EVENT_PROP_REGEXP.test(name)) {
-      attrs += serializeEvent(name, value, isVLark, ctx, tag);
+      attrs += serializeEvent(name, value, ctx, tag);
       continue;
     }
 
@@ -299,22 +338,6 @@ function serializeElement(tag: string, vnode: VNode, ctx: SerializeCtx): string 
         `Skipped "${name}" on <${tag}> — use camelCase (e.g. "onClick") for Lark events; ` +
           `native inline handlers are not allowed.`,
       );
-      continue;
-    }
-
-    // Child-view props: prop:name → p-lark-name
-    if (name.startsWith("prop:")) {
-      const propName = name.slice(5);
-      const lower = propName.toLowerCase();
-      if (lower !== propName) {
-        devWarn(
-          `Child-view prop "prop:${propName}" is delivered lowercase as "${lower}" ` +
-            `(HTML attribute names are case-insensitive).`,
-        );
-      }
-      if (value == null) continue;
-      const attrValue = isPrimitive(value) ? strSafe(value) : refToken(ctx, value);
-      attrs += ` ${LARK_PROP_PREFIX}${lower}="${encodeHTML(attrValue)}"`;
       continue;
     }
 
@@ -353,41 +376,16 @@ function serializeElement(tag: string, vnode: VNode, ctx: SerializeCtx): string 
 }
 
 /**
- * Serialize an `onXxx` event prop into the matching attribute.
+ * Serialize an `onXxx` event prop into a delegated `@type` attribute.
  *
- * | Value    | On a regular element                  | On a `v-lark` element        |
- * | -------- | ------------------------------------- | ---------------------------- |
- * | string   | `@type="<viewId>\x1ename()"`          | `e-lark-type="name"`         |
- * | function | `@type="<viewId>\x1e__jsxN()"` + collect | same as regular (DOM event) |
- *
- * Inline functions on `v-lark` elements intentionally stay DOM events —
- * `mountZone` captures `e-lark` parent handlers by name ONCE at child mount,
- * which would go stale against per-render generated names.
+ * Only inline functions are supported. The handler is deduped by identity,
+ * assigned a generated per-render name (`__jsxN`), collected into
+ * `SerializeCtx.handlers` (plain-name key) and emitted as
+ * `@type="<viewId>\x1e__jsxN"` for the capture-phase delegator.
  */
-function serializeEvent(
-  name: string,
-  value: unknown,
-  isVLark: boolean,
-  ctx: SerializeCtx,
-  tag: string,
-): string {
+function serializeEvent(name: string, value: unknown, ctx: SerializeCtx, tag: string): string {
   // onClick → click (DOM event types are lowercase; HTML lowercases attributes)
   const eventType = name.slice(2).toLowerCase();
-
-  if (typeof value === "string") {
-    if (!HANDLER_NAME_REGEXP.test(value)) {
-      devWarn(
-        `Skipped event "${name}" on <${tag}> — handler reference "${value}" must be a ` +
-          `plain handler name (declare params via an inline function instead).`,
-      );
-      return "";
-    }
-    if (isVLark) {
-      // Child→parent custom event binding, consumed by mountZone
-      return ` ${LARK_EVENT_PREFIX}${eventType}="${encodeHTML(value)}"`;
-    }
-    return ` @${eventType}="${encodeHTML(`${ctx.viewId}${SPLITTER}${value}()`)}"`;
-  }
 
   if (typeof value === "function") {
     const fn = value as AnyFunc;
@@ -396,15 +394,15 @@ function serializeEvent(
       generated = `__jsx${++ctx.counter}`;
       ctx.fnNames.set(fn, generated);
     }
-    ctx.handlers.set(`${generated}<${eventType}>`, fn);
+    ctx.handlers.set(generated, fn);
     ctx.eventTypes.add(eventType);
-    return ` @${eventType}="${encodeHTML(`${ctx.viewId}${SPLITTER}${generated}()`)}"`;
+    return ` @${eventType}="${encodeHTML(`${ctx.viewId}${SPLITTER}${generated}`)}"`;
   }
 
   if (value != null) {
     devWarn(
-      `Skipped event "${name}" on <${tag}> — expected a handler name string or an ` +
-        `inline function, got ${typeof value}.`,
+      `Skipped event "${name}" on <${tag}> — events accept inline functions only ` +
+        `(onClick={() => ...}), got ${typeof value}.`,
     );
   }
   return "";

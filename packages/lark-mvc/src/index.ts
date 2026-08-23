@@ -55,6 +55,7 @@ export { Router } from "./router";
 export { Frame, createFrame } from "./frame";
 export type { FrameApi } from "./frame";
 export { registerViewClass, invalidateViewClass } from "./frame";
+export { ensureViewName, resolveSetup } from "./view-registry";
 
 // View (functional — defineView factory)
 export { defineView } from "./view";
@@ -89,7 +90,7 @@ export type { StoreApi } from "./store";
 
 // JSX (template adapter + helpers; jsx/jsxs live in "@lark.js/mvc/jsx-runtime")
 export { jsxTemplate } from "./jsx/template";
-export { raw, Fragment } from "./jsx/vnode";
+export { raw, Fragment, isLarkView } from "./jsx/vnode";
 export type { JSXNode, VNode, RawHTML, Component } from "./jsx/vnode";
 export type { LarkEvent, JsxEventValue, LarkAttributes } from "./jsx-runtime";
 

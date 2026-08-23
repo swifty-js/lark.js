@@ -219,3 +219,5 @@ dist-docs
 **/.larky/
 packages/lark-docs/docs
 sentry
+
+.playwright-cli

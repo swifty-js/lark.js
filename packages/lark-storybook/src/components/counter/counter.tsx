@@ -2,8 +2,8 @@
  * Counter — internal state (`useState`) next to Storybook-controlled props.
  *
  * Tweaking the `step` control does NOT reset `count`: larkRender pushes args
- * with `updater.set().digest()` instead of re-mounting, exactly like a parent
- * view pushing `*prop` updates through `mountZone`.
+ * with `updater.set()` + `view.render()` instead of re-mounting, exactly like
+ * a parent view pushing component props through `mountZone`.
  *
  * Note the arg is called `initialCount`, not `count` — args share the updater
  * data namespace with `useState` keys, so a `count` arg would overwrite the
@@ -24,45 +24,7 @@ interface CounterData {
   step: number;
 }
 
-const template = jsxTemplate<CounterData>(({ label, count, step }) => (
-  <div class={styles["counter"]}>
-    <div class={styles["counter__label"]}>{label}</div>
-
-    <div class={styles["counter__value"]}>{count}</div>
-
-    <wa-button-group class={styles["counter__actions"]} label="Counter actions">
-      <wa-button
-        type="button"
-        variant="neutral"
-        appearance="outlined"
-        size="s"
-        onClick="decrement"
-      >
-        - {step}
-      </wa-button>
-      <wa-button
-        type="button"
-        variant="neutral"
-        appearance="plain"
-        size="s"
-        onClick="reset"
-      >
-        Reset
-      </wa-button>
-      <wa-button
-        type="button"
-        variant="brand"
-        appearance="filled"
-        size="s"
-        onClick="increment"
-      >
-        + {step}
-      </wa-button>
-    </wa-button-group>
-  </div>
-));
-
-export default defineView((ctx, params) => {
+export default defineView<CounterProps>((ctx, params) => {
   const props = (params ?? {}) as Partial<CounterProps>;
   const initial = props.initialCount ?? 0;
 
@@ -82,13 +44,43 @@ export default defineView((ctx, params) => {
     ctx.owner.fire("change", { count: next });
   };
 
-  return {
-    template,
-    events: {
-      "increment<click>": () => change(getCount() + step()),
-      "decrement<click>": () => change(getCount() - step()),
-      "reset<click>": () =>
-        change(ctx.updater.get<number>("initialCount") ?? initial),
-    },
-  };
+  const template = jsxTemplate<CounterData>(({ label, count, step: stepValue }) => (
+    <div class={styles["counter"]}>
+      <div class={styles["counter__label"]}>{label}</div>
+
+      <div class={styles["counter__value"]}>{count}</div>
+
+      <wa-button-group class={styles["counter__actions"]} label="Counter actions">
+        <wa-button
+          type="button"
+          variant="neutral"
+          appearance="outlined"
+          size="s"
+          onClick={() => change(getCount() - step())}
+        >
+          - {stepValue}
+        </wa-button>
+        <wa-button
+          type="button"
+          variant="neutral"
+          appearance="plain"
+          size="s"
+          onClick={() => change(ctx.updater.get<number>("initialCount") ?? initial)}
+        >
+          Reset
+        </wa-button>
+        <wa-button
+          type="button"
+          variant="brand"
+          appearance="filled"
+          size="s"
+          onClick={() => change(getCount() + step())}
+        >
+          + {stepValue}
+        </wa-button>
+      </wa-button-group>
+    </div>
+  ));
+
+  return { template };
 });

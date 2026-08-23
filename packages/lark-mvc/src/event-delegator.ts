@@ -25,42 +25,24 @@
  *
  * All DOM events are delegated to `document.body` in the **capture phase**,
  * rather than attaching listeners to individual elements. When an event
- * fires, the delegator walks from `event.target` up to `document.body`,
- * resolving the owning Frame and matching registered handlers at each level.
+ * fires, the delegator walks from `event.target` up to `document.body`; at
+ * each element it reads the `@<type>` attribute emitted by the JSX
+ * serializer — `"<viewId>\x1e<handlerName>"` — resolves the owning Frame by
+ * id, and calls `view.getEvents()[handlerName]`.
  *
- * ## Handler naming convention
- *
- * Event methods are declared in the `events` map returned by a view's setup
- * function, keyed by `"name<eventType>"` or `"$selector<eventType>"`:
- *
- * | Syntax                     | Meaning                                            |
- * | -------------------------- | -------------------------------------------------- |
- * | `handler<click>`           | Event on the view's root element                   |
- * | `$selector<click>`         | Selector-scoped binding (registers the event type) |
- * | `$<click>`                 | Empty selector — registers the event type only     |
- * | `$window<resize>`          | Delegated to `window`                               |
- * | `$document<keydown>`       | Delegated to `document`                             |
- * | `handler<click,mousedown>` | Multi-event binding                                |
- * | `name<click><ctrl>`        | Fires only when the Ctrl modifier is held          |
- *
- * Note: for `$selector` / `$` keys the delegator only registers a
- * capture-phase listener for the event type (see `registerEvents`). Handler
- * dispatch is still resolved through the element's `@event` attribute in
- * `findFrameInfo` — no CSS `element.matches(selector)` dispatch is performed.
- * The selector name is also limited to `\w` characters by
- * `VIEW_EVENT_METHOD_REGEXP`. Modifier filtering (`<ctrl>` etc.) is only
- * applied to `$window` / `$document` global handlers.
+ * Handlers are exclusively the inline JSX functions collected per render by
+ * `jsxTemplate` (generated `__jsxN` names, wired via `wireInlineHandlers`).
+ * There is no events-map key grammar: one plain name, one handler.
  *
  * ## Reference counting
  *
  * `bind` / `unbind` use reference counting per event type so that multiple
- * views registering the same event type on `document.body` don't attach
+ * views listening to the same event type on `document.body` don't attach
  * duplicate listeners, and a single `unbind` doesn't remove a listener still
  * needed by another view.
  */
-import { EVENT_METHOD_REGEXP, VIEW_EVENT_METHOD_REGEXP } from "./common";
-import { parseUri, funcWithTry, noop } from "./utils";
-import { createCache } from "./cache";
+import { SPLITTER } from "./common";
+import { funcWithTry, noop } from "./utils";
 import type { FrameObj, AnyFunc } from "./types";
 
 // ============================================================
@@ -70,15 +52,6 @@ import type { FrameObj, AnyFunc } from "./types";
 /** Root events counter: eventType -> count */
 const rootEvents: Record<string, number> = {};
 
-/** Selector events counter: eventType -> count */
-const selectorEvents: Record<string, number> = {};
-
-/** Event info cache */
-const eventInfoCache = createCache<EventInfo>({
-  maxSize: 30,
-  bufferSize: 10,
-});
-
 /** Reference to Frame.get (set during initialization) */
 let frameGetter: ((id: string) => FrameObj | undefined) | undefined;
 
@@ -86,134 +59,25 @@ let frameGetter: ((id: string) => FrameObj | undefined) | undefined;
 // Event info parsing
 // ============================================================
 
-/** Parsed event info from @event attribute */
+/** Parsed event info from an `@event` attribute. */
 interface EventInfo {
-  /** View/frame ID (before SPLITTER) */
+  /** Owning view/frame ID (before SPLITTER). */
   id: string;
-  /** Event handler name */
+  /** Event handler name (after SPLITTER). */
   name: string;
-  /** Params string */
-  params: string;
 }
 
 /**
- * Parse event info from attribute string.
- * Format: "viewId\x1ehandlerName(params)"
+ * Read and parse the `@<type>` attribute on an element.
+ * Wire format: `"<viewId>\x1e<handlerName>"` (always emitted with the
+ * viewId by the serializer). Returns undefined when absent or malformed.
  */
-function parseEventInfo(eventInfo: string): EventInfo {
-  const cached = eventInfoCache.get(eventInfo);
-  if (cached) {
-    return cached;
-  }
-
-  const match = eventInfo.match(EVENT_METHOD_REGEXP) || [];
-  const result = {
-    id: match[1] || "",
-    name: match[2] || "",
-    params: match[3] || "",
-  };
-
-  eventInfoCache.set(eventInfo, result);
-  return result;
-}
-
-/**
- * Resolve event handlers for a DOM element by walking up the Frame tree.
- *
- * Handles two registration sources:
- * 1. **`@event` attribute** on the current element — parsed into
- *    `{ id, name, params }` where `id` is the owning Frame ID.
- * 2. **Selector-scoped registrations** (`$selector<type>`) — these only
- *    enable the early-exit check and the Frame-boundary walk below; no
- *    `element.matches(selector)` dispatch is performed at this level.
- *
- * The walk stops at the first Frame whose view has a template (the view
- * boundary), preventing cross-view event leaking.
- *
- * @param current - The DOM element where the event originated
- * @param eventType - The DOM event type (e.g. `"click"`)
- * @returns Array of resolved `EventInfo` entries, ordered innermost-first
- */
-function findFrameInfo(current: HTMLElement, eventType: string): EventInfo[] {
-  const eventInfos: EventInfo[] = [];
-
-  // Check @event attribute on current element
-  const info = current.getAttribute(`@${eventType}`);
-  const hasSelectorEvents = !!selectorEvents[eventType];
-
-  // Early-exit: no `@event` attribute here and no view has registered any
-  // selector handler for this event type → nothing to find at this level.
-  if (!info && !hasSelectorEvents) {
-    return eventInfos;
-  }
-
-  let begin: HTMLElement | null = current;
-  let match: EventInfo | undefined;
-  if (info) {
-    match = parseEventInfo(info);
-  }
-
-  // If we have a match without frame ID, or there are selector events for this type
-  if ((match && !match.id) || hasSelectorEvents) {
-    // Find the nearest frame by walking up the DOM
-    let selectorFrameId = "#";
-    let backtrace = 0;
-
-    // Walk up to find nearest frame
-    while (begin && begin !== document.body) {
-      const beginId = begin.id;
-      if (beginId && frameGetter?.(beginId)) {
-        selectorFrameId = beginId;
-        break;
-      }
-      begin = begin.parentElement;
-    }
-
-    // If current element IS a frame root node
-    const currentId = current.id;
-    if (currentId && frameGetter?.(currentId)) {
-      backtrace = 1;
-      selectorFrameId = currentId;
-    }
-
-    // Walk up the frame tree looking for selector events
-    let frameId = selectorFrameId;
-    do {
-      const frame = frameId ? frameGetter?.(frameId) : undefined;
-      if (frame) {
-        const view = frame.view;
-        if (view) {
-          // Stop at view boundary (view with template). When the @event
-          // attribute had no frame ID, attach the nearest frame ID here so
-          // the handler resolves to the correct view.
-          if (view.getTemplate() && !backtrace) {
-            if (match && !match.id) {
-              match.id = frameId;
-            }
-            break;
-          }
-          backtrace = 0;
-        }
-      }
-      // Move to parent frame
-      if (frame) {
-        frameId = frame.parentId || "";
-      } else {
-        break;
-      }
-    } while (frameId);
-  }
-
-  // Add the direct @event match
-  if (match) {
-    eventInfos.push({
-      id: match.id,
-      name: match.name,
-      params: match.params,
-    });
-  }
-
-  return eventInfos;
+function readEventInfo(el: HTMLElement, eventType: string): EventInfo | undefined {
+  const raw = el.getAttribute(`@${eventType}`);
+  if (!raw) return undefined;
+  const i = raw.indexOf(SPLITTER);
+  if (i <= 0 || i === raw.length - 1) return undefined;
+  return { id: raw.slice(0, i), name: raw.slice(i + 1) };
 }
 
 // ============================================================
@@ -221,109 +85,37 @@ function findFrameInfo(current: HTMLElement, eventType: string): EventInfo[] {
 // ============================================================
 
 /**
- * Fallback handler resolution for non-exact events-map keys.
- *
- * The fast path looks up the literal `"name<type>"` key; this scan resolves
- * the two other documented key forms:
- *
- * - multi-event:  `"name<click,mousedown>"`
- * - modifiers:    `"name<click><ctrl>"` (fires only with the modifier held)
- *
- * Selector/global keys (`$…`) are skipped — they are dispatched through
- * their own paths, not via `@event` attributes.
- */
-function findHandlerByScan(
-  events: Record<string, AnyFunc> | undefined,
-  handlerName: string,
-  eventType: string,
-  domEvent: Event,
-): AnyFunc | undefined {
-  if (!events) return undefined;
-  for (const key of Object.keys(events)) {
-    const m = key.match(VIEW_EVENT_METHOD_REGEXP);
-    if (!m || m[1]) continue; // not an events-map key, or a $selector/global form
-    if (m[2] !== handlerName) continue;
-    if (!m[3].split(",").includes(eventType)) continue;
-    if (m[4] && !modifiersHeld(m[4], domEvent)) continue;
-    return events[key];
-  }
-  return undefined;
-}
-
-/** Check that every listed keyboard modifier is held on the DOM event. */
-function modifiersHeld(modifiers: string, domEvent: Event): boolean {
-  for (const item of modifiers.split(",")) {
-    const mod = item.trim();
-    if (!mod) continue;
-    if (!Reflect.get(domEvent, mod + "Key")) return false;
-  }
-  return true;
-}
-
-/**
  * Main capture-phase handler for all delegated DOM events.
  *
  * Attached to `document.body` via `addEventListener(type, handler, true)`.
  * When an event fires, walks from `event.target` up to `document.body`,
- * calling `findFrameInfo` at each level to resolve handlers. Respects
- * `stopPropagation()` and Frame-boundary range events.
+ * dispatching at every element carrying a matching `@event` attribute.
+ * Respects `isPropagationStopped()` (if a consumer patched the event).
  *
  * The extended event object carries `eventTarget` (the original hit element)
- * and `params` (parsed from the `@event` parameter string) for consumer
- * access.
+ * for consumer access.
  */
 function domEventProcessor(domEvent: Event): void {
   const target = domEvent.target as HTMLElement;
   const eventType = domEvent.type;
 
-  let lastFrameId = "";
-
   let current: HTMLElement | null = target;
   while (current && current !== document.body) {
-    const eventInfos = findFrameInfo(current, eventType);
-    if (eventInfos.length) {
-      for (const info of eventInfos) {
-        const { id: frameId, name: handlerName, params: params } = info;
-
-        if (lastFrameId !== frameId) {
-          if (
-            lastFrameId &&
-            (domEvent as Event & { isPropagationStopped?: () => boolean }).isPropagationStopped?.()
-          ) {
-            break;
-          }
-          lastFrameId = frameId;
-        }
-
-        const frame = frameId ? frameGetter?.(frameId) : undefined;
-        const view = frame?.view;
-        if (view) {
-          // Functional API: events are stored in ctx.getEvents() map,
-          // keyed by the original "name<eventType>" format (e.g. "navigateTo<click>").
-          const eventKey = handlerName + "<" + eventType + ">";
-          const events =
-            typeof (view as { getEvents?: () => Record<string, AnyFunc> | undefined }).getEvents ===
-            "function"
-              ? (
-                  view as {
-                    getEvents: () => Record<string, AnyFunc> | undefined;
-                  }
-                ).getEvents()
-              : undefined;
-          // Fast path: exact single-type key. Fallback: scan for multi-event
-          // ("name<click,mousedown>") and modifier ("name<click><ctrl>") keys.
-          const fn =
-            events?.[eventKey] ?? findHandlerByScan(events, handlerName, eventType, domEvent);
-          if (fn) {
-            // Attach event metadata
-            const extendedEvent = domEvent as Event & {
-              eventTarget?: EventTarget | null;
-              params?: Record<string, string>;
-            };
-            extendedEvent.eventTarget = target;
-            extendedEvent.params = params ? parseUri(params).params : {};
-            funcWithTry(fn, [extendedEvent], view, noop);
-          }
+    const info = readEventInfo(current, eventType);
+    if (info) {
+      const frame = frameGetter?.(info.id);
+      const view = frame?.view;
+      if (view) {
+        const events =
+          typeof (view as { getEvents?: () => Record<string, AnyFunc> | undefined }).getEvents ===
+          "function"
+            ? (view as { getEvents: () => Record<string, AnyFunc> | undefined }).getEvents()
+            : undefined;
+        const fn = events?.[info.name];
+        if (fn) {
+          const extendedEvent = domEvent as Event & { eventTarget?: EventTarget | null };
+          extendedEvent.eventTarget = target;
+          funcWithTry(fn, [extendedEvent], view, noop);
         }
       }
     }
@@ -344,7 +136,7 @@ function domEventProcessor(domEvent: Event): void {
  * DOM event delegation singleton.
  *
  * Manages capture-phase listeners on `document.body` via reference counting.
- * Called by the view system during `registerEvents` / `unregisterEvents`.
+ * Called by the JSX inline-handler wiring layer (`jsx/template.ts`).
  */
 export const EventDelegator = {
   /**
@@ -355,9 +147,8 @@ export const EventDelegator = {
    * listener is only removed when the counter returns to zero via `unbind`.
    *
    * @param eventType - DOM event type (e.g. `"click"`, `"input"`)
-   * @param hasSelector - Whether this binding uses CSS-selector delegation
    */
-  bind(eventType: string, hasSelector = false): void {
+  bind(eventType: string): void {
     const counter = rootEvents[eventType] || 0;
 
     if (counter === 0) {
@@ -366,10 +157,6 @@ export const EventDelegator = {
     }
 
     rootEvents[eventType] = counter + 1;
-
-    if (hasSelector) {
-      selectorEvents[eventType] = (selectorEvents[eventType] || 0) + 1;
-    }
   },
 
   /**
@@ -379,9 +166,8 @@ export const EventDelegator = {
    * removed when the counter reaches zero.
    *
    * @param eventType - DOM event type
-   * @param hasSelector - Whether this binding used CSS-selector delegation
    */
-  unbind(eventType: string, hasSelector = false): void {
+  unbind(eventType: string): void {
     const counter = rootEvents[eventType] || 0;
 
     if (counter <= 1) {
@@ -390,15 +176,6 @@ export const EventDelegator = {
       Reflect.deleteProperty(rootEvents, eventType);
     } else {
       rootEvents[eventType] = counter - 1;
-    }
-
-    if (hasSelector) {
-      const selectorCounter = selectorEvents[eventType] || 0;
-      if (selectorCounter <= 1) {
-        Reflect.deleteProperty(selectorEvents, eventType);
-      } else {
-        selectorEvents[eventType] = selectorCounter - 1;
-      }
     }
   },
 

@@ -46,6 +46,28 @@ export const VNODE_MARK: symbol = Symbol.for("lark.mvc.vnode");
 /** Brand marker for raw-HTML wrappers (global symbol registry — cross-bundle safe). */
 export const RAW_MARK: symbol = Symbol.for("lark.mvc.raw");
 
+/** Brand marker for `defineView` results used as JSX component tags. */
+export const VIEW_MARK: symbol = Symbol.for("lark.mvc.view");
+
+/**
+ * Structural shape of a branded view component (see `LarkView<P>` in the
+ * framework's types for the full generic form). Kept minimal here so this
+ * module stays free of framework imports.
+ */
+export interface LarkViewBrand {
+  (...args: unknown[]): unknown;
+  $$: symbol;
+  setup: unknown;
+}
+
+/**
+ * Check whether a value is a `defineView` result (a mountable view component).
+ * Cross-bundle safe via `Symbol.for`.
+ */
+export function isLarkView(value: unknown): value is LarkViewBrand {
+  return typeof value === "function" && (value as { $$?: unknown }).$$ === VIEW_MARK;
+}
+
 /**
  * Fragment component — groups children without a wrapper element.
  *
@@ -60,8 +82,8 @@ export const Fragment: symbol = Symbol.for("lark.mvc.fragment");
  * under `props.children`) and returns renderable JSX content.
  *
  * Components are invoked lazily by the serializer during render — they are
- * pure template partials, NOT stateful views. Use `v-lark` attributes to
- * embed child views.
+ * pure template partials, NOT stateful views. Stateful views are created
+ * with `defineView` and used directly as JSX tags (`<MyView prop={x}/>`).
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type Component<P = any> = (props: P) => JSXNode;

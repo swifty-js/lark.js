@@ -21,8 +21,8 @@
  */
 
 /**
- * Integration tests for JSX views: mounting, event delegation (named +
- * inline handlers), re-render, keyed diff, v-lark child views, and
+ * Integration tests for JSX views: mounting, inline-event delegation,
+ * re-render, keyed diff, imported component tags (child views), and
  * bind/unbind balance on unmount.
  */
 
@@ -94,9 +94,9 @@ describe("JSX views (integration)", () => {
     expect(document.querySelector("#jsx-basic .wrap")).toBeTruthy();
   });
 
-  it("dispatches clicks to named handlers and inline handlers", async () => {
-    const named = vi.fn();
-    const inline = vi.fn();
+  it("dispatches clicks to inline handlers under generated plain keys", async () => {
+    const first = vi.fn();
+    const second = vi.fn();
 
     registerViewClass(
       "jsx/events",
@@ -105,15 +105,14 @@ describe("JSX views (integration)", () => {
         return {
           template: jsxTemplate(() => (
             <div>
-              <button data-role="named" onClick="save">
-                save
+              <button data-role="first" onClick={first}>
+                first
               </button>
-              <button data-role="inline" onClick={inline}>
-                inline
+              <button data-role="second" onClick={second}>
+                second
               </button>
             </div>
           )),
-          events: { "save<click>": named },
         };
       }),
     );
@@ -122,17 +121,17 @@ describe("JSX views (integration)", () => {
     frame.mountView("jsx/events");
     await flush();
 
-    click(document.querySelector("#jsx-events [data-role='named']")!);
-    expect(named).toHaveBeenCalledTimes(1);
+    click(document.querySelector("#jsx-events [data-role='first']")!);
+    expect(first).toHaveBeenCalledTimes(1);
+    expect(second).not.toHaveBeenCalled();
 
-    click(document.querySelector("#jsx-events [data-role='inline']")!);
-    expect(inline).toHaveBeenCalledTimes(1);
-    expect(named).toHaveBeenCalledTimes(1);
+    click(document.querySelector("#jsx-events [data-role='second']")!);
+    expect(second).toHaveBeenCalledTimes(1);
+    expect(first).toHaveBeenCalledTimes(1);
 
-    // Inline handlers are stored under generated keys in the events map
+    // Inline handlers are stored under generated plain names
     const keys = Object.keys(frame.view!.getEvents()!);
-    expect(keys).toContain("save<click>");
-    expect(keys.some((k) => k.startsWith("__jsx"))).toBe(true);
+    expect(keys).toEqual(["__jsx1", "__jsx2"]);
   });
 
   it("re-renders on digest and swaps inline closures to the new generation", async () => {
@@ -170,6 +169,40 @@ describe("JSX views (integration)", () => {
     expect(seen).toEqual([1, 42]); // new closure captured the new value
   });
 
+  it("filters modifier keys inside the handler (e.ctrlKey)", async () => {
+    const ctrlOnly = vi.fn();
+
+    registerViewClass(
+      "jsx/modifier",
+      defineView((ctx) => {
+        ctx.updater.digest({});
+        return {
+          template: jsxTemplate(() => (
+            <button
+              data-role="c"
+              onClick={(e) => {
+                if (!(e as MouseEvent).ctrlKey) return;
+                ctrlOnly();
+              }}
+            >
+              c
+            </button>
+          )),
+        };
+      }),
+    );
+
+    const frame = makeFrame("jsx-modifier");
+    frame.mountView("jsx/modifier");
+    await flush();
+
+    const c = document.querySelector("#jsx-modifier [data-role='c']")!;
+    c.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(ctrlOnly).not.toHaveBeenCalled();
+    c.dispatchEvent(new MouseEvent("click", { bubbles: true, ctrlKey: true }));
+    expect(ctrlOnly).toHaveBeenCalledTimes(1);
+  });
+
   it("reuses keyed DOM nodes across list reorders", async () => {
     type Data = { items: string[] };
     registerViewClass(
@@ -204,23 +237,27 @@ describe("JSX views (integration)", () => {
     expect(nodeBAfter.__marker).toBe(7); // same node instance, moved not rebuilt
   });
 
-  it("mounts v-lark children with prop: objects and wires child events", async () => {
+  it("mounts component tags with typed props and wires child events", async () => {
     const onNotify = vi.fn();
+    const onCleared = vi.fn();
     let receivedRows: unknown;
 
-    registerViewClass(
-      "jsx/child",
-      defineView((ctx, params) => {
-        const p = (params || {}) as Record<string, unknown>;
-        receivedRows = p["rows"];
-        ctx.updater.digest({ label: String(p["label"] ?? "") });
-        return {
-          template: jsxTemplate<{ label: string }>(({ label }) => (
-            <span data-role="child-label">{label}</span>
-          )),
-        };
-      }),
-    );
+    interface ChildProps {
+      rows: object;
+      label: string;
+      onNotify: (d?: Record<string, unknown>) => void;
+      onHistoryCleared: () => void;
+    }
+
+    const Child = defineView<ChildProps>((ctx, params) => {
+      receivedRows = params?.rows;
+      ctx.updater.digest({ label: String(params?.label ?? "") });
+      return {
+        template: jsxTemplate<{ label: string }>(({ label }) => (
+          <span data-role="child-label">{label}</span>
+        )),
+      };
+    });
 
     const rows = [{ id: 1 }, { id: 2 }];
     registerViewClass(
@@ -230,16 +267,15 @@ describe("JSX views (integration)", () => {
         return {
           template: jsxTemplate<{ rows: object; label: string }>((d) => (
             <section>
-              <div
+              <Child
                 id="jsx-child-host"
-                v-lark="jsx/child"
-                prop:rows={d.rows}
-                prop:label={d.label}
-                onNotify="onNotify"
-              ></div>
+                rows={d.rows}
+                label={d.label}
+                onNotify={onNotify}
+                onHistoryCleared={onCleared}
+              />
             </section>
           )),
-          events: { "onNotify<click>": onNotify },
         };
       }),
     );
@@ -248,21 +284,75 @@ describe("JSX views (integration)", () => {
     frame.mountView("jsx/parent");
     await flush();
 
-    // Object prop delivered by reference
+    // Object prop delivered by reference; camelCase keys exact
     expect(receivedRows).toBe(rows);
     expect(document.querySelector("[data-role='child-label']")!.textContent).toBe("first");
 
-    // Parent re-render pushes updated props into the child updater
+    // Parent re-render pushes updated props into the child (full render)
     frame.view!.updater.set({ label: "second" }).digest();
     await flush();
     const child = Frame.get("jsx-child-host");
     expect(child?.view?.updater.get<string>("label")).toBe("second");
+    expect(document.querySelector("[data-role='child-label']")!.textContent).toBe("second");
 
-    // Child custom event reaches the parent's named handler (e-lark binding)
+    // Child custom event reaches the parent's inline handler (trampoline)
     child?.view?.owner.fire("notify", { x: 1 });
     await flush();
     expect(onNotify).toHaveBeenCalledTimes(1);
     expect(onNotify.mock.calls[0][0]).toMatchObject({ x: 1 });
+
+    // camelCase event names match exactly — no HTML round-trip
+    child?.view?.owner.fire("historyCleared");
+    await flush();
+    expect(onCleared).toHaveBeenCalledTimes(1);
+    child?.view?.owner.fire("historycleared");
+    await flush();
+    expect(onCleared).toHaveBeenCalledTimes(1);
+  });
+
+  it("preserves child frames and state across keyed component-list reorders", async () => {
+    const Item = defineView<{ tag: string }>((ctx, params) => {
+      ctx.updater.digest({ tag: String(params?.tag ?? "") });
+      return {
+        template: jsxTemplate<{ tag: string }>(({ tag }) => <b data-tag={tag}>{tag}</b>),
+      };
+    });
+
+    registerViewClass(
+      "jsx/klist",
+      defineView((ctx) => {
+        ctx.updater.digest({ order: ["a", "b", "c"] });
+        return {
+          template: jsxTemplate<{ order: string[] }>(({ order }) => (
+            <div>
+              {order.map((t) => (
+                <Item key={`it-${t}`} tag={t} />
+              ))}
+            </div>
+          )),
+        };
+      }),
+    );
+
+    const frame = makeFrame("jsx-klist");
+    frame.mountView("jsx/klist");
+    await flush();
+
+    // Stamp private state on the middle child
+    const childB = Frame.get("it-b");
+    expect(childB?.view).toBeTruthy();
+    childB!.view!.updater.set({ stamp: 7 });
+
+    frame.view!.updater.set({ order: ["c", "b", "a"] }).digest();
+    await flush();
+
+    const tags = Array.from(document.querySelectorAll("#jsx-klist [data-tag]")).map((el) =>
+      el.getAttribute("data-tag"),
+    );
+    expect(tags).toEqual(["c", "b", "a"]);
+    // Same frame instance — private state survived the reorder
+    expect(Frame.get("it-b")).toBe(childB);
+    expect(childB!.view!.updater.get<number>("stamp")).toBe(7);
   });
 
   it("balances EventDelegator bind/unbind across the view lifecycle", async () => {
@@ -280,10 +370,9 @@ describe("JSX views (integration)", () => {
                 one
               </button>
               <input data-role="b2" onInput={() => n} />
-              <button onClick="named">two</button>
+              <button onClick={() => n + 1}>two</button>
             </div>
           )),
-          events: { "named<click>": vi.fn() },
         };
       }),
     );
@@ -304,9 +393,9 @@ describe("JSX views (integration)", () => {
     const countCalls = (spy: { mock: { calls: unknown[][] } }, type: string): number =>
       spy.mock.calls.filter((c) => c[0] === type).length;
 
-    // click: 1x registerEvents (named<click>) + 1x jsx wiring; input: 1x jsx wiring
-    expect(countCalls(bindSpy, "click")).toBe(2);
-    expect(countCalls(unbindSpy, "click")).toBe(2);
+    // One bind per type per view (jsx wiring is the sole binder)
+    expect(countCalls(bindSpy, "click")).toBe(1);
+    expect(countCalls(unbindSpy, "click")).toBe(1);
     expect(countCalls(bindSpy, "input")).toBe(1);
     expect(countCalls(unbindSpy, "input")).toBe(1);
 
@@ -347,7 +436,7 @@ describe("JSX views (integration)", () => {
     refData[SPLITTER] = 1;
     const html = template({ x: 1, vId: "nope" }, "nope", refData);
     expect(html).toContain("<div");
-    expect(html).toContain("__jsx1()");
+    expect(html).toContain("__jsx1");
   });
 
   it("sweeps stale refData tokens across renders (fresh identities do not leak)", () => {
@@ -359,48 +448,5 @@ describe("JSX views (integration)", () => {
     }
     const tokenCount = Object.keys(refData).filter((k) => k !== SPLITTER).length;
     expect(tokenCount).toBe(1); // only the latest render's token survives
-  });
-
-  it("dispatches multi-event and modifier events-map keys", async () => {
-    const multi = vi.fn();
-    const modified = vi.fn();
-
-    registerViewClass(
-      "jsx/multi",
-      defineView((ctx) => {
-        ctx.updater.digest({});
-        return {
-          template: jsxTemplate(() => (
-            <div>
-              <button data-role="m" onClick="both" onMousedown="both">
-                m
-              </button>
-              <button data-role="c" onClick="ctrlOnly">
-                c
-              </button>
-            </div>
-          )),
-          events: {
-            "both<click,mousedown>": multi,
-            "ctrlOnly<click><ctrl>": modified,
-          },
-        };
-      }),
-    );
-
-    const frame = makeFrame("jsx-multi");
-    frame.mountView("jsx/multi");
-    await flush();
-
-    const m = document.querySelector("#jsx-multi [data-role='m']")!;
-    m.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    m.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
-    expect(multi).toHaveBeenCalledTimes(2);
-
-    const c = document.querySelector("#jsx-multi [data-role='c']")!;
-    c.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    expect(modified).not.toHaveBeenCalled();
-    c.dispatchEvent(new MouseEvent("click", { bubbles: true, ctrlKey: true }));
-    expect(modified).toHaveBeenCalledTimes(1);
   });
 });

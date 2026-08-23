@@ -69,13 +69,11 @@ describe("EventDelegator", () => {
       removeSpy.mockRestore();
     });
 
-    it("bind with hasSelector=true tracks selector events", () => {
-      EventDelegator.bind("test-selector", true);
-      boundTypes.push("test-selector");
-      // The selector tracking is internal, but we can verify by unbinding with hasSelector
-      // and checking no error is thrown
-      EventDelegator.unbind("test-selector", true);
-      boundTypes.length = 0;
+    it("bind/unbind refcount pairs balance without error", () => {
+      EventDelegator.bind("test-refpair");
+      EventDelegator.bind("test-refpair");
+      EventDelegator.unbind("test-refpair");
+      EventDelegator.unbind("test-refpair");
     });
 
     it("unbind for non-existent event type does not throw", () => {

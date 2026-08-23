@@ -64,26 +64,15 @@ export const RouterEvents = {
   PAGE_UNLOAD: "page_unload",
 };
 
-/** Attribute name: v-lark */
+/** Attribute name marking a child-view host element (wire format): v-lark */
 export const LARK_VIEW = "v-lark";
 
-/** Attribute prefix for component props: p-lark-{name} */
-export const LARK_PROP_PREFIX = "p-lark-";
-
-/** Attribute prefix for child→parent event bindings: e-lark-{name} */
-export const LARK_EVENT_PREFIX = "e-lark-";
-
-/** View event method regex: e.g. "app\x1eclickHandler(click)" or "clickHandler()"
- * Group 1: optional frame ID (before SPLITTER)
- * Group 2: handler name
- * Group 3: params string
+/**
+ * Attribute name carrying the child-view props (wire format): p-lark.
+ * Holds ONE refData token for the whole props object; omitted when the
+ * component was used without props.
  */
-export const EVENT_METHOD_REGEXP = new RegExp(
-  `(?:([\\w-]+)${SPLITTER})?([^(]+)\\(([\\s\\S]*?)?\\)`,
-);
-
-/** View event method name regex: e.g. "name<click,mousedown>" or "$selector<click>" */
-export const VIEW_EVENT_METHOD_REGEXP = /^(\$?)([\w]*)<(.*?)>(?:<([\w ,]*)>)?$/;
+export const LARK_PROP = "p-lark";
 
 /** URL query/hash trim regexp */
 export const URL_TRIM_HASH_REGEXP = /(?:^.*\/\/[^/]+|#.*$)/gi;

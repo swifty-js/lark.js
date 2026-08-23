@@ -63,7 +63,8 @@ declare global {
     compareKeyCached?: number | undefined;
     /** Cached compare key (from `id` or `v-lark` path) for keyed diff */
     cachedCompareKey?: string | undefined;
-    /** `v-lark` attribute — declares a child view embedding point */
+    /** `v-lark` wire attribute — marks a view-component host element
+     * (emitted by the JSX serializer; also honored in raw registered-path HTML) */
     "v-lark"?: string | undefined;
   }
 }

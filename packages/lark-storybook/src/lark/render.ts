@@ -10,9 +10,9 @@
  *
  * - First render: args are passed as `viewInitParams`, i.e. they arrive as the
  *   `params` argument of the view's setup function.
- * - Later renders: args are merged with `view.updater.set(args)` — the same keys
- *   `frame.mountZone` writes for `*prop` bindings on a `v-lark` element —
- *   followed by `view.render()`, so a view that installs a `ctx.renderMethod`
+ * - Later renders: args are merged with `view.updater.set(args)` — the same
+ *   push `frame.mountZone` performs for component props — followed by
+ *   `view.render()`, so a view that installs a `ctx.renderMethod`
  *   gets to re-derive its data. Nothing is re-mounted, so `useState` / store
  *   subscriptions survive control tweaks. Opt out per story with
  *   `remountOnArgsChange: true`.
@@ -20,8 +20,8 @@
  *   `{ action: "..." }`) and `undefined` args are stripped before they reach the
  *   updater; functions are instead wired to the frame events listed in `events`.
  */
-import { Frame, State, registerViewClass } from "@lark.js/mvc";
-import type { FrameObj, ViewSetup } from "@lark.js/mvc";
+import { Frame, State, registerViewClass, ensureViewName } from "@lark.js/mvc";
+import type { AnyLarkView, FrameObj, ViewSetup } from "@lark.js/mvc";
 import { getChannel } from "storybook/preview-api";
 import { bootLarkStorybook, getLarkHostFrame } from "./boot";
 
@@ -34,19 +34,14 @@ export interface LarkStoryContext {
 }
 
 export interface LarkStoryConfig<TArgs extends object = StoryArgs> {
+  /** The component returned by `defineView` (or a plain setup function). */
+  view: ViewSetup | AnyLarkView;
   /**
-   * View path used for registration and mounting — the same string you would
-   * put in `v-lark` or in `FrameworkConfig.routes` (extension-less).
+   * Optional explicit view path for registration and mounting. Defaults to
+   * the component's auto-registered internal name. Embedded child components
+   * need no registration — they auto-register when the template serializes.
    */
-  path: string;
-  /** The setup function returned by `defineView`. */
-  view: ViewSetup;
-  /**
-   * Extra views to register up front, keyed by view path. Needed for any
-   * `v-lark` child the story's template embeds, because story rendering is
-   * synchronous and does not go through `FrameworkConfig.require`.
-   */
-  children?: Record<string, ViewSetup>;
+  path?: string;
   /**
    * Frame event names (as fired by `ctx.owner.fire(name, data)`) to forward to
    * the like-named function arg. Combine with
@@ -217,10 +212,12 @@ function mount(entry: MountedStory): void {
 export function larkRender<TArgs extends object = StoryArgs>(
   config: LarkStoryConfig<TArgs>,
 ): (args: TArgs, context: LarkStoryContext) => HTMLElement {
-  registerViewClass(config.path, config.view);
-  const children = config.children ?? {};
-  for (const path of Object.keys(children)) {
-    registerViewClass(path, children[path]);
+  let mountPath: string;
+  if (config.path) {
+    mountPath = config.path;
+    registerViewClass(mountPath, config.view);
+  } else {
+    mountPath = ensureViewName(config.view);
   }
 
   const applyState = (args: TArgs): void => {
@@ -263,14 +260,14 @@ export function larkRender<TArgs extends object = StoryArgs>(
     const frameId = `lark-story-${++frameSeq}`;
     const el = document.createElement("div");
     el.id = frameId;
-    el.dataset["larkView"] = config.path;
+    el.dataset["larkView"] = mountPath;
 
     const entry: MountedStory = {
       frameId,
       storyId: context.id,
       el,
       args: storyArgs,
-      path: config.path,
+      path: mountPath,
       events: config.events ?? [],
       mounted: false,
     };

@@ -3,44 +3,14 @@ import styles from "./tag-list.module.css";
 
 export interface TagListProps {
   tags: string[];
+  onSelect?: (data?: Record<string, unknown>) => void;
 }
 
 interface TagListData {
   tags: string[];
 }
 
-const template = jsxTemplate<TagListData>(({ tags }) => (
-  <div class={styles["tag-list"]}>
-    {tags.length > 0 ? (
-      tags.map((tag) => (
-        <wa-tag
-          class={styles["tag-list__tag"]}
-          variant="brand"
-          appearance="outlined"
-          size="s"
-          pill
-          role="button"
-          tabindex="0"
-          data-tag={tag}
-          onClick="pick"
-          onKeydown="pickKey"
-        >
-          {tag}
-        </wa-tag>
-      ))
-    ) : (
-      <wa-badge
-        class={styles["tag-list__empty"]}
-        variant="neutral"
-        appearance="outlined"
-      >
-        No tags
-      </wa-badge>
-    )}
-  </div>
-));
-
-export default defineView((ctx, params) => {
+export default defineView<TagListProps>((ctx, params) => {
   const props = (params ?? {}) as Partial<TagListProps>;
 
   ctx.updater.set({
@@ -53,15 +23,41 @@ export default defineView((ctx, params) => {
     if (tag) ctx.owner.fire("select", { tag });
   };
 
-  return {
-    template,
-    events: {
-      "pick<click>": pick,
-      "pickKey<keydown>": (e: KeyboardEvent) => {
-        if (e.key !== "Enter" && e.key !== " ") return;
-        e.preventDefault();
-        pick(e);
-      },
-    },
-  };
+  const template = jsxTemplate<TagListData>(({ tags }) => (
+    <div class={styles["tag-list"]}>
+      {tags.length > 0 ? (
+        tags.map((tag) => (
+          <wa-tag
+            class={styles["tag-list__tag"]}
+            variant="brand"
+            appearance="outlined"
+            size="s"
+            pill
+            role="button"
+            tabindex="0"
+            data-tag={tag}
+            onClick={pick}
+            onKeydown={(e) => {
+              const key = (e as KeyboardEvent).key;
+              if (key !== "Enter" && key !== " ") return;
+              e.preventDefault();
+              pick(e);
+            }}
+          >
+            {tag}
+          </wa-tag>
+        ))
+      ) : (
+        <wa-badge
+          class={styles["tag-list__empty"]}
+          variant="neutral"
+          appearance="outlined"
+        >
+          No tags
+        </wa-badge>
+      )}
+    </div>
+  ));
+
+  return { template };
 });

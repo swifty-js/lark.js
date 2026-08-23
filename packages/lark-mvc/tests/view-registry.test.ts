@@ -26,8 +26,12 @@ import {
   registerViewClass,
   invalidateViewClass,
   getViewClassRegistry,
+  resolveSetup,
+  ensureViewName,
+  aliasViewName,
 } from "../src/view-registry";
 import { defineView } from "../src/view";
+import { isLarkView } from "../src/jsx/vnode";
 
 describe("view-registry", () => {
   beforeEach(() => {
@@ -38,17 +42,17 @@ describe("view-registry", () => {
     }
   });
 
-  it("registers and looks up a view class by path", () => {
+  it("registers a component and stores the unwrapped setup", () => {
     const A = defineView(() => ({ template: () => "" }));
     registerViewClass("foo/a", A);
-    expect(getViewClass("foo/a")).toBe(A);
+    expect(getViewClass("foo/a")).toBe(A.setup);
   });
 
   it("strips query parameters from the view path", () => {
     const B = defineView(() => ({ template: () => "" }));
     registerViewClass("bar/b?x=1", B);
     // Lookup uses path only — the query was stripped on register.
-    expect(getViewClass("bar/b")).toBe(B);
+    expect(getViewClass("bar/b")).toBe(B.setup);
     expect(getViewClass("bar/b?x=1")).toBeUndefined();
   });
 
@@ -69,6 +73,38 @@ describe("view-registry", () => {
     const E = defineView(() => ({ template: () => "" }));
     registerViewClass("zzz/e", E);
     const reg = getViewClassRegistry();
-    expect(reg["zzz/e"]).toBe(E);
+    expect(reg["zzz/e"]).toBe(E.setup);
+  });
+
+  it("resolveSetup unwraps branded components and passes plain setups through", () => {
+    const V = defineView(() => ({}));
+    expect(isLarkView(V)).toBe(true);
+    expect(resolveSetup(V)).toBe(V.setup);
+    const plain = (): Record<string, never> => ({});
+    expect(resolveSetup(plain)).toBe(plain);
+  });
+
+  it("ensureViewName assigns a stable auto name and registers the setup", () => {
+    const V = defineView(function Fancy() {
+      return {};
+    });
+    const name = ensureViewName(V);
+    expect(name).toMatch(/^__v\d+_Fancy$/);
+    expect(ensureViewName(V)).toBe(name);
+    expect(getViewClass(name)).toBe(V.setup);
+  });
+
+  it("ensureViewName reuses an explicit registerViewClass name", () => {
+    const V = defineView(() => ({}));
+    registerViewClass("named/view", V);
+    expect(ensureViewName(V)).toBe("named/view");
+  });
+
+  it("aliasViewName maps a replacement to the original name (HMR)", () => {
+    const Old = defineView(() => ({}));
+    const name = ensureViewName(Old);
+    const New = defineView(() => ({}));
+    aliasViewName(Old, New);
+    expect(ensureViewName(New)).toBe(name);
   });
 });

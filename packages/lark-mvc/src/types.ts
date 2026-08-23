@@ -504,6 +504,13 @@ export interface FrameObj {
   emitter: EmitterApi;
   /** Dispatcher visit tag (set during dispatcherUpdate walk) */
   dispatcherUpdateTag?: number;
+  /**
+   * Child→parent event trampolines, keyed by event name. The frame emitter
+   * subscribes ONE stable wrapper per name; each parent render swaps
+   * `.current` to the fresh handler prop (mountZone), so inline closures
+   * never go stale. `undefined` current = handler prop removed.
+   */
+  hostEvents?: Record<string, { current?: AnyFunc }>;
 
   mountView(viewPath: string, viewInitParams?: Record<string, unknown>): void;
   unmountView(): void;
@@ -523,18 +530,69 @@ export interface FrameObj {
  * View setup function — the functional API for defining views.
  *
  * Called once on mount with a `ViewCtx` and optional init params.
- * Returns a descriptor with `template`, `events`, and optional `assign`.
+ * Returns a descriptor with `template` and optional `assign`.
+ * Events are declared as inline functions in the JSX template
+ * (`onClick={() => ...}`) — there is no events map.
  */
-export type ViewSetup<T = unknown> = (
-  ctx: ViewCtx,
-  params?: T,
-) => {
+export type ViewSetup<T = unknown> = (ctx: ViewCtx, params?: T) => ViewSetupResult;
+
+/** The descriptor returned by a view setup function. */
+export interface ViewSetupResult {
   template?: ViewTemplate;
-  events?: Record<string, AnyFunc>;
   assign?: (options?: unknown) => boolean | undefined;
+}
+
+/** Class attribute value: string, array (falsy entries dropped), or truthy-key map. */
+export type ClassValue =
+  | string
+  | Array<string | false | null | undefined>
+  | Record<string, unknown>;
+
+/**
+ * Props reserved for the auto-generated host element when a view component
+ * is used as a JSX tag (`<MyView id class style key/>`). All other props are
+ * delivered to the child view; `on[A-Z]*` function props become child→parent
+ * event subscriptions. `children` are intentionally NOT supported.
+ */
+export interface LarkHostProps {
+  id?: string | number;
+  key?: string | number;
+  class?: ClassValue;
+  className?: ClassValue;
+  style?: string | Record<string, string | number>;
+}
+
+/**
+ * The params a view setup receives, derived from the component's JSX props:
+ * camelCase `on*` event props are stripped (they are wired to the frame
+ * emitter, not delivered as data).
+ *
+ * Note: the type strips every `on${Capitalize}` key; the runtime strips only
+ * function-valued ones — declare non-handler props without the `on` prefix.
+ */
+export type ViewParams<P> = {
+  [K in keyof P as K extends `on${infer R}` ? (R extends Uncapitalize<R> ? K : never) : K]: P[K];
 };
 
-// defineView returns a ViewSetup function directly — no wrapper class needed
+/**
+ * A mountable view component created by `defineView`.
+ *
+ * Typed as a callable so TSX validates `<MyView prop={x}/>` props against
+ * `P`, but it is never legitimately invoked — the JSX serializer intercepts
+ * the `VIEW_MARK` brand and mounts the view through the Frame tree instead.
+ */
+export type LarkView<P extends object = object> = ((props: P & LarkHostProps) => null) & {
+  /** Brand marker — `Symbol.for("lark.mvc.view")`. */
+  $$: symbol;
+  /** The original setup function passed to `defineView`. */
+  setup: ViewSetup;
+};
+
+/**
+ * Supertype accepting any `LarkView<P>` (props param is contravariant, so
+ * `never` admits every instantiation). Used in config positions.
+ */
+export type AnyLarkView = LarkView<never>;
 
 // ============================================================
 // Service types
@@ -847,10 +905,10 @@ export interface FrameworkConfig {
    */
   routeMode?: "history" | "hash";
   /**
-   * Default view path.
-   * Default root view path to load when URL doesn't match any route.
+   * Default view: registered view path or an imported view component.
+   * Root view to load when the URL doesn't match any route.
    */
-  defaultView?: string;
+  defaultView?: string | AnyLarkView;
   /**
    * Default path when no hash present,
    * Path used when URL hash is empty, defaults to "/".
@@ -859,11 +917,11 @@ export interface FrameworkConfig {
   /**
    * Route mapping: path -> view.
    * Mapping relationship between paths and views.
-   * - Simple mapping: `{ "/home": "app/views/home" }`
-   * - Config mapping: `{ "/detail": { view: "app/views/detail", title: "Detail" } }`
+   * - Simple mapping: `{ "/home": "app/views/home" }` or `{ "/home": HomeView }`
+   * - Config mapping: `{ "/detail": { view: DetailView, title: "Detail" } }`
    * Use rewrite config item for path rewriting logic.
    */
-  routes?: Record<string, string | RouteViewConfig>;
+  routes?: Record<string, string | AnyLarkView | RouteViewConfig>;
   /** Hashbang prefix (only used in hash mode) */
   hashbang?: string;
   /**
@@ -881,9 +939,9 @@ export interface FrameworkConfig {
   ) => string;
   /**
    * Unmatched view (404).
-   * View path to use when no matching view is found in routes, e.g., 404 page.
+   * View to use when no matching view is found in routes, e.g., 404 page.
    */
-  unmatchedView?: string;
+  unmatchedView?: string | AnyLarkView;
   /**
    * Module require function for asynchronous view loading.
    * Called by `Framework.use()` when a view setup is not found in the registry.
@@ -897,8 +955,8 @@ export interface FrameworkConfig {
 }
 
 export interface RouteViewConfig {
-  /** View path */
-  view: string;
+  /** View path or imported view component */
+  view: string | AnyLarkView;
   /** Additional properties merged into location */
   [k: string]: unknown;
 }

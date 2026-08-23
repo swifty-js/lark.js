@@ -122,7 +122,7 @@ describe("HMR", () => {
       hotSwapByView(OldView, NewView);
 
       expect(frame.view!.updater.get<number>("count")).toBe(33);
-      expect(getViewClassRegistry()["test/swap"]).toBe(NewView);
+      expect(getViewClassRegistry()["test/swap"]).toBe(NewView.setup);
       cleanupFrame(frame);
     });
 

@@ -1,7 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/html-vite";
 import { larkRender } from "../../lark";
 import UserCard, { type UserCardProps } from "./user-card";
-import TagList from "./tag-list";
 
 type Args = UserCardProps & {
   select?: (data?: unknown) => void;
@@ -12,9 +11,6 @@ const meta: Meta<Args> = {
   render: larkRender<Args>({
     path: "components/user-card",
     view: UserCard,
-    // The `v-lark` child must be registered up front: story rendering is
-    // synchronous and never goes through `FrameworkConfig.require`.
-    children: { "components/user-card/tag-list": TagList },
     events: ["select"],
   }),
   argTypes: {

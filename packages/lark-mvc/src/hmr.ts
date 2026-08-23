@@ -35,36 +35,38 @@
  *
  * `hotSwapView` preserves the entire `ViewCtx` — `updater.data`, `resources`,
  * `emitter`, `signature`, `id`, and `owner` all stay the same. It:
- * 1. Runs old `useEffect` cleanups
- * 2. Unregisters old events
- * 3. Destroys `destroyOnRender` resources
- * 4. Re-runs `newSetup(ctx)` — the same ctx instance
- * 5. Updates template/events/assign from the new descriptor
- * 6. Registers new events
- * 7. Increments signature, fires `render`, destroys transient resources,
- *    and calls `updater.forceDigest()`
+ * 1. Runs old `useEffect` cleanups (this includes the JSX event wiring
+ *    cleanup, which unbinds delegated event types and strips `__jsx*`
+ *    handlers)
+ * 2. Destroys `destroyOnRender` resources
+ * 3. Re-runs `newSetup(ctx)` — the same ctx instance
+ * 4. Updates template/assign from the new descriptor
+ * 5. Increments signature, fires `render`, destroys transient resources,
+ *    and calls `updater.forceDigest()` — the re-render re-wires inline
+ *    handlers from scratch
  *
  * Because the setup function re-runs against the preserved ctx, any data set
  * via `ctx.updater.set()` in the previous setup survives the swap.
  */
 import { parseUri } from "./utils";
-import { getViewClassRegistry } from "./view-registry";
-import { unregisterEvents, registerEvents, destroyAllResources } from "./view";
+import { getViewClassRegistry, resolveSetup, aliasViewName } from "./view-registry";
+import { destroyAllResources } from "./view";
 import { setCurrentCtx } from "./hooks";
-import type { ViewSetup, FrameObj } from "./types";
+import type { ViewSetup, ViewSetupResult, FrameObj, LarkView } from "./types";
 import { Frame } from "./frame";
 
 /**
  * Hot-swap a single frame's view setup in place, preserving the `ViewCtx`.
  *
  * This is the building block for state-preserving HMR. The existing ctx is
- * reused — only the setup function, template, events, and assign are
- * replaced. See the module-level docs for the full step-by-step sequence.
+ * reused — only the setup function, template, and assign are replaced. See
+ * the module-level docs for the full step-by-step sequence.
  *
  * @param frame - The frame whose view should be hot-swapped
- * @param newSetup - The new view setup function produced by the updated module
+ * @param newSetup - The new view setup (or branded component) from the updated module
  */
-export function hotSwapView(frame: FrameObj, newSetup: ViewSetup): void {
+export function hotSwapView(frame: FrameObj, newSetup: ViewSetup | LarkView<never>): void {
+  const setupFn = resolveSetup(newSetup);
   const oldView = frame.view;
   if (!oldView) {
     const vp = frame.getViewPath();
@@ -75,20 +77,17 @@ export function hotSwapView(frame: FrameObj, newSetup: ViewSetup): void {
     oldView.cleanups[i]();
   }
   oldView.cleanups.length = 0;
-  unregisterEvents(oldView);
   destroyAllResources(oldView, false);
   // Set currentCtx so hooks inside the new setup can access the ctx
   setCurrentCtx(oldView);
-  let descriptor: ReturnType<ViewSetup>;
+  let descriptor: ViewSetupResult;
   try {
-    descriptor = newSetup(oldView, undefined);
+    descriptor = setupFn(oldView, undefined);
   } finally {
     setCurrentCtx(null);
   }
   oldView.setTemplate(descriptor.template);
-  oldView.setEvents(descriptor.events);
   if (descriptor.assign) oldView.setAssign(descriptor.assign);
-  registerEvents(oldView);
   if (oldView.signature.value > 0) {
     oldView.signature.value++;
     oldView.fire("render");
@@ -101,18 +100,28 @@ export function hotSwapView(frame: FrameObj, newSetup: ViewSetup): void {
  * View setup HMR: update the view-registry and hot-swap every frame using
  * `oldSetup` with `newSetup`.
  *
- * 1. Walk the registry, replacing any entry equal to `oldSetup` with `newSetup`
- * 2. Walk all frames, hot-swapping any whose registry entry now points to
+ * 1. Alias the new component to the old component's auto-registered name,
+ *    so parents still holding the stale import keep resolving to the same
+ *    internal view path across re-renders
+ * 2. Walk the registry, replacing any entry equal to `oldSetup` with `newSetup`
+ * 3. Walk all frames, hot-swapping any whose registry entry now points to
  *    `newSetup`
  *
- * @param oldSetup - The previous setup function reference
- * @param newSetup - The new setup function reference
+ * @param oldSetup - The previous setup/component reference
+ * @param newSetup - The new setup/component reference
  */
-export function hotSwapByView(oldSetup: ViewSetup, newSetup: ViewSetup): boolean {
+export function hotSwapByView(
+  oldSetup: ViewSetup | LarkView<never>,
+  newSetup: ViewSetup | LarkView<never>,
+): boolean {
   if (!oldSetup || !newSetup || oldSetup === newSetup) return false;
+  aliasViewName(oldSetup, newSetup);
+  const oldFn = resolveSetup(oldSetup);
+  const newFn = resolveSetup(newSetup);
+  if (oldFn === newFn) return false;
   const reg = getViewClassRegistry();
   for (const path in reg) {
-    if (reg[path] === oldSetup) reg[path] = newSetup;
+    if (reg[path] === oldFn) reg[path] = newFn;
   }
   let swapped = false;
   for (const [, frame] of Frame.getAll()) {
@@ -120,8 +129,8 @@ export function hotSwapByView(oldSetup: ViewSetup, newSetup: ViewSetup): boolean
     const vp = frame.getViewPath();
     if (view && vp) {
       const parsed = parseUri(vp);
-      if (reg[parsed.path] === newSetup) {
-        hotSwapView(frame, newSetup);
+      if (reg[parsed.path] === newFn) {
+        hotSwapView(frame, newFn);
         swapped = true;
       }
     }

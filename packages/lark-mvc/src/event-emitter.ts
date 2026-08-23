@@ -73,7 +73,7 @@ export function createEmitter<T = unknown>(): EmitterApi<T> {
   let pendingCompaction: Set<string> | undefined;
 
   function on(event: string, handler: (e: ChangeEvent) => void): EmitterApi<T> {
-    const key = SPLITTER + event.toLowerCase();
+    const key = SPLITTER + event;
     let list = listeners.get(key);
     if (!list) {
       list = [];
@@ -84,7 +84,7 @@ export function createEmitter<T = unknown>(): EmitterApi<T> {
   }
 
   function off(event: string, handler?: AnyFunc): EmitterApi<T> {
-    const key = SPLITTER + event.toLowerCase();
+    const key = SPLITTER + event;
     if (handler) {
       const list = listeners.get(key);
       if (!list) return api;
@@ -121,14 +121,15 @@ export function createEmitter<T = unknown>(): EmitterApi<T> {
     remove?: boolean,
     lastToFirst?: boolean,
   ): EmitterApi<T> {
-    // Case-insensitive event matching: HTML attribute names are lowercased
-    // by the parser, so e-lark-clearHistory becomes e-lark-clearhistory.
-    // Lowercasing the key lets fire("clearHistory") match on("clearhistory").
-    const key = SPLITTER + event.toLowerCase();
+    // Event names match exactly (case-sensitive). The HTML attribute
+    // lowercasing problem is solved at the boundary instead: the JSX
+    // serializer emits kebab-case `e-lark-*` names and `mountZone`
+    // camelizes them back before subscribing.
+    const key = SPLITTER + event;
     const list = listeners.get(key);
 
     const eventData: Record<string, unknown> = data ?? {};
-    eventData["type"] = event; // preserve original case in event data
+    eventData["type"] = event;
 
     firingDepth++;
     try {

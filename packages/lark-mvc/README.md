@@ -79,10 +79,15 @@ Enable the automatic JSX runtime in `tsconfig.json`:
 ### Bundler plugin
 
 Install the bundler plugin matching your build tool. The Vite plugin also
-defaults `esbuild.jsx = "automatic"` + `esbuild.jsxImportSource = "@lark.js/mvc"`
+defaults `oxc.jsx = { runtime: "automatic", importSource: "@lark.js/mvc" }`
 for you; with Webpack/Rspack the JSX transform comes from your existing
 TS/SWC/Babel loader reading the tsconfig above. All three plugins auto-inject
 state-preserving view HMR (no `import.meta.hot` boilerplate needed).
+
+> Linking this package via the `file:` protocol? Vite's dependency
+> pre-bundle cache is keyed by the lockfile, not by dep contents — after
+> rebuilding lark-mvc run `vite --force` (or delete `node_modules/.vite`)
+> so the browser picks up the new build.
 
 ```ts
 // vite.config.ts
@@ -113,7 +118,7 @@ export default {
 
 ## Quick Start
 
-### 1. Define a view (JSX)
+### 1. Define a view component (JSX)
 
 ```tsx
 // src/views/home.tsx
@@ -121,44 +126,46 @@ import { defineView, jsxTemplate, useState } from "@lark.js/mvc";
 
 type Data = { count: number };
 
-const template = jsxTemplate<Data>(({ count }) => (
-  <div class="home">
-    <h1>Welcome to Lark Mvc</h1>
-    <p>Count: {count}</p>
-    <button onClick="increment">Increment</button>
-  </div>
-));
-
-export default defineView((ctx, params) => {
+export default defineView((ctx) => {
   const [getCount, setCount] = useState("count", 0);
 
-  return {
-    template,
-    events: {
-      "increment<click>"() {
-        setCount(getCount() + 1);
-      },
-    },
-  };
+  const template = jsxTemplate<Data>(({ count }) => (
+    <div class="home">
+      <h1>Welcome to Lark Mvc</h1>
+      <p>Count: {count}</p>
+      <button onClick={() => setCount(getCount() + 1)}>Increment</button>
+    </div>
+  ));
+
+  return { template };
 });
 ```
+
+Events are inline functions — there is no events map and no handler-name
+strings. Define the template inside the setup when handlers need `ctx` or
+hook setters; a template without handlers can live at module level.
 
 ### 2. Boot the framework
 
 ```ts
 // src/main.ts
 import { Framework } from "@lark.js/mvc";
+import HomeView from "./views/home";
+import AboutView from "./views/about";
 
 Framework.boot({
   rootId: "root",
   routeMode: "history",
-  defaultView: "src/views/home",
+  defaultView: HomeView,
   routes: {
-    "/": "src/views/home",
-    "/about": "src/views/about",
+    "/": HomeView,
+    "/about": AboutView,
   },
 });
 ```
+
+Routes accept imported components directly (or registered view-path strings
+for lazy loading / Module Federation — see `registerViewClass`).
 
 ### 3. HTML entry point
 
@@ -179,14 +186,13 @@ Framework.boot({
 
 ### Views
 
-A view is defined via `defineView()`. The setup function runs once on mount, receives a `ViewCtx`, and returns `{ template, events, assign? }`.
+A view component is defined via `defineView<P>()`. The setup function runs
+once on mount, receives a `ViewCtx` and the props passed at the JSX usage
+site, and returns `{ template, assign? }`. The result is used directly as a
+JSX tag — never called as a function.
 
 ```tsx
 import { defineView, jsxTemplate, useState, useEffect } from "@lark.js/mvc";
-
-const template = jsxTemplate<{ greeting: string }>(({ greeting }) => (
-  <p onClick="greet">{greeting}</p>
-));
 
 export default defineView((ctx, params) => {
   // View-local state
@@ -198,19 +204,28 @@ export default defineView((ctx, params) => {
     return () => clearInterval(timer);
   });
 
+  const template = jsxTemplate<{ greeting: string }>(({ greeting }) => (
+    <p onClick={() => setName("Lark")}>{greeting}</p>
+  ));
+
   return {
     template,
-    events: {
-      "greet<click>"() {
-        setName("Lark");
-      },
-    },
     // Optional: custom data assignment logic
     assign(options) {
       ctx.updater.set({ greeting: `Hello, ${getName()}!` }).digest();
       return true;
     },
   };
+});
+```
+
+Window/document-level listeners are plain `useEffect` work:
+
+```tsx
+useEffect(() => {
+  const onResize = () => ctx.updater.digest({ width: window.innerWidth });
+  window.addEventListener("resize", onResize);
+  return () => window.removeEventListener("resize", onResize);
 });
 ```
 
@@ -335,69 +350,78 @@ root.unmountFrame("child-id");
 | `frame.children()`                    | Get child frame IDs                         |
 | `frame.on/off/fire`                   | Frame-level events                          |
 
-#### Embedded Views (v-lark)
+#### Embedded Components
 
-Child views are embedded by putting a `v-lark` attribute on a JSX element:
+Child views are embedded by using the imported component directly as a JSX
+tag. The serializer emits a host `<div>` carrying an internal `v-lark` wire
+attribute (an auto-registered name like `__v1_Detail`, or the explicit
+`registerViewClass` path when one exists); `mountZone` scans these hosts and
+mounts a child frame for each one.
 
 ```tsx
-<div v-lark="src/views/detail"></div>
+import Detail from "./views/detail";
+
+const template = jsxTemplate(() => <Detail class="panel" />);
 ```
 
-At render time, `mountZone` scans for `v-lark` elements and calls `mountFrame` for each one.
+Raw registered-path HTML still mounts (markdown pipelines, router views):
+`registerViewClass("views/detail", Detail)` + `<div v-lark="views/detail"></div>`.
 
 #### Component Props & Events
 
-Pass data to child views with `prop:` attributes and bind child-to-parent events with string-valued `onXxx` props:
+Pass data and event handlers to child components as regular JSX props:
 
 ```tsx
+import CounterUpdater from "./components/counter-updater";
+
 const template = jsxTemplate<{ count: number; step: number; history: number[] }>((d) => (
-  <div
-    id="counter-updater"
-    v-lark="components/counter-updater"
-    prop:count={d.count}
-    prop:step={d.step}
-    prop:history={d.history}
-    onIncrement="increment"
-    onDecrement="decrement"
-    onClearHistory="clearHistory"
-  ></div>
+  <CounterUpdater
+    key="counter-updater"
+    class="mx-2"
+    count={d.count}
+    step={d.step}
+    history={d.history}
+    onIncrement={() => bump(+1)}
+    onDecrement={() => bump(-1)}
+    onClearHistory={(data) => clear(data)}
+  />
 ));
 ```
 
-| Syntax                   | Description                                                             |
-| ------------------------ | ----------------------------------------------------------------------- |
-| `prop:name={primitive}`  | Pass string/number/boolean (HTML-escaped, child receives a string)      |
-| `prop:name={objectOrFn}` | Pass object/array/function by live reference (refData token)            |
-| `onEvent="handlerName"`  | Bind child custom event to a parent handler (string value → `e-lark-*`) |
-| `onEvent={fn}`           | On a `v-lark` element this stays a **DOM** event on the host element    |
+| Prop                               | Behavior                                                                |
+| ---------------------------------- | ----------------------------------------------------------------------- |
+| `id` / `key` / `class` / `style`   | Routed to the auto-generated host element (`key` becomes the host `id`) |
+| `on` + Capitalized, function value | Child→parent event subscription (`onClearHistory` → `"clearHistory"`)   |
+| everything else                    | Delivered to the child — objects/arrays/functions by live reference     |
 
-**Props flow:** Parent `updater.set().digest()` → template re-renders → `p-lark-*` attributes update → `mountZone` reads and pushes to `childView.updater.set(props).digest()` → child re-renders.
+All child props travel through ONE refData token (`p-lark` wire attribute),
+so names keep their exact camelCase and values keep their types — `count={5}`
+arrives as the number `5`. `children` are not supported on component tags.
 
-**Events flow:** Child calls `ctx.owner.fire("eventName", data?)` → parent handler found by prefix-matching in events map → handler called with data.
+**Props flow:** Parent `updater.set().digest()` → template re-renders → the
+props token updates → `mountZone` translates it and pushes data into the
+child with `updater.set(data)` + a full `view.render()` (the child's
+`assign` / `renderMethod` re-run).
 
-Event matching is case-insensitive (emitter lowercases event keys, so `fire("clearHistory")` matches the HTML-lowercased `e-lark-clearhistory` binding). Child **custom** events support string handler names only — inline functions on a `v-lark` element bind a DOM event on the host element instead, because per-render generated names cannot be captured by the one-time `mountZone` wiring.
+**Events flow:** Child calls `ctx.owner.fire("eventName", data?)` → the frame
+emitter hits a stable trampoline that always points at the parent's LATEST
+handler prop (re-synced every parent render — inline closures never go
+stale). Event names match exactly (case-sensitive); they never pass through
+HTML attributes.
 
 ```tsx
-// Child view
-const template = jsxTemplate<{ count: number }>(({ count }) => (
-  <button onClick="bump">count: {count}</button>
-));
-
-export default defineView((ctx, params) => {
-  const p = (params || {}) as Record<string, unknown>;
-  ctx.updater.digest({
-    count: p["count"] ?? 0,
-    step: p["step"] ?? 1,
-    history: p["history"] ?? [],
-  });
-  return {
-    template,
-    events: {
-      "bump<click>": () => ctx.owner.fire("increment"),
-    },
-  };
+// Child component
+export default defineView<{ count?: number; onIncrement?: () => void }>((ctx, params) => {
+  ctx.updater.digest({ count: params?.count ?? 0 });
+  const template = jsxTemplate<{ count: number }>(({ count }) => (
+    <button onClick={() => ctx.owner.fire("increment")}>count: {count}</button>
+  ));
+  return { template };
 });
 ```
+
+Use `key` on components rendered in `map()` loops — it becomes the host `id`
+and preserves child frames (and their state) across list reorders.
 
 ### Routing
 
@@ -490,16 +514,23 @@ Framework.boot({
 
 #### Route Configuration
 
+Routes accept imported components or registered view-path strings (strings
+pair with `registerViewClass` / the `require` lazy loader):
+
 ```ts
+import HomeView from "./views/home";
+import DetailView from "./views/detail";
+import NotFoundView from "./views/not-found";
+
 Framework.boot({
   rootId: "root",
   routes: {
-    "/home": "app/views/home",
-    "/detail": { view: "app/views/detail", title: "Detail Page" },
-    "/admin": "app/views/admin",
+    "/home": HomeView,
+    "/detail": { view: DetailView, title: "Detail Page" },
+    "/admin": "app/views/admin", // lazy-loaded via config.require
   },
-  defaultView: "app/views/home",
-  unmatchedView: "app/views/not-found",
+  defaultView: HomeView,
+  unmatchedView: NotFoundView,
   defaultPath: "/home",
   rewrite(path, params, routes) {
     // Custom path rewriting logic
@@ -589,14 +620,13 @@ export default defineView((ctx) => {
     doubled: s.doubled,
   }));
 
-  return {
-    template,
-    events: {
-      "inc<click>"() {
-        counterStore.getState().increment();
-      },
-    },
-  };
+  const template = jsxTemplate<{ count: number; doubled: number }>(({ count, doubled }) => (
+    <button onClick={() => counterStore.getState().increment()}>
+      {count} (doubled: {doubled})
+    </button>
+  ));
+
+  return { template };
 });
 
 // Cleanup
@@ -675,16 +705,17 @@ export default defineView((ctx) => {
   // Capture the service instance for auto-destroy
   ctx.capture("api", service);
 
-  return {
-    template,
-    events: {
-      "loadUser<click>"() {
-        service.all([{ name: "getUser", id: "123" }], (errors, payload) => {
-          ctx.updater.set({ userName: payload.get("userName") }).digest();
-        });
-      },
-    },
+  const loadUser = (): void => {
+    service.all([{ name: "getUser", id: "123" }], (errors, payload) => {
+      ctx.updater.set({ userName: payload.get("userName") }).digest();
+    });
   };
+
+  const template = jsxTemplate<{ userName: string }>(({ userName }) => (
+    <button onClick={loadUser}>{userName || "Load user"}</button>
+  ));
+
+  return { template };
 });
 ```
 
@@ -828,6 +859,7 @@ const template = jsxTemplate<Data>(({ user, items, md }) => (
 | `{list.map(...)}`        | List rendering (arrays are flattened)                               |
 | `<>...</>` (Fragment)    | Multiple roots without a wrapper element                            |
 | `<Row item={x} />`       | Functional component — a pure template partial, invoked at render   |
+| `<MyView prop={x} />`    | View component (`defineView` result) — mounted as a child frame     |
 
 #### Attribute semantics
 
@@ -838,22 +870,18 @@ const template = jsxTemplate<Data>(({ user, items, md }) => (
 | `id` / `key`          | Keyed-diff compare key; `key` emits as `id` when no explicit `id` is set |
 | `disabled={true}`     | Boolean attribute → `disabled=""`; `false`/nullish omit the attribute    |
 | `data-x={object}`     | Object/array/function values become live refData tokens                  |
-| `prop:name={value}`   | Child-view prop on `v-lark` elements (see Component Props & Events)      |
 
 Give loop items a stable `key` (or `id`) to get keyed reordering instead of
 in-place rewrites — ids are document-global, so keep them unique.
 
 #### Event Binding
 
-Events use React-style camelCase props; the type is the lowercased remainder
-(`onClick` → `click`, `onDblclick` → `dblclick`). Two value forms:
+Events use React-style camelCase props with **inline function values only**;
+the type is the lowercased remainder (`onClick` → `click`, `onDblclick` →
+`dblclick`). Handlers are auto-registered per render — closures capture loop
+variables directly:
 
 ```tsx
-// 1. Named handler — references the events map returned by setup
-<button onClick="save">Save</button>;
-
-// 2. Inline function — auto-registered per render; closures capture loop
-//    variables directly, no e.params round-trip needed
 {
   items.map((item) => (
     <button key={`del-${item.id}`} onClick={() => deleteItem(item.id)}>
@@ -863,29 +891,40 @@ Events use React-style camelCase props; the type is the lowercased remainder
 }
 ```
 
-Named handlers live in the events map (`"save<click>"`). Multi-event bindings
-and keyboard modifiers are declared on the events-map key, not in JSX:
+Multi-event bindings are just the same function on several props; keyboard
+modifiers are ordinary checks inside the handler:
 
-```ts
-events: {
-  "validate<input,change>": (e) => { /* fires for both events */ },
-  "specialAction<click><ctrl>": (e) => { /* fires only with Ctrl held */ },
-}
+```tsx
+const validate = (e: LarkEvent) => {
+  /* fires for input AND change */
+};
+
+<input
+  onInput={validate}
+  onChange={validate}
+  onClick={(e) => {
+    if (!(e as MouseEvent).ctrlKey) return; // Ctrl-only action
+    specialAction();
+  }}
+/>;
 ```
 
 Notes:
 
-- Event types are lowercase (HTML lowercases attribute names) — a
-  `CustomEvent("myEvent")` cannot be matched; use lowercase event types.
-- Lowercase `onclick`-style props are rejected (native inline handlers would
-  execute attribute text as JavaScript).
-- Inline handlers are delegated like everything else — a single
-  capture-phase listener per event type on `document.body`.
+- DOM event types are lowercase (HTML lowercases attribute names) — a
+  `CustomEvent("myEvent")` cannot be delegated; use lowercase DOM types.
+  Frame events (`ctx.owner.fire`) are case-sensitive and support camelCase.
+- Lowercase `onclick`-style props and string handler values are rejected
+  (native inline handlers would execute attribute text as JavaScript).
+- Inline handlers are delegated — a single capture-phase listener per event
+  type on `document.body`; the extended event exposes `e.eventTarget`
+  (the original hit element).
+- Window/document listeners: use `useEffect` + `addEventListener`.
 
 #### Functional components
 
 Components are pure template partials — props in, JSX out. They are invoked
-during serialization and have no lifecycle; use `v-lark` child views for
+during serialization and have no lifecycle; use `defineView` components for
 stateful composition.
 
 ```tsx
@@ -909,9 +948,11 @@ jsxTemplate closure: renderFn(updater.data) -> VNode tree
     |
 serialize(vnode, { viewId, refData })  -- escape text/attrs, encode events,
     |                                     tokenize object props via refFn
-inline handlers wired into the view's events map (per render)
+inline handlers wired into the view's handler map (per render)
     |
 HTML string -> domGetNode() -> domSetChildNodes() keyed diff -> applyDomOps()
+    |
+mountZone: mount/update embedded view components (props push + events re-sync)
 ```
 
 ### Updater
@@ -956,8 +997,8 @@ export default defineConfig({
 
 The Vite plugin:
 
-- Defaults `esbuild.jsx = "automatic"` and `esbuild.jsxImportSource = "@lark.js/mvc"`
-  (user-provided esbuild settings always win)
+- Defaults `oxc.jsx = { runtime: "automatic", importSource: "@lark.js/mvc" }`
+  (user-provided oxc settings always win; `oxc: false` / `jsx: "preserve"` respected)
 - Auto-injects state-preserving view HMR into every `defineView` module
   (`.ts` / `.tsx` / `.js` / `.jsx`)
 
@@ -1078,39 +1119,36 @@ Framework.boot({
 
 ## Event Delegation
 
-All DOM events are delegated to `document.body` in the capture phase. The EventDelegator walks from `event.target` up to `document.body`, resolving the owning Frame and matching handlers.
+All DOM events are delegated to `document.body` in the capture phase. The
+EventDelegator walks from `event.target` up to `document.body`; at each
+element it reads the `@<type>` attribute the serializer emitted
+(`"<viewId>\x1e__jsxN"`), resolves the owning Frame by id, and calls the
+matching inline handler from the view's handler map.
 
-### Handler Naming Convention
-
-| Syntax                     | Meaning                                                                   |
-| -------------------------- | ------------------------------------------------------------------------- |
-| `handler<click>`           | Event on the view's root element                                          |
-| `$selector<click>`         | Registers the event type; dispatch still resolves via `@event` attributes |
-| `$<click>`                 | Empty selector, fires only at the Frame boundary                          |
-| `$window<resize>`          | Delegated to `window`                                                     |
-| `$document<keydown>`       | Delegated to `document`                                                   |
-| `handler<click,mousedown>` | Multi-event binding                                                       |
-| `name<click><ctrl>`        | Fires only when the Ctrl modifier is held                                 |
+There is no handler-key grammar: inline JSX functions are the only DOM event
+mechanism. Frame (child→parent) events are wired separately by `mountZone`
+through per-frame trampolines. Window/document listeners belong in
+`useEffect`.
 
 ### Reference Counting
 
-`bind`/`unbind` use reference counting per event type so multiple views registering the same event type do not attach duplicate listeners.
+`bind`/`unbind` use reference counting per event type so multiple views listening to the same event type do not attach duplicate listeners. Binding is managed automatically by the JSX wiring layer — one bind per (view, type), released on unmount/hot-swap.
 
 ## API Reference
 
 ### Exports
 
-| Category  | Exports                                                                                     |
-| --------- | ------------------------------------------------------------------------------------------- |
-| Framework | `Framework`, `defineView`, `EventDelegator`                                                 |
-| JSX       | `jsxTemplate`, `raw`, `Fragment`, `JSXNode` / `VNode` / `Component` / `LarkEvent` (types)   |
-| State     | `State`, `createStore`, `computed`, `bindStore`, `useUrlState`                              |
-| Router    | `Router`                                                                                    |
-| View      | `defineView`, `ViewCtx`, `ViewSetup` (types)                                                |
-| Hooks     | `useState`, `useEffect`, `useStore`, `useInterval`, `useTimeout`, `useResource`, `useEvent` |
-| Frame     | `Frame`, `createFrame`, `registerViewClass`, `invalidateViewClass`, `FrameApi` (type)       |
-| Service   | `createService`, `ServiceApi`, `ServiceInstance` (types)                                    |
-| Types     | All types from `./types` via `export *`                                                     |
+| Category  | Exports                                                                                                 |
+| --------- | ------------------------------------------------------------------------------------------------------- |
+| Framework | `Framework`, `defineView`, `EventDelegator`                                                             |
+| JSX       | `jsxTemplate`, `raw`, `Fragment`, `isLarkView`, `JSXNode` / `VNode` / `Component` / `LarkEvent` (types) |
+| State     | `State`, `createStore`, `computed`, `bindStore`, `useUrlState`                                          |
+| Router    | `Router`                                                                                                |
+| View      | `defineView`, `ViewCtx` / `ViewSetup` / `LarkView` / `LarkHostProps` / `ViewParams` (types)             |
+| Hooks     | `useState`, `useEffect`, `useStore`, `useInterval`, `useTimeout`, `useResource`, `useEvent`             |
+| Frame     | `Frame`, `createFrame`, `registerViewClass`, `invalidateViewClass`, `ensureViewName`, `resolveSetup`    |
+| Service   | `createService`, `ServiceApi`, `ServiceInstance` (types)                                                |
+| Types     | All types from `./types` via `export *`                                                                 |
 
 ### Package Entry Points
 
@@ -1128,24 +1166,27 @@ All DOM events are delegated to `document.body` in the capture phase. The EventD
 
 ### FrameworkConfig
 
-| Key             | Type                                        | Default     | Description                                 |
-| --------------- | ------------------------------------------- | ----------- | ------------------------------------------- |
-| `rootId`        | `string`                                    | `"root"`    | DOM root element ID                         |
-| `routeMode`     | `"history" or "hash"`                       | `"history"` | Routing mode                                |
-| `defaultView`   | `string`                                    | -           | Default view path when URL matches no route |
-| `defaultPath`   | `string`                                    | `"/"`       | Default path when URL hash/query is empty   |
-| `routes`        | `Record<string, string or RouteViewConfig>` | -           | Path-to-view mapping                        |
-| `hashbang`      | `string`                                    | `"#!"`      | Hash prefix (hash mode only)                |
-| `error`         | `(error: Error) => void`                    | throws      | Global error handler                        |
-| `rewrite`       | `(path, params, routes) => string`          | -           | Route rewriting function                    |
-| `unmatchedView` | `string`                                    | -           | View path for 404 pages                     |
-| `require`       | `(names, params?) => Promise<unknown[]>`    | -           | Async module loader (Module Federation)     |
+| Key             | Type                                                    | Default     | Description                               |
+| --------------- | ------------------------------------------------------- | ----------- | ----------------------------------------- |
+| `rootId`        | `string`                                                | `"root"`    | DOM root element ID                       |
+| `routeMode`     | `"history" or "hash"`                                   | `"history"` | Routing mode                              |
+| `defaultView`   | `string or LarkView`                                    | -           | Default view when URL matches no route    |
+| `defaultPath`   | `string`                                                | `"/"`       | Default path when URL hash/query is empty |
+| `routes`        | `Record<string, string or LarkView or RouteViewConfig>` | -           | Path-to-view mapping                      |
+| `hashbang`      | `string`                                                | `"#!"`      | Hash prefix (hash mode only)              |
+| `error`         | `(error: Error) => void`                                | throws      | Global error handler                      |
+| `rewrite`       | `(path, params, routes) => string`                      | -           | Route rewriting function                  |
+| `unmatchedView` | `string or LarkView`                                    | -           | View for 404 pages                        |
+| `require`       | `(names, params?) => Promise<unknown[]>`                | -           | Async module loader (Module Federation)   |
+
+`boot()` normalizes `LarkView` entries to internal registry-name strings, so
+Router internals stay string-based.
 
 ### RouteViewConfig
 
 ```ts
 interface RouteViewConfig {
-  view: string; // View path
+  view: string | LarkView; // View path or imported component
   [k: string]: unknown; // Additional properties merged into location
 }
 ```

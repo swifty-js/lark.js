@@ -22,6 +22,8 @@
 
 import { describe, it, expect } from "vitest";
 import { Framework } from "../src/framework";
+import { defineView } from "../src/view";
+import { getViewClass } from "../src/view-registry";
 import type { ChangeEvent } from "../src/types";
 
 describe("Framework", () => {
@@ -423,6 +425,33 @@ describe("Framework", () => {
           defaultPath: "/booted",
         });
         expect(Framework.getConfig("defaultPath")).toBe("/booted");
+      } finally {
+        el.remove();
+      }
+    });
+
+    it("boot normalizes LarkView config entries to registry-name strings", () => {
+      const el = document.createElement("div");
+      el.id = "boot-norm-test";
+      document.body.appendChild(el);
+      const Home = defineView(() => ({ template: () => "<div>home</div>" }));
+      const Missing = defineView(() => ({ template: () => "<div>404</div>" }));
+      try {
+        Framework.boot({
+          rootId: "boot-norm-test",
+          defaultView: Home,
+          unmatchedView: Missing,
+          routes: { "/home": Home, "/deep": { view: Missing, title: "x" } },
+        });
+        const dv = Framework.getConfig("defaultView") as string;
+        const uv = Framework.getConfig("unmatchedView") as string;
+        const routes = Framework.getConfig("routes") as Record<string, string | { view: string }>;
+        expect(typeof dv).toBe("string");
+        expect(getViewClass(dv)).toBe(Home.setup);
+        expect(typeof uv).toBe("string");
+        expect(getViewClass(uv)).toBe(Missing.setup);
+        expect(routes["/home"]).toBe(dv);
+        expect((routes["/deep"] as { view: string }).view).toBe(uv);
       } finally {
         el.remove();
       }

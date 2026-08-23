@@ -56,6 +56,8 @@ import type { FrameObj } from "./types";
 import { EventDelegator } from "./event-delegator";
 import { defineView } from "./view";
 import { hotSwapByView } from "./hmr";
+import { isLarkView } from "./jsx/vnode";
+import { ensureViewName } from "./view-registry";
 import type { AnyFunc, FrameworkConfig, ViewCtx, ChangeEvent, FrameworkApi } from "./types";
 
 // ============================================================
@@ -427,6 +429,25 @@ export const Framework: FrameworkApi = {
       assign(config, cfg);
     }
 
+    // Normalize imported view components to internal registry names —
+    // Router and Frame operate on string view paths only.
+    if (isLarkView(config.defaultView)) {
+      config.defaultView = ensureViewName(config.defaultView);
+    }
+    if (isLarkView(config.unmatchedView)) {
+      config.unmatchedView = ensureViewName(config.unmatchedView);
+    }
+    if (config.routes) {
+      for (const routePath of Object.keys(config.routes)) {
+        const entry = config.routes[routePath];
+        if (isLarkView(entry)) {
+          config.routes[routePath] = ensureViewName(entry);
+        } else if (entry && typeof entry === "object" && isLarkView(entry.view)) {
+          entry.view = ensureViewName(entry.view);
+        }
+      }
+    }
+
     // Wire the global error sink so every funcWithTry catch forwards to
     // config.error. Reads config.error dynamically so later setConfig()
     // calls (e.g. from @lark.js/sentry) are picked up without re-booting.
@@ -489,7 +510,8 @@ export const Framework: FrameworkApi = {
     // viewPath is set synchronously in mountView (before the sync/async
     // branch), so it reliably indicates "a mount has been initiated for
     // this frame" — which is exactly the condition we want to guard on.
-    const defaultView = config.defaultView || "";
+    // (boot normalization turned any LarkView defaultView into a string.)
+    const defaultView = (config.defaultView as string) || "";
     if (defaultView && !rootFrame.getViewPath()) {
       rootFrame.mountView(defaultView);
     }

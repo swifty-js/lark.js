@@ -20,6 +20,19 @@
  * SOFTWARE.
  */
 
+/**
+ * Child-view props & events over the component wire format:
+ *
+ *   <div v-lark="<registry name>" p-lark="<refData token>"></div>
+ *
+ * The single `p-lark` token resolves (via the parent updater's refData) to
+ * the WHOLE props object. `on[A-Z]*` function values become child→parent
+ * event subscriptions through per-frame trampolines; everything else is
+ * pushed into the child as data (full `view.render()` on updates).
+ *
+ * Templates here are hand-written strings mimicking exactly what the JSX
+ * serializer emits for `<Child .../>` tags.
+ */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { defineView } from "../src/view";
 import { Frame, createFrame, registerViewClass, invalidateViewClass } from "../src/frame";
@@ -55,25 +68,23 @@ function findChild(parentFrame: FrameObj): FrameObj | undefined {
 }
 
 /**
- * Create a parent template that uses refFn to pass an object/array prop —
- * simulating what the JSX serializer does for object props at runtime.
- *
- * The returned template function receives (data, viewId, refData) and calls
- * refFn(refData, data[key], "") to store the value and get a SPLITTER token.
- * The token is rendered into the p-lark-attribute.
+ * Create a parent template that packs the given props object into ONE
+ * refData token — exactly what `serializeViewTag` does for `<Child .../>`.
  */
-function makeRefPropTemplate(propName: string, dataKey: string): ViewTemplate {
+function makePropsTemplate(
+  build: (d: Record<string, unknown>) => Record<string, unknown>,
+): ViewTemplate {
   return (data: unknown, _viewId: string, refData: unknown) => {
     const d = (data || {}) as Record<string, unknown>;
     const ref = refData as Record<string, unknown>;
-    const token = refFn(ref, d[dataKey], "");
-    return `<div v-lark="test/child" p-lark-${propName}="${token}"></div>`;
+    const token = refFn(ref, build(d), "");
+    return `<div v-lark="test/child" p-lark="${token}"></div>`;
   };
 }
 
 // ─── Tests ────────────────────────────────────────────────────────────────
 
-describe("v-lark Props & Events", () => {
+describe("component host Props & Events", () => {
   beforeEach(() => {
     const reg = getViewClassRegistry();
     for (const key of Object.keys(reg)) invalidateViewClass(key);
@@ -82,9 +93,9 @@ describe("v-lark Props & Events", () => {
   afterEach(() => cleanup());
 
   // ============================================================
-  // 1. String Props
+  // 1. Primitive Props
   // ============================================================
-  describe("string props", () => {
+  describe("primitive props", () => {
     it("passes string prop to child setup params", async () => {
       let received = "";
       registerViewClass(
@@ -101,12 +112,7 @@ describe("v-lark Props & Events", () => {
         "test/parent",
         defineView((ctx) => {
           ctx.updater.digest({ greeting: "hello" });
-          return {
-            template: (data: unknown) => {
-              const d = (data || {}) as Record<string, unknown>;
-              return `<div v-lark="test/child" p-lark-msg="${d["greeting"]}"></div>`;
-            },
-          };
+          return { template: makePropsTemplate((d) => ({ msg: d["greeting"] })) };
         }),
       );
 
@@ -136,12 +142,7 @@ describe("v-lark Props & Events", () => {
         "test/parent",
         defineView((ctx) => {
           ctx.updater.digest({ greeting: "first" });
-          return {
-            template: (data: unknown) => {
-              const d = (data || {}) as Record<string, unknown>;
-              return `<div v-lark="test/child" p-lark-msg="${d["greeting"]}"></div>`;
-            },
-          };
+          return { template: makePropsTemplate((d) => ({ msg: d["greeting"] })) };
         }),
       );
 
@@ -157,12 +158,12 @@ describe("v-lark Props & Events", () => {
       expect(childView?.updater.get<string>("msg")).toBe("second");
     });
 
-    it("handles empty string prop", async () => {
-      let received = "UNSET";
+    it("preserves primitive types through the props token (no stringification)", async () => {
+      let received: Record<string, unknown> = {};
       registerViewClass(
         "test/child",
         defineView((ctx, params) => {
-          received = String((params as Record<string, unknown>)?.["val"] ?? "UNSET");
+          received = { ...(params || {}) } as Record<string, unknown>;
           ctx.updater.digest({});
           return { template: () => "<div>child</div>" };
         }),
@@ -171,12 +172,14 @@ describe("v-lark Props & Events", () => {
       registerViewClass(
         "test/parent",
         defineView((ctx) => {
-          ctx.updater.digest({ val: "" });
+          ctx.updater.digest({});
           return {
-            template: (data: unknown) => {
-              const d = (data || {}) as Record<string, unknown>;
-              return `<div v-lark="test/child" p-lark-val="${d["val"]}"></div>`;
-            },
+            template: makePropsTemplate(() => ({
+              count: 42,
+              enabled: false,
+              empty: "",
+              nothing: null,
+            })),
           };
         }),
       );
@@ -185,12 +188,43 @@ describe("v-lark Props & Events", () => {
       frame.mountView("test/parent");
       await flush();
 
-      expect(received).toBe("");
+      expect(received["count"]).toBe(42);
+      expect(received["enabled"]).toBe(false);
+      expect(received["empty"]).toBe("");
+      expect(received["nothing"]).toBeNull();
+    });
+
+    it("delivers camelCase prop names exactly (never lowercased)", async () => {
+      let received: Record<string, unknown> = {};
+      registerViewClass(
+        "test/child",
+        defineView((ctx, params) => {
+          received = { ...(params || {}) } as Record<string, unknown>;
+          ctx.updater.digest({});
+          return { template: () => "<div>child</div>" };
+        }),
+      );
+
+      registerViewClass(
+        "test/parent",
+        defineView((ctx) => {
+          ctx.updater.digest({});
+          return { template: makePropsTemplate(() => ({ userName: "ada", maxRetryCount: 3 })) };
+        }),
+      );
+
+      const frame = makeFrame("s4");
+      frame.mountView("test/parent");
+      await flush();
+
+      expect(received["userName"]).toBe("ada");
+      expect(received["maxRetryCount"]).toBe(3);
+      expect("username" in received).toBe(false);
     });
   });
 
   // ============================================================
-  // 2. Object/Array Props (via refFn tokens)
+  // 2. Object/Array Props (live references)
   // ============================================================
   describe("object/array props", () => {
     it("passes array reference to child", async () => {
@@ -210,7 +244,7 @@ describe("v-lark Props & Events", () => {
         "test/parent",
         defineView((ctx) => {
           ctx.updater.digest({ history });
-          return { template: makeRefPropTemplate("history", "history") };
+          return { template: makePropsTemplate((d) => ({ history: d["history"] })) };
         }),
       );
 
@@ -239,7 +273,7 @@ describe("v-lark Props & Events", () => {
         "test/parent",
         defineView((ctx) => {
           ctx.updater.digest({ config });
-          return { template: makeRefPropTemplate("config", "config") };
+          return { template: makePropsTemplate((d) => ({ config: d["config"] })) };
         }),
       );
 
@@ -273,7 +307,7 @@ describe("v-lark Props & Events", () => {
         "test/parent",
         defineView((ctx) => {
           ctx.updater.digest({ history: arr });
-          return { template: makeRefPropTemplate("history", "history") };
+          return { template: makePropsTemplate((d) => ({ history: d["history"] })) };
         }),
       );
 
@@ -314,7 +348,7 @@ describe("v-lark Props & Events", () => {
         "test/parent",
         defineView((ctx) => {
           ctx.updater.digest({ history: arr });
-          return { template: makeRefPropTemplate("history", "history") };
+          return { template: makePropsTemplate((d) => ({ history: d["history"] })) };
         }),
       );
 
@@ -355,7 +389,7 @@ describe("v-lark Props & Events", () => {
         "test/parent",
         defineView((ctx) => {
           ctx.updater.digest({ items });
-          return { template: makeRefPropTemplate("items", "items") };
+          return { template: makePropsTemplate((d) => ({ items: d["items"] })) };
         }),
       );
 
@@ -397,7 +431,7 @@ describe("v-lark Props & Events", () => {
         "test/parent",
         defineView((ctx) => {
           ctx.updater.digest({ config });
-          return { template: makeRefPropTemplate("config", "config") };
+          return { template: makePropsTemplate((d) => ({ config: d["config"] })) };
         }),
       );
 
@@ -439,7 +473,7 @@ describe("v-lark Props & Events", () => {
         "test/parent",
         defineView((ctx) => {
           ctx.updater.digest({ config });
-          return { template: makeRefPropTemplate("config", "config") };
+          return { template: makePropsTemplate((d) => ({ config: d["config"] })) };
         }),
       );
 
@@ -457,42 +491,10 @@ describe("v-lark Props & Events", () => {
       const el7b = document.getElementById("o7")!.querySelector("[data-keys]");
       expect(el7b?.getAttribute("data-keys")).toBe("theme");
     });
-
-    it("passes null/undefined as raw string when not a ref token", async () => {
-      let received = "UNSET";
-      registerViewClass(
-        "test/child",
-        defineView((ctx, params) => {
-          const p = (params || {}) as Record<string, unknown>;
-          received = String(p["val"] ?? "UNSET");
-          ctx.updater.digest({});
-          return { template: () => "<div>child</div>" };
-        }),
-      );
-
-      registerViewClass(
-        "test/parent",
-        defineView((ctx) => {
-          ctx.updater.digest({ val: "null" });
-          return {
-            template: (data: unknown) => {
-              const d = (data || {}) as Record<string, unknown>;
-              return `<div v-lark="test/child" p-lark-val="${d["val"]}"></div>`;
-            },
-          };
-        }),
-      );
-
-      const frame = makeFrame("o8");
-      frame.mountView("test/parent");
-      await flush();
-
-      expect(received).toBe("null");
-    });
   });
 
   // ============================================================
-  // 3. Event Binding (child → parent)
+  // 3. Event Binding (child → parent via function props)
   // ============================================================
   describe("event binding", () => {
     it("calls parent handler when child fires event", async () => {
@@ -501,14 +503,8 @@ describe("v-lark Props & Events", () => {
         "test/child",
         defineView((ctx) => {
           ctx.updater.digest({});
-          return {
-            template: () => "<div>child</div>",
-            events: {
-              "fire<click>": () => {
-                ctx.owner.fire("customEvent");
-              },
-            },
-          };
+          void ctx;
+          return { template: () => "<div>child</div>" };
         }),
       );
 
@@ -516,10 +512,7 @@ describe("v-lark Props & Events", () => {
         "test/parent",
         defineView((ctx) => {
           ctx.updater.digest({});
-          return {
-            template: () => `<div v-lark="test/child" e-lark-customEvent="onCustom"></div>`,
-            events: { "onCustom<click>": handler },
-          };
+          return { template: makePropsTemplate(() => ({ onCustomEvent: handler })) };
         }),
       );
 
@@ -539,14 +532,7 @@ describe("v-lark Props & Events", () => {
         "test/child",
         defineView((ctx) => {
           ctx.updater.digest({});
-          return {
-            template: () => "<div>child</div>",
-            events: {
-              "fire<click>": () => {
-                ctx.owner.fire("dataEvent", { value: 42 });
-              },
-            },
-          };
+          return { template: () => "<div>child</div>" };
         }),
       );
 
@@ -555,12 +541,11 @@ describe("v-lark Props & Events", () => {
         defineView((ctx) => {
           ctx.updater.digest({});
           return {
-            template: () => `<div v-lark="test/child" e-lark-dataEvent="onData"></div>`,
-            events: {
-              "onData<click>": (data: Record<string, unknown>) => {
+            template: makePropsTemplate(() => ({
+              onDataEvent: (data: Record<string, unknown>) => {
                 received = data;
               },
-            },
+            })),
           };
         }),
       );
@@ -581,14 +566,7 @@ describe("v-lark Props & Events", () => {
         "test/child",
         defineView((ctx) => {
           ctx.updater.digest({});
-          return {
-            template: () => "<div>child</div>",
-            events: {
-              "fire<click>": () => {
-                ctx.owner.fire("asyncEvent");
-              },
-            },
-          };
+          return { template: () => "<div>child</div>" };
         }),
       );
 
@@ -597,9 +575,8 @@ describe("v-lark Props & Events", () => {
         defineView((ctx) => {
           ctx.updater.digest({});
           return {
-            template: () => `<div v-lark="test/child" e-lark-asyncEvent="onAsync"></div>`,
-            events: {
-              "onAsync<click>": () => {
+            template: makePropsTemplate(() => ({
+              onAsyncEvent: () => {
                 return new Promise<void>((resolve) => {
                   setTimeout(() => {
                     results.push("done");
@@ -607,7 +584,7 @@ describe("v-lark Props & Events", () => {
                   }, 10);
                 });
               },
-            },
+            })),
           };
         }),
       );
@@ -622,20 +599,13 @@ describe("v-lark Props & Events", () => {
       expect(results).toContain("done");
     });
 
-    it("matches camelCase event names case-insensitively", async () => {
+    it("matches camelCase event names exactly (case-sensitive)", async () => {
       const handler = vi.fn();
       registerViewClass(
         "test/child",
         defineView((ctx) => {
           ctx.updater.digest({});
-          return {
-            template: () => "<div>child</div>",
-            events: {
-              "fire<click>": () => {
-                ctx.owner.fire("clearHistory");
-              },
-            },
-          };
+          return { template: () => "<div>child</div>" };
         }),
       );
 
@@ -643,12 +613,9 @@ describe("v-lark Props & Events", () => {
         "test/parent",
         defineView((ctx) => {
           ctx.updater.digest({});
-          return {
-            // HTML lowercases attr name: e-lark-clearHistory → e-lark-clearhistory
-            // Emitter matches case-insensitively: fire("clearHistory") matches on("clearhistory")
-            template: () => `<div v-lark="test/child" e-lark-clearHistory="onClear"></div>`,
-            events: { "onClear<click>": handler },
-          };
+          // onClearHistory → subscribes the frame event "clearHistory";
+          // prop names travel inside the token, never through HTML.
+          return { template: makePropsTemplate(() => ({ onClearHistory: handler })) };
         }),
       );
 
@@ -656,36 +623,34 @@ describe("v-lark Props & Events", () => {
       frame.mountView("test/parent");
       await flush();
 
+      findChild(frame)?.view?.owner.fire("clearhistory");
+      await flush();
+      expect(handler).not.toHaveBeenCalled();
+
       findChild(frame)?.view?.owner.fire("clearHistory");
       await flush();
-
       expect(handler).toHaveBeenCalledTimes(1);
     });
 
-    it("maps different event name to handler name", async () => {
-      const handler = vi.fn();
+    it("re-syncs handlers on parent re-render (trampoline swaps closures)", async () => {
+      const calls: string[] = [];
       registerViewClass(
         "test/child",
         defineView((ctx) => {
           ctx.updater.digest({});
-          return {
-            template: () => "<div>child</div>",
-            events: {
-              "fire<click>": () => {
-                ctx.owner.fire("childEvent");
-              },
-            },
-          };
+          return { template: () => "<div>child</div>" };
         }),
       );
 
       registerViewClass(
         "test/parent",
         defineView((ctx) => {
-          ctx.updater.digest({});
+          ctx.updater.digest({ generation: "g1" });
           return {
-            template: () => `<div v-lark="test/child" e-lark-childEvent="parentHandler"></div>`,
-            events: { "parentHandler<click>": handler },
+            template: makePropsTemplate((d) => ({
+              tick: d["generation"],
+              onPing: () => calls.push(String(d["generation"])),
+            })),
           };
         }),
       );
@@ -694,25 +659,60 @@ describe("v-lark Props & Events", () => {
       frame.mountView("test/parent");
       await flush();
 
-      findChild(frame)?.view?.owner.fire("childEvent");
+      findChild(frame)?.view?.owner.fire("ping");
+      expect(calls).toEqual(["g1"]);
+
+      frame.view!.updater.set({ generation: "g2" }).digest();
       await flush();
 
-      expect(handler).toHaveBeenCalledTimes(1);
+      // The SAME frame-emitter subscription now reaches the new closure.
+      findChild(frame)?.view?.owner.fire("ping");
+      expect(calls).toEqual(["g1", "g2"]);
     });
 
-    it("does not crash when no matching handler in parent", async () => {
+    it("parks removed handler props without unsubscribing", async () => {
+      const handler = vi.fn();
       registerViewClass(
         "test/child",
         defineView((ctx) => {
           ctx.updater.digest({});
+          return { template: () => "<div>child</div>" };
+        }),
+      );
+
+      registerViewClass(
+        "test/parent",
+        defineView((ctx) => {
+          ctx.updater.digest({ armed: 1 });
           return {
-            template: () => "<div>child</div>",
-            events: {
-              "fire<click>": () => {
-                ctx.owner.fire("noHandler");
-              },
-            },
+            template: makePropsTemplate((d) =>
+              d["armed"] ? { flag: 1, onPing: handler } : { flag: 0 },
+            ),
           };
+        }),
+      );
+
+      const frame = makeFrame("e6");
+      frame.mountView("test/parent");
+      await flush();
+
+      findChild(frame)?.view?.owner.fire("ping");
+      expect(handler).toHaveBeenCalledTimes(1);
+
+      frame.view!.updater.set({ armed: 0 }).digest();
+      await flush();
+
+      // Handler prop removed → trampoline parked, no call, no crash.
+      expect(() => findChild(frame)?.view?.owner.fire("ping")).not.toThrow();
+      expect(handler).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not crash when child fires an unbound event", async () => {
+      registerViewClass(
+        "test/child",
+        defineView((ctx) => {
+          ctx.updater.digest({});
+          return { template: () => "<div>child</div>" };
         }),
       );
 
@@ -720,14 +720,11 @@ describe("v-lark Props & Events", () => {
         "test/parent",
         defineView((ctx) => {
           ctx.updater.digest({});
-          return {
-            template: () => `<div v-lark="test/child" e-lark-noHandler="nonExistent"></div>`,
-            events: {},
-          };
+          return { template: () => `<div v-lark="test/child"></div>` };
         }),
       );
 
-      const frame = makeFrame("e6");
+      const frame = makeFrame("e7");
       frame.mountView("test/parent");
       await flush();
 
@@ -755,10 +752,7 @@ describe("v-lark Props & Events", () => {
         defineView((ctx) => {
           ctx.updater.digest({ a: "valA", b: "valB", c: "valC" });
           return {
-            template: (data: unknown) => {
-              const d = (data || {}) as Record<string, unknown>;
-              return `<div v-lark="test/child" p-lark-a="${d["a"]}" p-lark-b="${d["b"]}" p-lark-c="${d["c"]}"></div>`;
-            },
+            template: makePropsTemplate((d) => ({ a: d["a"], b: d["b"], c: d["c"] })),
           };
         }),
       );
@@ -772,7 +766,7 @@ describe("v-lark Props & Events", () => {
       expect(received["c"]).toBe("valC");
     });
 
-    it("does not call digest on child when no p-lark-attributes", async () => {
+    it("does not touch the child when the host has no props token", async () => {
       registerViewClass(
         "test/child",
         defineView((ctx) => {
@@ -819,12 +813,7 @@ describe("v-lark Props & Events", () => {
         "test/parent",
         defineView((ctx) => {
           ctx.updater.digest({ count: 5 });
-          return {
-            template: (data: unknown) => {
-              const d = (data || {}) as Record<string, unknown>;
-              return `<div v-lark="test/child" p-lark-count="${d["count"]}"></div>`;
-            },
-          };
+          return { template: makePropsTemplate((d) => ({ count: d["count"] })) };
         }),
       );
 
@@ -840,6 +829,50 @@ describe("v-lark Props & Events", () => {
         color: "red",
       });
       expect(childView?.updater.get<string>("msg")).toBe("child");
+    });
+
+    it("prop pushes run the child's full render (assign re-runs)", async () => {
+      const assignCalls: number[] = [];
+      registerViewClass(
+        "test/child",
+        defineView((ctx, params) => {
+          const p = (params || {}) as Record<string, unknown>;
+          ctx.updater.set({ count: Number(p["count"]) || 0 });
+          return {
+            template: (data: unknown) => {
+              const d = (data || {}) as Record<string, unknown>;
+              return `<div data-doubled="${d["doubled"] ?? ""}">child</div>`;
+            },
+            assign: () => {
+              const count = ctx.updater.get<number>("count") ?? 0;
+              assignCalls.push(count);
+              ctx.updater.set({ doubled: count * 2 });
+              return true;
+            },
+          };
+        }),
+      );
+
+      registerViewClass(
+        "test/parent",
+        defineView((ctx) => {
+          ctx.updater.digest({ count: 3 });
+          return { template: makePropsTemplate((d) => ({ count: d["count"] })) };
+        }),
+      );
+
+      const frame = makeFrame("m4");
+      frame.mountView("test/parent");
+      await flush();
+      // First render: assign ran once during the child's initial render
+      const initialAssigns = assignCalls.length;
+
+      frame.view!.updater.set({ count: 7 }).digest();
+      await flush();
+
+      expect(assignCalls.length).toBeGreaterThan(initialAssigns);
+      const childEl = document.getElementById("m4")!.querySelector("[data-doubled]");
+      expect(childEl?.getAttribute("data-doubled")).toBe("14");
     });
   });
 });

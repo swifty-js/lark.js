@@ -25,6 +25,8 @@ import { jsx, jsxs, Fragment, raw } from "../src/jsx-runtime";
 import { jsxDEV } from "../src/jsx-dev-runtime";
 import { serialize, createSerializeCtx, type SerializeCtx } from "../src/jsx/serialize";
 import { isVNode, createVNode, type JSXNode } from "../src/jsx/vnode";
+import { defineView } from "../src/view";
+import { registerViewClass, getViewClass } from "../src/view-registry";
 import { SPLITTER } from "../src/common";
 
 /** Build a fresh render context for one serialization pass. */
@@ -145,65 +147,88 @@ describe("serialize: attributes", () => {
   });
 });
 
-describe("serialize: child-view props (prop:)", () => {
-  it("primitive prop: values render escaped as p-lark-*", () => {
-    expect(render(jsx("div", { "v-lark": "components/panel", "prop:title": "a<b" }))).toBe(
-      `<div v-lark="components/panel" p-lark-title="a&lt;b"></div>`,
-    );
-  });
+describe("serialize: view component tags", () => {
+  const Panel = defineView(() => ({}));
+  registerViewClass("t/panel", Panel); // explicit name → deterministic wire output
 
-  it("object prop: values render as refData tokens", () => {
+  it("renders a host div with the registry name and a single p-lark props token", () => {
     const c = ctx();
     const rows = [1, 2];
-    const html = serialize(jsx("div", { "v-lark": "x/y", "prop:rows": rows }), c);
-    expect(html).toBe(`<div v-lark="x/y" p-lark-rows="${SPLITTER}1"></div>`);
-    expect(c.refData[`${SPLITTER}1`]).toBe(rows);
+    const html = serialize(jsx(Panel, { title: "a<b", rows }), c);
+    expect(html).toBe(`<div v-lark="t/panel" p-lark="${SPLITTER}1"></div>`);
+    const props = c.refData[`${SPLITTER}1`] as Record<string, unknown>;
+    expect(props["title"]).toBe("a<b");
+    expect(props["rows"]).toBe(rows);
   });
 
-  it("uppercase prop: names are lowered (with dev warning)", () => {
-    const spy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    expect(render(jsx("div", { "v-lark": "x/y", "prop:userName": "n" }))).toBe(
-      `<div v-lark="x/y" p-lark-username="n"></div>`,
+  it("routes id/class/className/style to the host element and omits an empty token", () => {
+    expect(render(jsx(Panel, { id: "p1", class: "a", className: "b", style: { zIndex: 1 } }))).toBe(
+      `<div id="p1" class="a b" v-lark="t/panel" style="z-index:1"></div>`,
     );
+  });
+
+  it("key becomes the host id (keyed diff / frame identity)", () => {
+    expect(render(jsx(Panel, {}, "row-3"))).toBe(`<div id="row-3" v-lark="t/panel"></div>`);
+  });
+
+  it("camelCase prop names survive inside the token (never through HTML)", () => {
+    const c = ctx();
+    serialize(jsx(Panel, { userName: "ada", onSelect: () => 1 }), c);
+    const props = c.refData[`${SPLITTER}1`] as Record<string, unknown>;
+    expect(Object.keys(props)).toEqual(["userName", "onSelect"]);
+    expect(typeof props["onSelect"]).toBe("function");
+  });
+
+  it("warns and ignores children on view tags", () => {
+    const spy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    expect(render(jsx(Panel, { children: "nope" }))).toBe(`<div v-lark="t/panel"></div>`);
+    expect(spy).toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  it("auto-registers unnamed components with a stable __vN name", () => {
+    const Anon = defineView(() => ({}));
+    const h1 = render(jsx(Anon, {}));
+    const h2 = render(jsx(Anon, {}));
+    const m = h1.match(/v-lark="(__v\d+[\w]*)"/);
+    expect(m).not.toBeNull();
+    expect(h2).toBe(h1); // same component → same name across renders
+    expect(getViewClass(m![1])).toBe(Anon.setup);
+  });
+
+  it("calling a view component directly renders nothing (dev warning)", () => {
+    const spy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    expect((Panel as unknown as () => null)()).toBeNull();
     spy.mockRestore();
   });
 });
 
 describe("serialize: events", () => {
-  it("string handler renders a delegated @type attribute with viewId prefix", () => {
-    expect(render(jsx("button", { onClick: "save" }), ctx("view9"))).toBe(
-      `<button @click="view9${SPLITTER}save()"></button>`,
-    );
-  });
-
-  it("camelCase event names lowercase fully (onDblclick → dblclick)", () => {
-    expect(render(jsx("button", { onDblclick: "go" }), ctx("v"))).toBe(
-      `<button @dblclick="v${SPLITTER}go()"></button>`,
-    );
-  });
-
-  it("string handler on a v-lark element becomes an e-lark binding", () => {
-    expect(render(jsx("div", { "v-lark": "x/y", onSelect: "onSelect" }))).toBe(
-      `<div v-lark="x/y" e-lark-select="onSelect"></div>`,
-    );
-  });
-
   it("inline function handlers get generated names and are collected", () => {
     const c = ctx("v1");
     const fn = vi.fn();
     const html = serialize(jsx("button", { onClick: fn }), c);
-    expect(html).toBe(`<button @click="v1${SPLITTER}__jsx1()"></button>`);
-    expect(c.handlers.get("__jsx1<click>")).toBe(fn);
+    expect(html).toBe(`<button @click="v1${SPLITTER}__jsx1"></button>`);
+    expect(c.handlers.get("__jsx1")).toBe(fn);
     expect(c.eventTypes.has("click")).toBe(true);
   });
 
-  it("same function reference reuses one generated name", () => {
+  it("camelCase event names lowercase fully (onDblclick → dblclick)", () => {
+    const c = ctx("v");
+    expect(serialize(jsx("button", { onDblclick: vi.fn() }), c)).toBe(
+      `<button @dblclick="v${SPLITTER}__jsx1"></button>`,
+    );
+  });
+
+  it("same function reference reuses one generated name across event types", () => {
     const c = ctx("v1");
     const fn = vi.fn();
     const html = serialize([jsx("a", { onClick: fn }), jsx("b", { onMousedown: fn })], c);
-    expect(html).toContain(`@click="v1${SPLITTER}__jsx1()"`);
-    expect(html).toContain(`@mousedown="v1${SPLITTER}__jsx1()"`);
-    expect(c.handlers.size).toBe(2); // one per event type key
+    expect(html).toContain(`@click="v1${SPLITTER}__jsx1"`);
+    expect(html).toContain(`@mousedown="v1${SPLITTER}__jsx1"`);
+    expect(c.handlers.size).toBe(1); // plain-name key, one entry per function
+    expect(c.eventTypes.has("click")).toBe(true);
+    expect(c.eventTypes.has("mousedown")).toBe(true);
     expect(c.counter).toBe(1);
   });
 
@@ -212,20 +237,14 @@ describe("serialize: events", () => {
     const h1 = serialize(tree(), ctx());
     const h2 = serialize(tree(), ctx());
     expect(h1).toBe(h2);
-    expect(h1).toContain("__jsx1()");
-    expect(h1).toContain("__jsx2()");
+    expect(h1).toContain("__jsx1");
+    expect(h1).toContain("__jsx2");
   });
 
-  it("inline functions on v-lark elements stay DOM events (never e-lark)", () => {
-    const c = ctx("p1");
-    const html = serialize(jsx("div", { "v-lark": "x/y", onClick: vi.fn() }), c);
-    expect(html).toBe(`<div v-lark="x/y" @click="p1${SPLITTER}__jsx1()"></div>`);
-  });
-
-  it("rejects lowercase native inline handlers and invalid handler references", () => {
+  it("rejects native inline handlers, string values, and non-functions", () => {
     const spy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     expect(render(jsx("div", { onclick: "alert(1)" }))).toBe(`<div></div>`);
-    expect(render(jsx("div", { onClick: "not a name" }))).toBe(`<div></div>`);
+    expect(render(jsx("div", { onClick: "save" }))).toBe(`<div></div>`);
     expect(render(jsx("div", { onClick: 42 }))).toBe(`<div></div>`);
     spy.mockRestore();
   });

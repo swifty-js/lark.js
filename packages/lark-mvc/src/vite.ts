@@ -25,7 +25,7 @@
  *
  * Zero-config integration for JSX views:
  *
- * 1. **JSX transform defaults** — configures esbuild's automatic JSX runtime
+ * 1. **JSX transform defaults** — configures the oxc automatic JSX runtime
  *    with `jsxImportSource: "@lark.js/mvc"` (unless the user already set one),
  *    so `.tsx` / `.jsx` files compile against `@lark.js/mvc/jsx-runtime`
  *    without any tsconfig/vite tweaking.
@@ -60,18 +60,20 @@ export function larkMvcPlugin(): Plugin {
     enforce: "pre",
 
     /**
-     * Default the esbuild JSX transform to the Lark automatic runtime.
-     * User-provided `esbuild.jsx*` settings always win; `esbuild: false`
-     * disables the transform entirely and is respected.
+     * Default the oxc JSX transform to the Lark automatic runtime.
+     * User-provided `oxc.jsx` settings always win; `oxc: false` disables
+     * the transform entirely and `jsx: "preserve"` is respected.
      */
     config(userConfig): UserConfig | undefined {
-      const esbuild = userConfig.esbuild;
-      if (esbuild === false) return undefined;
-      const patch: NonNullable<UserConfig["esbuild"]> = {};
-      if (!esbuild?.jsx) patch.jsx = "automatic";
-      if (!esbuild?.jsxImportSource) patch.jsxImportSource = "@lark.js/mvc";
+      const oxc = userConfig.oxc;
+      if (oxc === false) return undefined;
+      const jsx = oxc?.jsx;
+      if (jsx === "preserve") return undefined;
+      const patch: { runtime?: "automatic"; importSource?: string } = {};
+      if (!jsx?.runtime) patch.runtime = "automatic";
+      if (!jsx?.importSource) patch.importSource = "@lark.js/mvc";
       if (Object.keys(patch).length === 0) return undefined;
-      return { esbuild: patch };
+      return { oxc: { jsx: patch } };
     },
 
     /**

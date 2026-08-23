@@ -16,22 +16,6 @@ interface ButtonData {
   waSize: string;
 }
 
-const template = jsxTemplate<ButtonData>(
-  ({ label, disabled, waVariant, waAppearance, waSize }) => (
-    <wa-button
-      class={styles["button"]}
-      type="button"
-      variant={waVariant}
-      appearance={waAppearance}
-      size={waSize}
-      disabled={disabled}
-      onClick="press"
-    >
-      {label}
-    </wa-button>
-  ),
-);
-
 const variantMap = {
   primary: { waVariant: "brand", waAppearance: "filled" },
   secondary: { waVariant: "neutral", waAppearance: "outlined" },
@@ -44,7 +28,7 @@ const sizeMap = {
   lg: "l",
 } as const;
 
-export default defineView((ctx, params) => {
+export default defineView<ButtonProps>((ctx, params) => {
   const props = (params ?? {}) as Partial<ButtonProps>;
 
   ctx.updater.set({
@@ -71,15 +55,27 @@ export default defineView((ctx, params) => {
 
   let clicks = 0;
 
-  return {
-    template,
-    assign,
-    events: {
-      "press<click>": () => {
-        if (ctx.updater.get<boolean>("disabled")) return;
-        clicks += 1;
-        ctx.owner.fire("click", { clicks });
-      },
-    },
+  const press = (): void => {
+    if (ctx.updater.get<boolean>("disabled")) return;
+    clicks += 1;
+    ctx.owner.fire("click", { clicks });
   };
+
+  const template = jsxTemplate<ButtonData>(
+    ({ label, disabled, waVariant, waAppearance, waSize }) => (
+      <wa-button
+        class={styles["button"]}
+        type="button"
+        variant={waVariant}
+        appearance={waAppearance}
+        size={waSize}
+        disabled={disabled}
+        onClick={press}
+      >
+        {label}
+      </wa-button>
+    ),
+  );
+
+  return { template, assign };
 });

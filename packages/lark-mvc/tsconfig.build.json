@@ -6,7 +6,7 @@
     "declarationMap": false,
     "esModuleInterop": true,
     "exactOptionalPropertyTypes": false,
-    // "jsx": "react-jsx",
+
     "isolatedModules": true,
     "lib": ["esnext", "DOM", "DOM.Iterable"],
     "module": "esnext",

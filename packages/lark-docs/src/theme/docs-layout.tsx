@@ -20,8 +20,15 @@
  * SOFTWARE.
  */
 
-import { State, Router, defineView, useEffect } from "@lark.js/mvc";
-import type { ViewSetup, ViewTemplate } from "@lark.js/mvc";
+import {
+  State,
+  Router,
+  defineView,
+  jsxTemplate,
+  raw,
+  useEffect,
+} from "@lark.js/mvc";
+import type { ViewSetup } from "@lark.js/mvc";
 import { z } from "zod";
 import { icons as defaultIcons, clockIcons } from "./icons";
 import { findDataHref } from "../utils/dom";
@@ -32,6 +39,319 @@ interface NavLink {
   link: string;
   text: string;
 }
+
+interface NavItemVM extends NavLink {
+  external: boolean;
+  active: boolean;
+}
+
+interface DocsLayoutData {
+  clockIcon: string;
+  year: number;
+  loading: boolean;
+  notFound: boolean;
+  drawerOpen: boolean;
+  contentHtml: string;
+  currentPath: string;
+  prevPage: NavLink | null;
+  nextPage: NavLink | null;
+  navItems: NavItemVM[];
+  siteTitle: string;
+  searchEnabled: boolean;
+}
+
+const NAV_ITEM_BASE =
+  "relative flex items-center gap-1 rounded-md px-3 py-1.5 text-sm transition-colors duration-200 after:absolute after:inset-x-3 after:-bottom-3.25 after:h-0.5 after:origin-left after:scale-x-0 after:rounded-full after:bg-primary after:transition-transform after:duration-300 after:ease-[cubic-bezier(0.32,0.72,0,1)]";
+
+const template = jsxTemplate<DocsLayoutData>((d) => (
+  <div class="bg-background text-foreground min-h-screen font-sans antialiased">
+    {/* Skip to content */}
+    <a
+      href="#main-content"
+      class="bg-primary text-primary-foreground fixed -top-full left-4 z-100 rounded-md px-[0.9rem] py-2 text-[0.8rem] font-medium transition-[top] duration-200 ease-out focus:top-3"
+    >
+      Skip to content
+    </a>
+
+    {/* Ambient background layers */}
+    <div aria-hidden="true" class="pointer-events-none fixed inset-0 -z-10">
+      <div class="absolute inset-0 bg-[radial-gradient(56rem_30rem_at_16%_-10%,color-mix(in_oklab,var(--primary)_10%,transparent),transparent_70%)]"></div>
+      <div class="absolute inset-0 bg-[radial-gradient(44rem_26rem_at_96%_-4%,color-mix(in_oklab,var(--primary)_6%,transparent),transparent_70%)]"></div>
+      <div class="via-primary/40 absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent to-transparent"></div>
+      <div class="docs-grid absolute inset-0 opacity-55 dark:opacity-30"></div>
+    </div>
+
+    {/* Fixed navbar (scroll state toggled via classList in view logic) */}
+    <header
+      id="docs-navbar"
+      class="fixed inset-x-0 top-0 z-40 border-b border-transparent bg-transparent transition-[background-color,border-color,box-shadow,backdrop-filter] duration-300"
+    >
+      <div class="mx-auto flex h-14 max-w-360 items-center gap-2 px-4 lg:px-8">
+        {/* Mobile menu button */}
+        <button
+          class="hover:bg-accent/60 hover:text-foreground text-muted-foreground grid size-8 place-items-center rounded-md transition-colors duration-200 lg:hidden"
+          onClick="openDrawer"
+          aria-label="Open navigation menu"
+        >
+          <span class="size-4.5 [&>svg]:size-full">
+            {raw(defaultIcons.menu)}
+          </span>
+        </button>
+
+        {/* Logo: hour-aware clock + title */}
+        <a class="group flex items-center gap-2.5" onClick="navigateHome">
+          <span class="text-primary grid size-7 place-items-center transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] group-hover:rotate-12 [&>svg]:size-5">
+            {raw(d.clockIcon)}
+          </span>
+          <span class="font-display text-foreground text-[0.95rem] font-semibold tracking-tight">
+            {d.siteTitle}
+          </span>
+        </a>
+
+        {/* Nav items */}
+        <nav
+          class="ml-4 hidden items-center gap-0.5 md:flex"
+          aria-label="Primary"
+        >
+          {d.navItems.map((item) =>
+            item.external ? (
+              <a
+                class="after:bg-primary text-muted-foreground hover:bg-accent/60 hover:text-foreground relative flex items-center gap-1 rounded-md px-3 py-1.5 text-sm transition-colors duration-200 after:absolute after:inset-x-3 after:-bottom-3.25 after:h-0.5 after:origin-left after:scale-x-0 after:rounded-full after:transition-transform after:duration-300 after:ease-[cubic-bezier(0.32,0.72,0,1)] hover:after:scale-x-100"
+                href={item.link}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {item.text}
+                <span class="size-3 opacity-60 [&>svg]:size-full">
+                  {raw(defaultIcons.arrowUpRight)}
+                </span>
+              </a>
+            ) : (
+              <a
+                class={[
+                  NAV_ITEM_BASE,
+                  item.active
+                    ? "text-foreground font-medium after:scale-x-100"
+                    : "text-muted-foreground hover:bg-accent/60 hover:text-foreground hover:after:scale-x-100",
+                ]}
+                data-href={item.link}
+                onClick="navigateTo"
+              >
+                {item.text}
+              </a>
+            ),
+          )}
+        </nav>
+
+        {/* Right cluster */}
+        <div class="ml-auto flex items-center gap-1.5">
+          {d.searchEnabled && (
+            <>
+              {/* Search trigger (desktop) */}
+              <button
+                onClick="openSearch"
+                aria-label="Search documentation"
+                class="group border-muted/80 bg-muted/40 text-muted-foreground hover:border-primary/40 hover:bg-accent/60 hidden h-8 w-52 items-center gap-2 rounded-md border px-2.5 text-left text-xs transition-[border-color,background-color,width] duration-300 sm:flex lg:w-60"
+              >
+                <span class="size-3.5 shrink-0 opacity-70 transition-transform duration-300 group-hover:scale-110 [&>svg]:size-full">
+                  {raw(defaultIcons.search)}
+                </span>
+                <span class="flex-1 truncate">Search documentation…</span>
+                <kbd class="text-muted-foreground border-muted bg-background/80 rounded border px-1.5 py-0.5 font-mono text-[10px] font-medium">
+                  ⌘K
+                </kbd>
+              </button>
+              {/* Search trigger (mobile icon) */}
+              <button
+                class="hover:bg-accent/60 hover:text-foreground text-muted-foreground grid size-8 place-items-center rounded-md transition-colors duration-200 sm:hidden"
+                onClick="openSearch"
+                aria-label="Search documentation"
+              >
+                <span class="size-4.5 [&>svg]:size-full">
+                  {raw(defaultIcons.search)}
+                </span>
+              </button>
+            </>
+          )}
+
+          {/* Theme toggle */}
+          <div v-lark="theme/theme-toggle"></div>
+        </div>
+      </div>
+    </header>
+
+    {/* Main grid */}
+    <div class="mx-auto max-w-360 px-4 pt-14 lg:px-8">
+      <div class="grid grid-cols-1 gap-10 lg:grid-cols-[236px_minmax(0,1fr)] xl:grid-cols-[236px_minmax(0,1fr)_224px]">
+        {/* Sidebar (desktop) */}
+        <aside class="hidden lg:block">
+          <div class="sidebar-scroll sticky top-14 max-h-[calc(100vh-3.5rem)] overflow-y-auto py-8 pr-3">
+            <div v-lark="theme/sidebar"></div>
+          </div>
+        </aside>
+
+        {/* Content */}
+        <main id="main-content" class="min-w-0 scroll-mt-20 py-8 lg:py-10">
+          {d.loading ? (
+            <div class="animate-fade-in space-y-4" role="status">
+              <div class="skeleton h-9 w-2/5 rounded-lg"></div>
+              <div class="skeleton mt-6 h-4 w-full rounded-md"></div>
+              <div class="skeleton h-4 w-11/12 rounded-md"></div>
+              <div class="skeleton h-4 w-4/5 rounded-md"></div>
+              <div class="skeleton mt-8 h-44 w-full rounded-xl"></div>
+              <div class="skeleton mt-4 h-4 w-3/5 rounded-md"></div>
+              <span class="sr-only">Loading page…</span>
+            </div>
+          ) : d.notFound ? (
+            <div class="animate-fade-in flex flex-col items-start gap-4 py-16">
+              <span class="border-muted bg-muted/40 text-muted-foreground grid size-12 place-items-center rounded-xl border [&>svg]:size-6">
+                {raw(defaultIcons.compass)}
+              </span>
+              <h1 class="font-display text-3xl font-semibold tracking-tight">
+                Page not found
+              </h1>
+              <p class="text-muted-foreground max-w-md text-sm leading-relaxed">
+                Nothing lives at{" "}
+                <code class="bg-muted text-foreground rounded px-1.5 py-0.5 font-mono text-xs">
+                  {d.currentPath}
+                </code>
+                . It may have moved, or the link may be out of date.
+              </p>
+              <button
+                class="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-4 py-2 text-sm font-medium transition-[background-color,transform] duration-200 active:scale-[0.97]"
+                onClick="navigateHome"
+              >
+                Back to the docs
+              </button>
+            </div>
+          ) : (
+            <>
+              {/* Page content */}
+              <article
+                id="docs-content"
+                class="prose max-w-none"
+                onClick="onContentClick"
+              >
+                {raw(d.contentHtml)}
+              </article>
+
+              {/* Prev / Mvc pager */}
+              {(d.prevPage || d.nextPage) && (
+                <div class="not-prose mt-12 grid gap-3 sm:grid-cols-2">
+                  {d.prevPage ? (
+                    <a
+                      class="group border-muted bg-background hover:border-primary/40 flex flex-col gap-1 rounded-xl border p-4 transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-[0_4px_16px_-8px_rgb(0_0_0/0.12)]"
+                      data-href={d.prevPage.link}
+                      onClick="navigateTo"
+                    >
+                      <span class="text-muted-foreground flex items-center gap-1 font-mono text-[10px] font-medium tracking-[0.12em] uppercase">
+                        <span class="size-3 transition-transform duration-200 group-hover:-translate-x-0.5 [&>svg]:size-full">
+                          {raw(defaultIcons.arrowLeft)}
+                        </span>
+                        Previous
+                      </span>
+                      <span class="text-foreground text-sm font-medium">
+                        {d.prevPage.text}
+                      </span>
+                    </a>
+                  ) : (
+                    <span class="hidden sm:block"></span>
+                  )}
+                  {d.nextPage && (
+                    <a
+                      class="group border-muted bg-background hover:border-primary/40 flex flex-col items-end gap-1 rounded-xl border p-4 text-right transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-[0_4px_16px_-8px_rgb(0_0_0/0.12)]"
+                      data-href={d.nextPage.link}
+                      onClick="navigateTo"
+                    >
+                      <span class="text-muted-foreground flex items-center gap-1 font-mono text-[10px] font-medium tracking-[0.12em] uppercase">
+                        Mvc
+                        <span class="size-3 transition-transform duration-200 group-hover:translate-x-0.5 [&>svg]:size-full">
+                          {raw(defaultIcons.arrowRight)}
+                        </span>
+                      </span>
+                      <span class="text-foreground text-sm font-medium">
+                        {d.nextPage.text}
+                      </span>
+                    </a>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Footer */}
+          <footer class="border-muted/70 text-muted-foreground mt-16 flex flex-wrap items-center justify-between gap-2 border-t pt-5 pb-10 text-xs">
+            <span>
+              © {d.year} {d.siteTitle}
+            </span>
+            <span class="font-mono">
+              Built with <span class="text-primary">@lark.js/docs</span>
+            </span>
+          </footer>
+        </main>
+
+        {/* TOC (right rail) */}
+        <aside class="hidden xl:block">
+          <div class="sidebar-scroll sticky top-14 max-h-[calc(100vh-3.5rem)] overflow-y-auto py-10">
+            <div v-lark="theme/toc"></div>
+          </div>
+        </aside>
+      </div>
+    </div>
+
+    {/* Mobile navigation drawer */}
+    <div
+      id="docs-drawer"
+      class={[
+        !d.drawerOpen && "pointer-events-none",
+        "fixed inset-0 z-50 lg:hidden",
+      ]}
+      aria-hidden={d.drawerOpen ? "false" : "true"}
+    >
+      <div
+        class={[
+          d.drawerOpen ? "opacity-100" : "opacity-0",
+          "bg-foreground/25 absolute inset-0 backdrop-blur-[2px] transition-opacity duration-300 dark:bg-black/50",
+        ]}
+        onClick="closeDrawer"
+      ></div>
+      <div
+        id="docs-drawer-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Navigation menu"
+        class={[
+          d.drawerOpen ? "translate-x-0" : "-translate-x-full",
+          "border-muted bg-background absolute inset-y-0 left-0 flex w-72 flex-col border-r shadow-xl transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]",
+        ]}
+      >
+        <div class="border-muted/70 flex h-14 shrink-0 items-center justify-between border-b px-4">
+          <a class="flex items-center gap-2" onClick="navigateHomeDrawer">
+            <span class="text-primary [&>svg]:size-5">{raw(d.clockIcon)}</span>
+            <span class="font-display text-sm font-semibold tracking-tight">
+              {d.siteTitle}
+            </span>
+          </a>
+          <button
+            class="hover:bg-accent/60 text-muted-foreground hover:text-foreground grid size-8 place-items-center rounded-md transition-colors duration-200"
+            onClick="closeDrawer"
+            aria-label="Close navigation menu"
+          >
+            <span class="size-4.5 [&>svg]:size-full">
+              {raw(defaultIcons.x)}
+            </span>
+          </button>
+        </div>
+        <div class="sidebar-scroll min-h-0 flex-1 overflow-y-auto px-3 py-6">
+          <div v-lark="theme/sidebar"></div>
+        </div>
+      </div>
+    </div>
+
+    {/* Search dialog */}
+    {d.searchEnabled && <div v-lark="theme/search"></div>}
+  </div>
+));
 
 // ============================================================
 // Runtime Zod schemas for State-injected values.
@@ -219,11 +539,10 @@ function replayPageIn(): void {
   article.classList.add("animate-page-in");
 }
 
-export function createDocsLayoutView(template: ViewTemplate): ViewSetup {
+export function createDocsLayoutView(): ViewSetup {
   return defineView((ctx) => {
     const clockIcon = clockIcons[new Date().getHours() % 12] ?? clockIcons[0];
     ctx.updater.set({
-      icons: defaultIcons,
       clockIcon,
       year: new Date().getFullYear(),
       loading: true,

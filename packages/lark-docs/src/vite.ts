@@ -25,9 +25,9 @@
  *
  * A single plugin that handles BOTH:
  * 1. .md file compilation (frontmatter, markdown-it, Shiki)
- * 2. .html template compilation (lark-mvc template engine)
+ * 2. lark-mvc integration (automatic JSX runtime defaults + view HMR)
  *
- * Consumers only need this one plugin — no separate larkMvcPlugin7() required.
+ * Consumers only need this one plugin — no separate larkMvcPlugin() required.
  *
  * Usage:
  * ```ts
@@ -65,11 +65,12 @@ export interface LarkDocsVitePluginOptions {
 const MD_SUFFIX = "?lark-docs";
 
 /**
- * Create a Vite plugin array that handles both .md and .html compilation.
+ * Create a Vite plugin array that handles .md compilation plus the lark-mvc
+ * integration.
  *
- * Returns an array of two plugins:
+ * Returns an array of plugins:
  * 1. lark-docs: compiles .md files to JS modules
- * 2. lark-template (from @lark.js/mvc): compiles .html templates
+ * 2. lark-mvc (from @lark.js/mvc): JSX runtime defaults + view HMR
  */
 export function larkDocsPlugin(options: LarkDocsVitePluginOptions): Plugin[] {
   const { config } = options;
@@ -192,7 +193,7 @@ export function larkDocsPlugin(options: LarkDocsVitePluginOptions): Plugin[] {
     },
   };
 
-  // The lark-mvc template plugin handles .html template compilation.
+  // The lark-mvc plugin supplies automatic-JSX esbuild defaults and view HMR.
   // We integrate it internally so consumers don't need to configure it separately.
   const plugin = larkMvcPlugin();
 

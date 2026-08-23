@@ -21,12 +21,8 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { hotSwapView, hotSwapByTemplate, hotSwapByView } from "../src/hmr";
-import {
-  injectTemplateHmrSnippet,
-  injectViewHmrSnippet,
-  importsHtmlTemplate,
-} from "../src/hmr-inject";
+import { hotSwapView, hotSwapByView } from "../src/hmr";
+import { injectViewHmrSnippet, isLarkViewSource } from "../src/hmr-inject";
 import { defineView } from "../src/view";
 import { Frame, createFrame, registerViewClass, invalidateViewClass } from "../src/frame";
 import { getViewClassRegistry } from "../src/view-registry";
@@ -111,48 +107,6 @@ describe("HMR", () => {
   });
 
   // ============================================================
-  // hotSwapByTemplate
-  // ============================================================
-  describe("hotSwapByTemplate", () => {
-    it("updates template on all views using the old template", async () => {
-      const oldTpl = makeTemplate("old");
-      const newTpl = makeTemplate("new");
-      const frame = createTestFrame("template-swap");
-      registerViewClass(
-        "test/tpl",
-        defineView(() => ({ template: oldTpl })),
-      );
-      frame.mountView("test/tpl");
-      await flushMicrotasks();
-
-      frame.view!.updater.set({ count: 77 }).digest();
-      hotSwapByTemplate(oldTpl, newTpl);
-
-      expect(frame.view!.updater.get<number>("count")).toBe(77);
-      expect(document.getElementById("template-swap")!.querySelector(".new")).not.toBeNull();
-      cleanupFrame(frame);
-    });
-
-    it("does nothing when oldTemplate === newTemplate", async () => {
-      const tpl = makeTemplate("same");
-      const frame = createTestFrame("template-same");
-      registerViewClass(
-        "test/same",
-        defineView((ctx) => {
-          ctx.updater.set({ count: 5 });
-          return { template: tpl };
-        }),
-      );
-      frame.mountView("test/same");
-      await flushMicrotasks();
-
-      hotSwapByTemplate(tpl, tpl);
-      expect(frame.view!.updater.get<number>("count")).toBe(5);
-      cleanupFrame(frame);
-    });
-  });
-
-  // ============================================================
   // hotSwapByView
   // ============================================================
   describe("hotSwapByView", () => {
@@ -192,47 +146,78 @@ describe("HMR", () => {
   // hmr-inject — snippet generation
   // ============================================================
   describe("hmr-inject", () => {
-    it("injects Vite template HMR with import.meta.hot", () => {
-      const result = injectTemplateHmrSnippet("export default function() {}", "vite");
-      expect(result).toContain("import.meta.hot");
-      expect(result).toContain("hotSwapByTemplate");
-      expect(result).toContain("__lark_template__");
+    it("detects view module sources via defineView", () => {
+      expect(isLarkViewSource("export default defineView(() => ({}));")).toBe(true);
+      expect(isLarkViewSource('import { x } from "./y";\nconst a = 1;')).toBe(false);
     });
 
-    it("injects webpack template HMR with import.meta.webpackHot", () => {
-      const result = injectTemplateHmrSnippet("export default function() {}", "webpack");
-      expect(result).toContain("import.meta.webpackHot");
-      expect(result).toContain("hotSwapByTemplate");
-    });
-
-    it("injects rspack template HMR with import.meta.webpackHot", () => {
-      const result = injectTemplateHmrSnippet("export default function() {}", "rspack");
-      expect(result).toContain("import.meta.webpackHot");
-      expect(result).not.toContain("import.meta.hot");
-    });
-
-    it("detects .html import", () => {
-      expect(importsHtmlTemplate('import t from "./x.html"')).toBe(true);
-      expect(importsHtmlTemplate('import V from "../view"')).toBe(false);
-    });
-
-    it("wraps export default and injects view HMR for .ts importing .html", () => {
-      const src = `import template from "./home.html";\nexport default defineView(() => ({}));`;
+    it("wraps export default and injects view HMR for a defineView module", () => {
+      const src = `import { defineView } from "@lark.js/mvc";\nexport default defineView(() => ({}));`;
       const result = injectViewHmrSnippet(src, "vite");
       expect(result).toContain("const __lark_view__ =");
       expect(result).toContain("import.meta.hot");
       expect(result).toContain("hotSwapByView");
     });
 
-    it("returns source unchanged when no .html import", () => {
-      const src = "export default defineView(() => ({}));";
+    it("injects view HMR into TSX view sources", () => {
+      const src = [
+        `import { defineView, jsxTemplate } from "@lark.js/mvc";`,
+        `const template = jsxTemplate(() => <div class="x">hi</div>);`,
+        `export default defineView(() => ({ template }));`,
+      ].join("\n");
+      const result = injectViewHmrSnippet(src, "vite");
+      expect(result).toContain("const __lark_view__ = defineView(() => ({ template }))");
+      expect(result).toContain("hotSwapByView");
+    });
+
+    it("returns source unchanged when there is no defineView call", () => {
+      const src = "export default { not: 'a view' };";
       expect(injectViewHmrSnippet(src, "vite")).toBe(src);
     });
 
-    it("uses import.meta.webpackHot for webpack", () => {
-      const src = `import template from "./home.html";\nexport default defineView(() => ({}));`;
-      const result = injectViewHmrSnippet(src, "webpack");
-      expect(result).toContain("import.meta.webpackHot");
+    it("returns source unchanged when there is no export default", () => {
+      const src = "export const v = defineView(() => ({}));";
+      expect(injectViewHmrSnippet(src, "vite")).toBe(src);
+    });
+
+    it("uses import.meta.webpackHot for webpack and rspack", () => {
+      const src = "export default defineView(() => ({}));";
+      const webpack = injectViewHmrSnippet(src, "webpack");
+      expect(webpack).toContain("import.meta.webpackHot");
+      expect(webpack).not.toContain("import.meta.hot.accept");
+      const rspack = injectViewHmrSnippet(src, "rspack");
+      expect(rspack).toContain("import.meta.webpackHot");
+    });
+
+    it("keeps `as`-cast default exports syntactically intact", () => {
+      const src = "export default defineView(() => ({})) as unknown;";
+      const result = injectViewHmrSnippet(src, "vite");
+      expect(result).toContain("const __lark_view__ = defineView(() => ({})) as unknown;");
+      expect(result).toContain("export default __lark_view__;");
+      expect(result).not.toMatch(/__lark_view__;\s*as /);
+    });
+
+    it("injects despite apostrophes in JSX text", () => {
+      const src = [
+        `const template = jsxTemplate(() => <p>It's here — don't worry</p>);`,
+        `export default defineView(() => ({ template }));`,
+      ].join("\n");
+      const result = injectViewHmrSnippet(src, "vite");
+      expect(result).toContain("const __lark_view__ = defineView(() => ({ template }));");
+      expect(result).toContain("hotSwapByView");
+    });
+
+    it("is idempotent — re-running the transform is a no-op", () => {
+      const src = "export default defineView(() => ({}));";
+      const once = injectViewHmrSnippet(src, "vite");
+      expect(injectViewHmrSnippet(once, "vite")).toBe(once);
+    });
+
+    it("skips export default inside comments", () => {
+      const src = ["// export default defineView(old);", "const v = defineView(() => ({}));"].join(
+        "\n",
+      );
+      expect(injectViewHmrSnippet(src, "vite")).toBe(src);
     });
   });
 });

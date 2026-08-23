@@ -21,54 +21,6 @@
  */
 
 /// <reference types="vite/client" />
-// HTML template module declarations
-// Lark's Vite/Webpack/Rspack plugin compiles .html files into template
-// functions at build time. The default export is a function, not a string.
-
-declare module "*.html" {
-  import type { ViewTemplate } from "@lark.js/mvc";
-
-  const template: ViewTemplate;
-  export default template;
-}
-
-/**
- * Type declarations for theme template virtual modules.
- *
- * These modules are resolved at build time by the themeTemplates Vite plugin
- * (see vite.config.ts). Each virtual module reads the corresponding .html
- * file from src/theme/ and compiles it via compileTemplate().
- */
-
-declare module "virtual:lark-docs/docs-layout" {
-  import type { ViewTemplate } from "@lark.js/mvc";
-  const template: ViewTemplate;
-  export default template;
-}
-
-declare module "virtual:lark-docs/sidebar" {
-  import type { ViewTemplate } from "@lark.js/mvc";
-  const template: ViewTemplate;
-  export default template;
-}
-
-declare module "virtual:lark-docs/toc" {
-  import type { ViewTemplate } from "@lark.js/mvc";
-  const template: ViewTemplate;
-  export default template;
-}
-
-declare module "virtual:lark-docs/search" {
-  import type { ViewTemplate } from "@lark.js/mvc";
-  const template: ViewTemplate;
-  export default template;
-}
-
-declare module "virtual:lark-docs/theme-toggle" {
-  import type { ViewTemplate } from "@lark.js/mvc";
-  const template: ViewTemplate;
-  export default template;
-}
 
 declare module "@lark-docs/generated" {
   import type { DocsConfig, PageData } from "@lark.js/docs";

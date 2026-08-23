@@ -11,8 +11,7 @@
  * that snapshots, recomputes and reports whether anything changed, wired into
  * `ctx.renderMethod` so every framework-driven render refreshes it.
  */
-import { defineView } from "@lark.js/mvc";
-import template from "./user-card.html";
+import { defineView, jsxTemplate } from "@lark.js/mvc";
 import styles from "./user-card.module.css";
 
 export interface User {
@@ -25,6 +24,46 @@ export interface UserCardProps {
   user: User;
   tags: string[];
 }
+
+interface UserCardData {
+  user: User;
+  initials: string;
+  tags: string[];
+}
+
+const template = jsxTemplate<UserCardData>(({ user, initials, tags }) => (
+  <wa-card class={styles["user-card"]} appearance="outlined" with-header>
+    <div slot="header" class={styles["user-card__head"]}>
+      <wa-avatar
+        class={styles["user-card__avatar"]}
+        initials={initials}
+        label={user.name}
+        shape="circle"
+      ></wa-avatar>
+      <div>
+        <div class={styles["user-card__name"]}>{user.name}</div>
+        <div class={styles["user-card__role"]}>{user.role}</div>
+      </div>
+    </div>
+
+    <wa-button
+      class={styles["user-card__email"]}
+      href={`mailto:${user.email}`}
+      variant="brand"
+      appearance="plain"
+      size="s"
+    >
+      {user.email}
+    </wa-button>
+
+    <div
+      class={styles["user-card__tags"]}
+      v-lark="components/user-card/tag-list"
+      prop:tags={tags}
+      onSelect="selectTag"
+    ></div>
+  </wa-card>
+));
 
 const FALLBACK_USER: User = {
   name: "Unknown",
@@ -51,7 +90,6 @@ export default defineView((ctx, params) => {
   ctx.updater.set({
     user: props.user ?? FALLBACK_USER,
     tags: props.tags ?? [],
-    styles,
   });
 
   const assign = (): boolean | undefined => {

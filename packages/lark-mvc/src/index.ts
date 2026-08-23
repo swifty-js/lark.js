@@ -87,5 +87,11 @@ export { useUrlState } from "./url-state";
 export { createStore, computed, bindStore } from "./store";
 export type { StoreApi } from "./store";
 
+// JSX (template adapter + helpers; jsx/jsxs live in "@lark.js/mvc/jsx-runtime")
+export { jsxTemplate } from "./jsx/template";
+export { raw, Fragment } from "./jsx/vnode";
+export type { JSXNode, VNode, RawHTML, Component } from "./jsx/vnode";
+export type { LarkEvent, JsxEventValue, LarkAttributes } from "./jsx-runtime";
+
 // Types (re-exported for consumer convenience)
 export * from "./types";

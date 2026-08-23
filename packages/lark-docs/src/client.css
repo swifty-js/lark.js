@@ -36,7 +36,7 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 /* Scan the lark-mvc theme templates + logic for utility classes. */
-@source "./theme/*.html";
+@source "./theme/*.tsx";
 @source "./theme/*.ts";
 
 /* ------------------------------------------------------------------ */

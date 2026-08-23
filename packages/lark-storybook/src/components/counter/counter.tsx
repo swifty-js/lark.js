@@ -9,8 +9,7 @@
  * data namespace with `useState` keys, so a `count` arg would overwrite the
  * live state on every control change.
  */
-import { defineView, useState } from "@lark.js/mvc";
-import template from "./counter.html";
+import { defineView, jsxTemplate, useState } from "@lark.js/mvc";
 import styles from "./counter.module.css";
 
 export interface CounterProps {
@@ -18,6 +17,50 @@ export interface CounterProps {
   step: number;
   initialCount: number;
 }
+
+interface CounterData {
+  label: string;
+  count: number;
+  step: number;
+}
+
+const template = jsxTemplate<CounterData>(({ label, count, step }) => (
+  <div class={styles["counter"]}>
+    <div class={styles["counter__label"]}>{label}</div>
+
+    <div class={styles["counter__value"]}>{count}</div>
+
+    <wa-button-group class={styles["counter__actions"]} label="Counter actions">
+      <wa-button
+        type="button"
+        variant="neutral"
+        appearance="outlined"
+        size="s"
+        onClick="decrement"
+      >
+        - {step}
+      </wa-button>
+      <wa-button
+        type="button"
+        variant="neutral"
+        appearance="plain"
+        size="s"
+        onClick="reset"
+      >
+        Reset
+      </wa-button>
+      <wa-button
+        type="button"
+        variant="brand"
+        appearance="filled"
+        size="s"
+        onClick="increment"
+      >
+        + {step}
+      </wa-button>
+    </wa-button-group>
+  </div>
+));
 
 export default defineView((ctx, params) => {
   const props = (params ?? {}) as Partial<CounterProps>;
@@ -28,7 +71,6 @@ export default defineView((ctx, params) => {
   ctx.updater.set({
     label: props.label ?? "Counter",
     step: props.step ?? 1,
-    styles,
   });
 
   // Read from updater data, never from the setup closure: `step` changes when

@@ -31,7 +31,7 @@ import {
   applyDomOps,
   applyIdUpdates,
 } from "../src/dom";
-import { encodeHTML, strSafe, encodeURIExtra, encodeQuote, LARK_VIEW } from "../src/common";
+import { encodeHTML, strSafe, LARK_VIEW } from "../src/common";
 import { Frame, createFrame } from "../src/frame";
 import type { FrameObj } from "../src/types";
 
@@ -56,13 +56,27 @@ describe("DOM Diff Engine", () => {
       expect(wrapper.firstElementChild?.tagName).toBe("P");
     });
 
-    it("parses <tr> via the table wrapper so the cell is preserved", () => {
+    it("parses <tr> via the table wrapper and unwraps to the row container", () => {
       const ref = document.createElement("div");
       const wrapper = domGetNode("<tr><td>x</td></tr>", ref);
-      // The <tr> survives somewhere under the wrapper — exact unwrap depth
-      // depends on the browser HTML parser.
-      const td = wrapper.querySelector("td");
-      expect(td?.textContent).toBe("x");
+      // The returned container's DIRECT children are the template roots.
+      expect(wrapper.firstElementChild?.tagName).toBe("TR");
+      expect(wrapper.firstElementChild?.firstElementChild?.tagName).toBe("TD");
+    });
+
+    it("parses <td> via the deeper wrapper (table>tbody>tr)", () => {
+      const ref = document.createElement("div");
+      const wrapper = domGetNode("<td>a</td><td>b</td>", ref);
+      expect(wrapper.tagName).toBe("TR");
+      expect(wrapper.children.length).toBe(2);
+      expect(wrapper.firstElementChild?.tagName).toBe("TD");
+    });
+
+    it("parses svg fragments inside an svg-namespaced container", () => {
+      const svgRef = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      const wrapper = domGetNode("<circle cx='1'></circle>", svgRef);
+      expect(wrapper.tagName.toLowerCase()).toBe("svg");
+      expect(wrapper.firstElementChild?.tagName.toLowerCase()).toBe("circle");
     });
   });
 
@@ -225,14 +239,6 @@ describe("DOM Diff Engine", () => {
       expect(strSafe(null)).toBe("");
       expect(strSafe(undefined)).toBe("");
       expect(strSafe(42)).toBe("42");
-    });
-
-    it("encodeURIExtra percent-encodes !', ()*", () => {
-      expect(encodeURIExtra("a!b'c(d)e*f")).toBe("a%21b%27c%28d%29e%2Af");
-    });
-
-    it("encodeQ escapes quotes and backslashes", () => {
-      expect(encodeQuote(`a"b'c\\d`)).toBe(`a\\"b\\'c\\\\d`);
     });
   });
 });

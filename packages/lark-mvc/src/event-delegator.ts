@@ -58,7 +58,7 @@
  * duplicate listeners, and a single `unbind` doesn't remove a listener still
  * needed by another view.
  */
-import { EVENT_METHOD_REGEXP } from "./common";
+import { EVENT_METHOD_REGEXP, VIEW_EVENT_METHOD_REGEXP } from "./common";
 import { parseUri, funcWithTry, noop } from "./utils";
 import { createCache } from "./cache";
 import type { FrameObj, AnyFunc } from "./types";
@@ -221,6 +221,46 @@ function findFrameInfo(current: HTMLElement, eventType: string): EventInfo[] {
 // ============================================================
 
 /**
+ * Fallback handler resolution for non-exact events-map keys.
+ *
+ * The fast path looks up the literal `"name<type>"` key; this scan resolves
+ * the two other documented key forms:
+ *
+ * - multi-event:  `"name<click,mousedown>"`
+ * - modifiers:    `"name<click><ctrl>"` (fires only with the modifier held)
+ *
+ * Selector/global keys (`$…`) are skipped — they are dispatched through
+ * their own paths, not via `@event` attributes.
+ */
+function findHandlerByScan(
+  events: Record<string, AnyFunc> | undefined,
+  handlerName: string,
+  eventType: string,
+  domEvent: Event,
+): AnyFunc | undefined {
+  if (!events) return undefined;
+  for (const key of Object.keys(events)) {
+    const m = key.match(VIEW_EVENT_METHOD_REGEXP);
+    if (!m || m[1]) continue; // not an events-map key, or a $selector/global form
+    if (m[2] !== handlerName) continue;
+    if (!m[3].split(",").includes(eventType)) continue;
+    if (m[4] && !modifiersHeld(m[4], domEvent)) continue;
+    return events[key];
+  }
+  return undefined;
+}
+
+/** Check that every listed keyboard modifier is held on the DOM event. */
+function modifiersHeld(modifiers: string, domEvent: Event): boolean {
+  for (const item of modifiers.split(",")) {
+    const mod = item.trim();
+    if (!mod) continue;
+    if (!Reflect.get(domEvent, mod + "Key")) return false;
+  }
+  return true;
+}
+
+/**
  * Main capture-phase handler for all delegated DOM events.
  *
  * Attached to `document.body` via `addEventListener(type, handler, true)`.
@@ -260,8 +300,6 @@ function domEventProcessor(domEvent: Event): void {
         if (view) {
           // Functional API: events are stored in ctx.getEvents() map,
           // keyed by the original "name<eventType>" format (e.g. "navigateTo<click>").
-          // Old class API used Reflect.get(view, name + SPLITTER + type) which
-          // looked up $evtObjMap on the prototype — that no longer exists.
           const eventKey = handlerName + "<" + eventType + ">";
           const events =
             typeof (view as { getEvents?: () => Record<string, AnyFunc> | undefined }).getEvents ===
@@ -272,7 +310,10 @@ function domEventProcessor(domEvent: Event): void {
                   }
                 ).getEvents()
               : undefined;
-          const fn = events?.[eventKey];
+          // Fast path: exact single-type key. Fallback: scan for multi-event
+          // ("name<click,mousedown>") and modifier ("name<click><ctrl>") keys.
+          const fn =
+            events?.[eventKey] ?? findHandlerByScan(events, handlerName, eventType, domEvent);
           if (fn) {
             // Attach event metadata
             const extendedEvent = domEvent as Event & {

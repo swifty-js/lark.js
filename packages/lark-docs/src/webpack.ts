@@ -25,7 +25,7 @@
  *
  * The loader transforms .md files into JS modules exporting `pageData` and
  * `contentHtml`. The plugin auto-registers the loader rule for .md files.
- * Note that .html templates are NOT handled here — configure the
+ * Note that view HMR is NOT handled here — configure the
  * @lark.js/mvc webpack integration separately for those.
  *
  * Usage:

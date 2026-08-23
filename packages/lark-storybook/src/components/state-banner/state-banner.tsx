@@ -6,9 +6,42 @@
  * `State.digest()`, and the framework dispatcher walks the frame tree down to
  * this view and re-renders it.
  */
-import { defineView, State } from "@lark.js/mvc";
-import template from "./state-banner.html";
+import { defineView, jsxTemplate, State } from "@lark.js/mvc";
 import styles from "./state-banner.module.css";
+
+interface StateBannerData {
+  theme: string;
+  message: string;
+  waVariant: string;
+  waAppearance: string;
+}
+
+const template = jsxTemplate<StateBannerData>(
+  ({ theme, message, waVariant, waAppearance }) => (
+    <wa-callout
+      class={styles["state-banner"]}
+      variant={waVariant}
+      appearance={waAppearance}
+      size="m"
+    >
+      <div class={styles["state-banner__row"]}>
+        <wa-badge variant="neutral" appearance="outlined">
+          sbTheme
+        </wa-badge>
+        <span class={styles["state-banner__value"]}>{theme}</span>
+      </div>
+      <div class={styles["state-banner__row"]}>
+        <wa-badge variant="neutral" appearance="outlined">
+          sbMessage
+        </wa-badge>
+        <span class={styles["state-banner__value"]}>{message}</span>
+      </div>
+      <p class={styles["state-banner__hint"]}>
+        Rendered from the State singleton via ctx.observeState()
+      </p>
+    </wa-callout>
+  ),
+);
 
 /** State keys this view observes. Namespaced to avoid clashes across stories. */
 export const STATE_KEYS = "sbTheme,sbMessage";
@@ -31,7 +64,6 @@ export default defineView((ctx) => {
     return ctx.updater.altered();
   };
 
-  ctx.updater.set({ styles });
   assign();
 
   ctx.renderMethod = () => {

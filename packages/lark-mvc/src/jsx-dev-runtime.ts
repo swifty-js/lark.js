@@ -21,15 +21,35 @@
  */
 
 /**
- * Compiler barrel export — re-exports the public compile-time API.
+ * JSX automatic DEV runtime for `@lark.js/mvc`.
  *
- * - `compileTemplate(source, options?)` — Compile a `.html` template string
- *   into an ES module exporting a render function `(data, viewId, refData) => string`.
- * - `extractGlobalVars(source)` — AST-based extraction of template data variables
- *   (used for zero-config variable auto-detection).
- *
- * These functions run at **build time** (Node.js) via the Vite / Webpack /
- * Rspack plugins — they are NOT part of the browser runtime bundle.
+ * Bundlers import `jsxDEV` from `<jsxImportSource>/jsx-dev-runtime` in
+ * development mode (e.g. Vite dev server, vitest). The extra debug arguments
+ * (`isStaticChildren`, `source`, `self`) are accepted and ignored — the
+ * produced VNode is identical to the production runtime's.
  */
-export { compileTemplate } from "./compiler/compile-template";
-export { extractGlobalVars } from "./compiler/extract-global-vars";
+
+import { createVNode, type Component, type VNode } from "./jsx/vnode";
+
+export * from "./jsx-runtime";
+
+/**
+ * Create a JSX element (dev-runtime entry).
+ *
+ * @param type - Tag name, functional component, or `Fragment`
+ * @param props - Props object (children under `props.children`)
+ * @param key - The JSX `key` (third argument per automatic-runtime convention)
+ * @param _isStaticChildren - Debug info (ignored)
+ * @param _source - Debug source location (ignored)
+ * @param _self - Debug `this` reference (ignored)
+ */
+export function jsxDEV(
+  type: string | Component | symbol,
+  props: Record<string, unknown> | null | undefined,
+  key?: unknown,
+  _isStaticChildren?: boolean,
+  _source?: unknown,
+  _self?: unknown,
+): VNode {
+  return createVNode(type, props, key);
+}

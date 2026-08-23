@@ -21,16 +21,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import {
-  encodeHTML,
-  strSafe,
-  encodeURIExtra,
-  encodeQuote,
-  refFn,
-  isRefToken,
-  nextCounter,
-  SPLITTER,
-} from "../src/common";
+import { encodeHTML, strSafe, refFn, isRefToken, nextCounter, SPLITTER } from "../src/common";
 
 describe("common", () => {
   describe("encodeHTML", () => {
@@ -96,57 +87,6 @@ describe("common", () => {
     });
     it("converts object to string via toString", () => {
       expect(strSafe({ toString: () => "custom" })).toBe("custom");
-    });
-  });
-
-  describe("encodeURIExtra", () => {
-    it("encodes ! to %21", () => {
-      expect(encodeURIExtra("!")).toBe("%21");
-    });
-    it("encodes ' to %27", () => {
-      expect(encodeURIExtra("'")).toBe("%27");
-    });
-    it("encodes ( to %28", () => {
-      expect(encodeURIExtra("(")).toBe("%28");
-    });
-    it("encodes ) to %29", () => {
-      expect(encodeURIExtra(")")).toBe("%29");
-    });
-    it("encodes * to %2A", () => {
-      expect(encodeURIExtra("*")).toBe("%2A");
-    });
-    it("encodes all special chars together", () => {
-      expect(encodeURIExtra("a!b'c(d)e*f")).toBe("a%21b%27c%28d%29e%2Af");
-    });
-    it("handles null", () => {
-      expect(encodeURIExtra(null)).toBe("");
-    });
-    it("leaves normal text unchanged", () => {
-      expect(encodeURIExtra("hello")).toBe("hello");
-    });
-    it("encodes spaces as %20", () => {
-      expect(encodeURIExtra("a b")).toBe("a%20b");
-    });
-  });
-
-  describe("encodeQuote", () => {
-    it("escapes double quotes", () => {
-      expect(encodeQuote('a"b')).toBe('a\\"b');
-    });
-    it("escapes single quotes", () => {
-      expect(encodeQuote("a'b")).toBe("a\\'b");
-    });
-    it("escapes backslashes", () => {
-      expect(encodeQuote("a\\b")).toBe("a\\\\b");
-    });
-    it("escapes all together", () => {
-      expect(encodeQuote(`a"b'c\\d`)).toBe(`a\\"b\\'c\\\\d`);
-    });
-    it("handles null", () => {
-      expect(encodeQuote(null)).toBe("");
-    });
-    it("leaves plain text unchanged", () => {
-      expect(encodeQuote("hello")).toBe("hello");
     });
   });
 

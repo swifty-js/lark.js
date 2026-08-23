@@ -28,11 +28,11 @@
  *   attributes, and internal data structures
  * - Router event name constants
  * - Regex patterns for URL parsing and tag-name extraction
- * - Encoding helpers (`strSafe`, `encodeHTML`, `encodeURIExtra`, `encodeQuote`,
- *   `refFn`) shared by `dom.ts`, `runtime.ts`, and `updater.ts`
+ * - Encoding helpers (`strSafe`, `encodeHTML`, `refFn`) shared by `dom.ts`,
+ *   `updater.ts`, and the JSX serializer (`jsx/serialize.ts`)
  *
- * Keeping the canonical implementations here ensures all three consumers
- * share a single copy rather than duplicating ~400 bytes per module.
+ * Keeping the canonical implementations here ensures all consumers share a
+ * single copy rather than duplicating them per module.
  */
 
 /** Global counter for generating unique IDs */
@@ -135,8 +135,7 @@ const HTML_ENT_REGEXP = /[&<>"'`]/g;
 /**
  * Null-safe `String(v)` — `null` / `undefined` become `""`.
  *
- * Used by the `{{!raw}}` template operator and as the base for `encodeHTML` /
- * `encodeURIExtra` / `encodeQuote`.
+ * Used by the JSX `raw()` output path and as the base for `encodeHTML`.
  */
 export function strSafe(v: unknown): string {
   return String(v == null ? "" : v);
@@ -146,45 +145,13 @@ export function strSafe(v: unknown): string {
  * HTML-escape a value for safe embedding in markup.
  *
  * Encodes `& < > " ' \`` to HTML entities (`&amp;`, `&lt;`, etc.).
- * Applied to all `{{=escaped}}` and `{{:binding}}` template outputs.
+ * Applied to all JSX text children and attribute values.
  */
 export function encodeHTML(v: unknown): string {
   return String(v == null ? "" : v).replace(
     HTML_ENT_REGEXP,
     (m: string) => "&" + HTML_ENT_MAP[m] + ";",
   );
-}
-
-const URI_ENT_MAP: Record<string, string> = {
-  "!": "%21",
-  "'": "%27",
-  "(": "%28",
-  ")": "%29",
-  "*": "%2A",
-};
-
-const URI_ENT_REGEXP = /[!')(*]/g;
-
-/**
- * URI-encode a value with extra character escaping.
- *
- * Extends `encodeURIComponent` with encoding of `! ' ( ) *` for stricter URI
- * compliance. Applied to values in `@event` URL parameters.
- */
-export function encodeURIExtra(v: unknown): string {
-  return encodeURIComponent(strSafe(v)).replace(URI_ENT_REGEXP, (m: string) => URI_ENT_MAP[m]);
-}
-
-const QUOTE_ENT_REGEXP = /['"\\]/g;
-
-/**
- * Backslash-escape quotes and backslashes for attribute string contents.
- *
- * Used for safe embedding in single- or double-quoted HTML attribute values
- * (e.g. `data-json='...'`).
- */
-export function encodeQuote(v: unknown): string {
-  return strSafe(v).replace(QUOTE_ENT_REGEXP, "\\$&");
 }
 
 /**
@@ -204,8 +171,8 @@ export function refFn(ref: Record<string, unknown>, value: unknown, key: string)
 
 /**
  * Check if a string is a refData reference token: SPLITTER followed by
- * one or more ASCII decimal digits. Used by utils.ts translateData and
- * updater.ts translate.
+ * one or more ASCII decimal digits. Used by updater.ts translate and the
+ * JSX template layer's refData sweep.
  */
 export function isRefToken(s: string): boolean {
   if (s.length < 2 || s[0] !== SPLITTER) return false;

@@ -52,7 +52,6 @@ function createMockView(): ViewCtx {
     altered: vi.fn(),
     refData: {},
     translate: vi.fn(),
-    parse: vi.fn(),
     forceDigest: vi.fn(),
     getChangedKeys: vi.fn().mockReturnValue(new Set()),
   };

@@ -133,29 +133,6 @@ describe("Updater", () => {
     expect(updater.translate(SPLITTER)).toBe(SPLITTER);
   });
 
-  it("parse - resolves dotted property paths against refData", () => {
-    const updater = createUpdater("viewId1");
-    updater.refData["user"] = { profile: { name: "alice" } };
-
-    expect(updater.parse("user.profile.name")).toBe("alice");
-    expect(updater.parse("user.profile")).toEqual({ name: "alice" });
-    expect(updater.parse("missing")).toBeUndefined();
-  });
-
-  it("parse - returns numbers for numeric literals", () => {
-    const updater = createUpdater("viewId1");
-    expect(updater.parse("42")).toBe(42);
-    expect(updater.parse("-1.5")).toBe(-1.5);
-  });
-
-  it("parse - rejects arbitrary expressions (no eval)", () => {
-    const updater = createUpdater("viewId1");
-    // Anything that isn't a numeric literal or a dotted path is rejected
-    expect(updater.parse("1 + 2")).toBeUndefined();
-    expect(updater.parse("alert(1)")).toBeUndefined();
-    expect(updater.parse("a[b]")).toBeUndefined();
-  });
-
   it("getChangedKeys - initially empty", () => {
     const updater = createUpdater("viewId1");
     const keys = updater.getChangedKeys();

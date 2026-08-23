@@ -4,15 +4,15 @@ A lightweight TypeScript Mvc frontend framework for single-page applications and
 
 ## Overview
 
-lark-mvc is a functional-first framework that provides a complete application architecture with zero runtime dependencies. It features a real-DOM diff engine, compile-time template transformation, two-phase route confirmation, zustand-aligned state management, and built-in HMR support across Vite, Webpack, and Rspack.
+lark-mvc is a functional-first framework that provides a complete application architecture with zero dependencies. Views are written with React-style JSX (automatic runtime, `jsxImportSource: "@lark.js/mvc"`), rendered through a real-DOM diff engine. It features two-phase route confirmation, zustand-aligned state management, and built-in state-preserving HMR across Vite, Webpack, and Rspack.
 
 Design principles:
 
 - Functional API: no class, no this, no prototype, no mixin
-- Zero runtime dependencies (Babel is build-time only)
-- Real DOM diff via innerHTML plus keyed comparison
+- Zero dependencies
+- React-style JSX templates — real JS scoping, inline event closures, type checking
+- Real DOM diff via innerHTML plus keyed comparison (no virtual DOM)
 - Module Federation support for micro-frontends
-- Compile-time template compilation with zero-config variable extraction
 
 ## Architecture
 
@@ -63,9 +63,26 @@ yarn add @lark.js/mvc
 
 - Vite 8+ (optional, for the Vite plugin)
 
+### TypeScript setup
+
+Enable the automatic JSX runtime in `tsconfig.json`:
+
+```jsonc
+{
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "@lark.js/mvc",
+  },
+}
+```
+
 ### Bundler plugin
 
-Install the bundler plugin matching your build tool:
+Install the bundler plugin matching your build tool. The Vite plugin also
+defaults `esbuild.jsx = "automatic"` + `esbuild.jsxImportSource = "@lark.js/mvc"`
+for you; with Webpack/Rspack the JSX transform comes from your existing
+TS/SWC/Babel loader reading the tsconfig above. All three plugins auto-inject
+state-preserving view HMR (no `import.meta.hot` boilerplate needed).
 
 ```ts
 // vite.config.ts
@@ -96,12 +113,21 @@ export default {
 
 ## Quick Start
 
-### 1. Define a view
+### 1. Define a view (JSX)
 
-```ts
-// src/views/home.ts
-import { defineView, useState } from "@lark.js/mvc";
-import template from "./home.html";
+```tsx
+// src/views/home.tsx
+import { defineView, jsxTemplate, useState } from "@lark.js/mvc";
+
+type Data = { count: number };
+
+const template = jsxTemplate<Data>(({ count }) => (
+  <div class="home">
+    <h1>Welcome to Lark Mvc</h1>
+    <p>Count: {count}</p>
+    <button onClick="increment">Increment</button>
+  </div>
+));
 
 export default defineView((ctx, params) => {
   const [getCount, setCount] = useState("count", 0);
@@ -117,18 +143,7 @@ export default defineView((ctx, params) => {
 });
 ```
 
-### 2. Write a template
-
-```html
-<!-- src/views/home.html -->
-<div class="home">
-  <h1>Welcome to Lark Mvc</h1>
-  <p>Count: {{=count}}</p>
-  <button @click="increment()">Increment</button>
-</div>
-```
-
-### 3. Boot the framework
+### 2. Boot the framework
 
 ```ts
 // src/main.ts
@@ -145,7 +160,7 @@ Framework.boot({
 });
 ```
 
-### 4. HTML entry point
+### 3. HTML entry point
 
 ```html
 <!doctype html>
@@ -166,9 +181,12 @@ Framework.boot({
 
 A view is defined via `defineView()`. The setup function runs once on mount, receives a `ViewCtx`, and returns `{ template, events, assign? }`.
 
-```ts
-import { defineView, useState, useEffect } from "@lark.js/mvc";
-import template from "./my-view.html";
+```tsx
+import { defineView, jsxTemplate, useState, useEffect } from "@lark.js/mvc";
+
+const template = jsxTemplate<{ greeting: string }>(({ greeting }) => (
+  <p onClick="greet">{greeting}</p>
+));
 
 export default defineView((ctx, params) => {
   // View-local state
@@ -319,44 +337,52 @@ root.unmountFrame("child-id");
 
 #### Embedded Views (v-lark)
 
-Child views are embedded in templates via the `v-lark` attribute:
+Child views are embedded by putting a `v-lark` attribute on a JSX element:
 
-```html
+```tsx
 <div v-lark="src/views/detail"></div>
 ```
 
-The compiler encodes the view path. At render time, `mountZone` scans for `v-lark` elements and calls `mountFrame` for each one.
+At render time, `mountZone` scans for `v-lark` elements and calls `mountFrame` for each one.
 
 #### Component Props & Events
 
-Pass data to child views with `*prop` and bind child-to-parent events with `@event`:
+Pass data to child views with `prop:` attributes and bind child-to-parent events with string-valued `onXxx` props:
 
-```html
-<div
-  v-lark="components/counter-updater"
-  *count="{{=count}}"
-  *step="{{=step}}"
-  *history="{{@history}}"
-  @increment="increment"
-  @decrement="decrement"
-  @clearHistory="clearHistory"
-></div>
+```tsx
+const template = jsxTemplate<{ count: number; step: number; history: number[] }>((d) => (
+  <div
+    id="counter-updater"
+    v-lark="components/counter-updater"
+    prop:count={d.count}
+    prop:step={d.step}
+    prop:history={d.history}
+    onIncrement="increment"
+    onDecrement="decrement"
+    onClearHistory="clearHistory"
+  ></div>
+));
 ```
 
-| Syntax                 | Description                                        |
-| ---------------------- | -------------------------------------------------- |
-| `*prop="{{=expr}}"`    | Pass string value (HTML-escaped)                   |
-| `*prop="{{@expr}}"`    | Pass object/array reference (resolved via refData) |
-| `@event="handlerName"` | Bind child event to parent handler                 |
+| Syntax                   | Description                                                             |
+| ------------------------ | ----------------------------------------------------------------------- |
+| `prop:name={primitive}`  | Pass string/number/boolean (HTML-escaped, child receives a string)      |
+| `prop:name={objectOrFn}` | Pass object/array/function by live reference (refData token)            |
+| `onEvent="handlerName"`  | Bind child custom event to a parent handler (string value → `e-lark-*`) |
+| `onEvent={fn}`           | On a `v-lark` element this stays a **DOM** event on the host element    |
 
 **Props flow:** Parent `updater.set().digest()` → template re-renders → `p-lark-*` attributes update → `mountZone` reads and pushes to `childView.updater.set(props).digest()` → child re-renders.
 
 **Events flow:** Child calls `ctx.owner.fire("eventName", data?)` → parent handler found by prefix-matching in events map → handler called with data.
 
-Event matching is case-insensitive (emitter lowercases event keys, so `fire("clearHistory")` matches `on("clearhistory")` from HTML-lowercased attribute names).
+Event matching is case-insensitive (emitter lowercases event keys, so `fire("clearHistory")` matches the HTML-lowercased `e-lark-clearhistory` binding). Child **custom** events support string handler names only — inline functions on a `v-lark` element bind a DOM event on the host element instead, because per-render generated names cannot be captured by the one-time `mountZone` wiring.
 
-```ts
+```tsx
 // Child view
+const template = jsxTemplate<{ count: number }>(({ count }) => (
+  <button onClick="bump">count: {count}</button>
+));
+
 export default defineView((ctx, params) => {
   const p = (params || {}) as Record<string, unknown>;
   ctx.updater.digest({
@@ -367,8 +393,7 @@ export default defineView((ctx, params) => {
   return {
     template,
     events: {
-      "increment<click>": () => ctx.owner.fire("increment"),
-      "clearHistory<click>": () => ctx.owner.fire("clearHistory"),
+      "bump<click>": () => ctx.owner.fire("increment"),
     },
   };
 });
@@ -767,80 +792,79 @@ const [state, setState] = useUrlState(ctx, { page: "1", size: "20" });
 // setState({ page: "2" }) updates URL via Router.to()
 ```
 
-### Template System
+### JSX Template System
 
-Templates are `.html` files compiled at build time into JavaScript render functions.
+Templates are written in JSX/TSX. `jsxTemplate(renderFn)` adapts a
+`(data) => JSX` function into the framework's template contract; at every
+digest the JSX tree is serialized to an HTML string and applied through the
+real-DOM keyed diff. There is no template compiler — JSX is plain JavaScript
+with real scoping, so conditionals, loops, and formatting are ordinary code.
 
-#### Output Operators
+```tsx
+import { defineView, jsxTemplate, raw } from "@lark.js/mvc";
 
-| Syntax      | Description                                            |
-| ----------- | ------------------------------------------------------ |
-| `{{=expr}}` | HTML-escaped output (safe for embedding in markup)     |
-| `{{:expr}}` | Two-way binding (same as = for rendering)              |
-| `{{!expr}}` | Raw output (no HTML escaping, use with caution)        |
-| `{{@expr}}` | Reference lookup for passing JS objects to child views |
+type Data = { user: { isAdmin: boolean }; items: { id: number; name: string }[]; md: string };
 
-#### Control Flow
-
-```html
-{{if user.isAdmin}}
-<div class="admin-panel">Welcome, admin</div>
-{{else if user.isEditor}}
-<div class="editor-panel">Welcome, editor</div>
-{{else}}
-<div class="user-panel">Welcome, user</div>
-{{/if}}
+const template = jsxTemplate<Data>(({ user, items, md }) => (
+  <>
+    {user.isAdmin ? <div class="admin-panel">Welcome, admin</div> : <div>Welcome</div>}
+    <ul>
+      {items.map((item) => (
+        <li key={`item-${item.id}`}>{item.name}</li>
+      ))}
+    </ul>
+    <article>{raw(md)}</article>
+  </>
+));
 ```
 
-#### Loops
+#### Output semantics
 
-```html
-<!-- forOf: array iteration -->
-{{forOf items as item index}}
-<div class="item" id="item-{{=index}}">{{=index}}: {{=item.name}}</div>
-{{/forOf}}
+| JSX                      | Behavior                                                            |
+| ------------------------ | ------------------------------------------------------------------- |
+| `{expr}` (string/number) | HTML-escaped text (`0` renders; `boolean/null/undefined` render "") |
+| `{raw(html)}`            | Trusted raw HTML, no escaping — never pass untrusted input          |
+| `{cond && <div/>}`       | Conditional rendering (falsy values are dropped)                    |
+| `{list.map(...)}`        | List rendering (arrays are flattened)                               |
+| `<>...</>` (Fragment)    | Multiple roots without a wrapper element                            |
+| `<Row item={x} />`       | Functional component — a pure template partial, invoked at render   |
 
-<!-- forOf with first/last helpers -->
-{{forOf items as item index last first}}
-<div class="{{if first}}first{{/if}}{{if last}}last{{/if}}">{{=item.name}}</div>
-{{/forOf}}
+#### Attribute semantics
 
-<!-- forOf with destructuring -->
-{{forOf entries as {key, value} index}}
-<div>{{=key}}: {{=value}}</div>
-{{/forOf}}
+| Attribute             | Behavior                                                                 |
+| --------------------- | ------------------------------------------------------------------------ |
+| `class` / `className` | String, array (falsy entries dropped), or `{ name: boolean }` map        |
+| `style`               | String, or camelCase object (kebab-cased; no implicit `px`)              |
+| `id` / `key`          | Keyed-diff compare key; `key` emits as `id` when no explicit `id` is set |
+| `disabled={true}`     | Boolean attribute → `disabled=""`; `false`/nullish omit the attribute    |
+| `data-x={object}`     | Object/array/function values become live refData tokens                  |
+| `prop:name={value}`   | Child-view prop on `v-lark` elements (see Component Props & Events)      |
 
-<!-- forIn: object iteration -->
-{{forIn config as val key}}
-<div>{{=key}} = {{=val}}</div>
-{{/forIn}}
-
-<!-- for: generic loop -->
-{{for(let i = 0; i < count; i++)}}
-<span>{{=i}}</span>
-{{/for}}
-```
-
-#### Variable Declaration
-
-```html
-{{set formattedDate = new Date(date).toLocaleDateString()}}
-<p>Date: {{=formattedDate}}</p>
-```
+Give loop items a stable `key` (or `id`) to get keyed reordering instead of
+in-place rewrites — ids are document-global, so keep them unique.
 
 #### Event Binding
 
-```html
-<!-- Direct handler -->
-<button @click="handleClick()">Click me</button>
+Events use React-style camelCase props; the type is the lowercased remainder
+(`onClick` → `click`, `onDblclick` → `dblclick`). Two value forms:
 
-<!-- With parameters (delivered to the handler as e.params) -->
-<button @click="deleteItem({id: item.id})">Delete</button>
+```tsx
+// 1. Named handler — references the events map returned by setup
+<button onClick="save">Save</button>;
+
+// 2. Inline function — auto-registered per render; closures capture loop
+//    variables directly, no e.params round-trip needed
+{
+  items.map((item) => (
+    <button key={`del-${item.id}`} onClick={() => deleteItem(item.id)}>
+      Delete
+    </button>
+  ));
+}
 ```
 
-Each template attribute binds exactly one event type. Multi-event bindings
-and keyboard modifiers are declared on the events-map key in the view's `.ts`
-file, not in the template attribute:
+Named handlers live in the events map (`"save<click>"`). Multi-event bindings
+and keyboard modifiers are declared on the events-map key, not in JSX:
 
 ```ts
 events: {
@@ -849,24 +873,45 @@ events: {
 }
 ```
 
-#### Compilation Pipeline
+Notes:
+
+- Event types are lowercase (HTML lowercases attribute names) — a
+  `CustomEvent("myEvent")` cannot be matched; use lowercase event types.
+- Lowercase `onclick`-style props are rejected (native inline handlers would
+  execute attribute text as JavaScript).
+- Inline handlers are delegated like everything else — a single
+  capture-phase listener per event type on `document.body`.
+
+#### Functional components
+
+Components are pure template partials — props in, JSX out. They are invoked
+during serialization and have no lifecycle; use `v-lark` child views for
+stateful composition.
+
+```tsx
+function Badge(props: { label: string; children?: JSXNode }) {
+  return (
+    <span class="badge">
+      {props.label}: {props.children}
+    </span>
+  );
+}
+
+const template = jsxTemplate<Data>(({ count }) => <Badge label="count">{count}</Badge>);
+```
+
+#### Render pipeline
 
 ```
-.html source
+updater.digest()
     |
-protectComments()      -- preserve HTML comments
+jsxTemplate closure: renderFn(updater.data) -> VNode tree
     |
-convertArtSyntax()     -- {{}} to <% %> internal syntax
+serialize(vnode, { viewId, refData })  -- escape text/attrs, encode events,
+    |                                     tokenize object props via refFn
+inline handlers wired into the view's events map (per render)
     |
-processViewEvents()    -- @event attribute encoding
-    |
-restoreComments()      -- restore HTML comments
-    |
-extractGlobalVars()    -- AST-based variable auto-detection
-    |
-compileToFunction()    -- <% %> to JS template function
-    |
-ES module output       -- exports default __lark_template__
+HTML string -> domGetNode() -> domSetChildNodes() keyed diff -> applyDomOps()
 ```
 
 ### Updater
@@ -911,16 +956,16 @@ export default defineConfig({
 
 The Vite plugin:
 
-- Resolves `.html` imports and compiles them via `compileTemplate`
-- Auto-extracts template variables (zero-config)
-- Auto-injects HMR snippets for both template and view modules
-- Handles Vite 7 and Vite 8 compatibility
+- Defaults `esbuild.jsx = "automatic"` and `esbuild.jsxImportSource = "@lark.js/mvc"`
+  (user-provided esbuild settings always win)
+- Auto-injects state-preserving view HMR into every `defineView` module
+  (`.ts` / `.tsx` / `.js` / `.jsx`)
 
 ### Webpack Plugin + Loader
 
 ```ts
-// Plugin form (recommended) — auto-registers two rules: .html template
-// compilation and .ts/.js view-file HMR injection (enforce: "pre").
+// Plugin form (recommended) — auto-registers the view-HMR injection rule
+// (enforce: "pre", runs before ts-loader/SWC/babel).
 import { LarkMvcPlugin } from "@lark.js/mvc/webpack";
 
 export default {
@@ -934,7 +979,9 @@ export default {
   module: {
     rules: [
       {
-        test: /\.html$/,
+        test: /\.[jt]sx?$/,
+        exclude: /node_modules/,
+        enforce: "pre",
         loader: "@lark.js/mvc/webpack",
       },
     ],
@@ -942,7 +989,9 @@ export default {
 };
 ```
 
-Plugin options: `{ test? (default /\.html$/), exclude? (default /node_modules/) }`.
+Plugin options: `{ test? (default /\.[jt]sx?$/), exclude? (default /node_modules/) }`.
+Configure the JSX transform in your TS/SWC/Babel loader via tsconfig
+(`"jsx": "react-jsx"`, `"jsxImportSource": "@lark.js/mvc"`).
 
 ### Rspack Plugin + Loader
 
@@ -961,7 +1010,9 @@ export default {
   module: {
     rules: [
       {
-        test: /\.html$/,
+        test: /\.[jt]sx?$/,
+        exclude: /node_modules/,
+        enforce: "pre",
         loader: "@lark.js/mvc/rspack",
       },
     ],
@@ -973,11 +1024,10 @@ export default {
 
 HMR hot-swaps view code without a full page reload, preserving view-local state.
 
-### Two HMR Layers
-
-1. Template layer (`.html` changes): `hotSwapByTemplate(old, new)` finds every mounted view whose template matches the old reference, replaces it, and force-renders.
-
-2. View setup layer (`.ts` changes): `hotSwapByView(old, new)` updates the view-registry and runs `hotSwapView` on every matching frame.
+A view module contains both the setup function and its `jsxTemplate` closure,
+so a single swap layer covers everything: on module update,
+`hotSwapByView(old, new)` updates the view-registry and runs `hotSwapView` on
+every matching frame — template edits included.
 
 ### State Preservation
 
@@ -991,12 +1041,15 @@ HMR hot-swaps view code without a full page reload, preserving view-local state.
 6. Register new events
 7. Increment signature, fire `render`, force re-render
 
+Because setup re-runs against the preserved ctx, initialize data conditionally
+(`useState` does this for you) if it must survive a hot swap.
+
 ### Auto-Injection
 
-The bundler plugins auto-inject HMR boilerplate at compile time. Users never need to write `import.meta.hot` (Vite) or `import.meta.webpackHot` (Webpack/Rspack) themselves. The injection:
-
-- For `.html` modules: self-accepts, calls `hotSwapByTemplate(old, new)`
-- For `.ts` view modules: self-accepts, calls `hotSwapByView(old, new)`
+The bundler plugins auto-inject HMR boilerplate at compile time into every
+module whose default export is a `defineView(...)` setup. Users never need to
+write `import.meta.hot` (Vite) or `import.meta.webpackHot` (Webpack/Rspack)
+themselves.
 
 ## Micro-Frontend Support
 
@@ -1029,15 +1082,15 @@ All DOM events are delegated to `document.body` in the capture phase. The EventD
 
 ### Handler Naming Convention
 
-| Syntax                     | Meaning                                          |
-| -------------------------- | ------------------------------------------------ |
-| `handler<click>`           | Event on the view's root element                 |
-| `$selector<click>`         | Delegated to child elements matching `.selector` |
-| `$<click>`                 | Empty selector, fires only at the Frame boundary |
-| `$window<resize>`          | Delegated to `window`                            |
-| `$document<keydown>`       | Delegated to `document`                          |
-| `handler<click,mousedown>` | Multi-event binding                              |
-| `name<click><ctrl>`        | Fires only when the Ctrl modifier is held        |
+| Syntax                     | Meaning                                                                   |
+| -------------------------- | ------------------------------------------------------------------------- |
+| `handler<click>`           | Event on the view's root element                                          |
+| `$selector<click>`         | Registers the event type; dispatch still resolves via `@event` attributes |
+| `$<click>`                 | Empty selector, fires only at the Frame boundary                          |
+| `$window<resize>`          | Delegated to `window`                                                     |
+| `$document<keydown>`       | Delegated to `document`                                                   |
+| `handler<click,mousedown>` | Multi-event binding                                                       |
+| `name<click><ctrl>`        | Fires only when the Ctrl modifier is held                                 |
 
 ### Reference Counting
 
@@ -1050,6 +1103,7 @@ All DOM events are delegated to `document.body` in the capture phase. The EventD
 | Category  | Exports                                                                                     |
 | --------- | ------------------------------------------------------------------------------------------- |
 | Framework | `Framework`, `defineView`, `EventDelegator`                                                 |
+| JSX       | `jsxTemplate`, `raw`, `Fragment`, `JSXNode` / `VNode` / `Component` / `LarkEvent` (types)   |
 | State     | `State`, `createStore`, `computed`, `bindStore`, `useUrlState`                              |
 | Router    | `Router`                                                                                    |
 | View      | `defineView`, `ViewCtx`, `ViewSetup` (types)                                                |
@@ -1058,17 +1112,17 @@ All DOM events are delegated to `document.body` in the capture phase. The EventD
 | Service   | `createService`, `ServiceApi`, `ServiceInstance` (types)                                    |
 | Types     | All types from `./types` via `export *`                                                     |
 
-### Bundler Entry Points
+### Package Entry Points
 
-| Import                  | Description                                                                    |
-| ----------------------- | ------------------------------------------------------------------------------ |
-| `@lark.js/mvc`          | Main runtime API                                                               |
-| `@lark.js/mvc/vite`     | Vite plugin (`larkMvcPlugin`)                                                  |
-| `@lark.js/mvc/webpack`  | Webpack integration (`LarkMvcPlugin`, `larkMvcLoader`)                         |
-| `@lark.js/mvc/rspack`   | Rspack integration (`LarkMvcPlugin`, `larkMvcLoader`)                          |
-| `@lark.js/mvc/runtime`  | Template runtime helpers (`encHtml`, `strSafe`, `encUri`, `encQuote`, `refFn`) |
-| `@lark.js/mvc/compiler` | Build-time compiler (`compileTemplate`, `extractGlobalVars`)                   |
-| `@lark.js/mvc/client`   | Client-side type declarations (DOM augmentations, `*.html` module types)       |
+| Import                         | Description                                                         |
+| ------------------------------ | ------------------------------------------------------------------- |
+| `@lark.js/mvc`                 | Main runtime API (including `jsxTemplate`, `raw`, `Fragment`)       |
+| `@lark.js/mvc/jsx-runtime`     | JSX automatic runtime (`jsx`, `jsxs`, `Fragment`, `raw`, JSX types) |
+| `@lark.js/mvc/jsx-dev-runtime` | JSX automatic dev runtime (`jsxDEV`)                                |
+| `@lark.js/mvc/vite`            | Vite plugin (`larkMvcPlugin`)                                       |
+| `@lark.js/mvc/webpack`         | Webpack integration (`LarkMvcPlugin`, `larkMvcLoader`)              |
+| `@lark.js/mvc/rspack`          | Rspack integration (`LarkMvcPlugin`, `larkMvcLoader`)               |
+| `@lark.js/mvc/client`          | Client-side type declarations (DOM augmentations, `*.css` modules)  |
 
 ## Configuration
 
@@ -1101,11 +1155,7 @@ interface RouteViewConfig {
 ### Build
 
 ```bash
-# Build with tsup (recommended)
 pnpm build
-
-# Build with rollup (alternative)
-pnpm build:rollup
 ```
 
 ### Test
@@ -1161,16 +1211,16 @@ packages/lark-mvc/
     mark.ts               -- async callback validity tracking
     hmr.ts                -- HMR hot-swap logic
     hmr-inject.ts         -- HMR code generation for bundlers
-    runtime.ts            -- template runtime helpers
     client.d.ts           -- ambient type declarations
     vite.ts               -- Vite plugin
-    webpack.ts            -- Webpack loader
-    rspack.ts             -- Rspack loader
-    compiler.ts           -- compiler barrel export
-    compiler/
-      template-syntax.ts        -- {{}} to <% %> conversion, @event processing
-      compile-template.ts       -- main compilation pipeline
-      extract-global-vars.ts    -- AST-based variable extraction
+    webpack.ts            -- Webpack loader/plugin
+    rspack.ts             -- Rspack loader/plugin
+    jsx-runtime.ts        -- JSX automatic runtime entry (jsx/jsxs + JSX types)
+    jsx-dev-runtime.ts    -- JSX automatic dev runtime entry (jsxDEV)
+    jsx/
+      vnode.ts            -- pure VNode model (Symbol.for markers, raw())
+      serialize.ts        -- VNode -> HTML string serializer
+      template.ts         -- jsxTemplate adapter + inline-handler wiring
   tests/                  -- vitest test suite
   dist/                   -- built output
 ```
@@ -1181,7 +1231,7 @@ packages/lark-mvc/
 
 2. Real-DOM diff as default: String mode parses HTML into a temporary DOM tree and performs keyed comparison. This avoids the overhead of maintaining a virtual DOM for most use cases.
 
-3. Compile-time templates: Templates are compiled at build time into JavaScript functions. The compiler uses `@babel/parser` for AST-based variable extraction, providing zero-config template variable detection.
+3. Runtime JSX templates: JSX compiles to plain `jsx()` calls via the standard automatic runtime; the VNode tree is serialized to an HTML string per digest and applied through the keyed real-DOM diff. No template compiler, no build-time AST analysis — templates are ordinary JavaScript with real scoping.
 
 4. Two-phase routing: The Router fires a `change` event before navigation (allowing rejection) and a `changed` event after (triggering view updates). Navigation guards run asynchronously between the two phases.
 

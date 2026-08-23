@@ -56,7 +56,7 @@ function findChild(parentFrame: FrameObj): FrameObj | undefined {
 
 /**
  * Create a parent template that uses refFn to pass an object/array prop —
- * simulating what the compiled {{@value}} expression does at runtime.
+ * simulating what the JSX serializer does for object props at runtime.
  *
  * The returned template function receives (data, viewId, refData) and calls
  * refFn(refData, data[key], "") to store the value and get a SPLITTER token.
@@ -190,7 +190,7 @@ describe("v-lark Props & Events", () => {
   });
 
   // ============================================================
-  // 2. Object/Array Props (via {{@value}} → refFn)
+  // 2. Object/Array Props (via refFn tokens)
   // ============================================================
   describe("object/array props", () => {
     it("passes array reference to child", async () => {

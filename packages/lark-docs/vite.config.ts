@@ -38,7 +38,6 @@ import {
 } from "vite";
 import dts from "vite-plugin-dts";
 import { resolve } from "node:path";
-import { compileTemplate, extractGlobalVars } from "@lark.js/mvc/compiler";
 import tailwindcss from "@tailwindcss/vite";
 // !!! For your project, it should be:
 // import { larkDocsPlugin, docsGuardPlugin } from "@lark.js/docs/vite";
@@ -133,7 +132,7 @@ function copyAssetsPlugin(): Rollup.Plugin {
           // published package all utility classes live in the stable
           // theme-chunk.js produced by manualChunks.
           const css = readFileSync(src, "utf-8")
-            .replace('@source "./theme/*.html";', '@source "./theme-chunk.js";')
+            .replace('@source "./theme/*.tsx";', '@source "./theme-chunk.js";')
             .replace(/@source "\.\/theme\/\*\.ts";\n?/, "");
           writeFileSync(dest, css, "utf-8");
         } else {
@@ -144,62 +143,13 @@ function copyAssetsPlugin(): Rollup.Plugin {
   };
 }
 
-// === themeTemplates: template compilation plugin ===
-
-/**
- * Vite plugin: compiles theme .html templates into ES module virtual modules.
- *
- * Uses virtual modules (virtual:lark-docs/<name>) to avoid conflicts with
- * larkMvcPlugin which intercepts all .html imports via resolveId. Virtual
- * module IDs never end in .html, so neither larkMvcPlugin nor Vite's
- * built-in HTML asset handler can intercept them.
- *
- * Each virtual module is a standard compiled template ES module with a
- * default export (the template function).
- */
-function themeTemplates(): PluginOption {
-  const THEME_DIR = resolve(PKG_DIR, "src", "theme");
-  const VIRTUAL_PREFIX = "virtual:lark-docs/";
-  const RESOLVED_PREFIX = "\0virtual:lark-docs/";
-  const TEMPLATE_NAMES = [
-    "docs-layout",
-    "sidebar",
-    "toc",
-    "search",
-    "theme-toggle",
-  ];
-
-  return {
-    name: "theme-templates",
-    enforce: "pre",
-
-    resolveId(source: string) {
-      if (source.startsWith(VIRTUAL_PREFIX)) {
-        return "\0" + source;
-      }
-      return undefined;
-    },
-
-    async load(id: string) {
-      if (!id.startsWith(RESOLVED_PREFIX)) return null;
-      const name = id.slice(RESOLVED_PREFIX.length);
-      if (!TEMPLATE_NAMES.includes(name)) return null;
-      const filePath = resolve(THEME_DIR, name + ".html");
-      const { readFile } = await import("node:fs/promises");
-      const raw = await readFile(filePath, "utf-8");
-      const globalVars = await extractGlobalVars(raw);
-      return compileTemplate(raw, { globalVars });
-    },
-  };
-}
-
 function libConfig(): UserConfig {
   // All theme modules (the only code containing Tailwind utility classes,
-  // including docs-guard.ts and the compiled virtual template modules) are
-  // forced into a single stable chunk so Tailwind can scan exactly one
-  // file: the @source "./theme-chunk.js" baked into dist/client.css.
+  // including docs-guard.ts and the JSX theme views) are forced into a
+  // single stable chunk so Tailwind can scan exactly one file: the
+  // @source "./theme-chunk.js" baked into dist/client.css.
   const themeChunk = (id: string): string | undefined => {
-    if (id.includes("/src/theme/") || id.includes("virtual:lark-docs/")) {
+    if (id.includes("/src/theme/")) {
       return "theme-chunk";
     }
     // Shared helpers (escape-html, guard) must never be hoisted into
@@ -216,6 +166,12 @@ function libConfig(): UserConfig {
   };
 
   return {
+    // Theme views are .tsx — compile them against the Lark automatic JSX
+    // runtime (mirrors the tsconfig jsx settings for editor/typecheck).
+    esbuild: {
+      jsx: "automatic",
+      jsxImportSource: "@lark.js/mvc",
+    },
     build: {
       lib: {
         cssFileName: "lark-docs",
@@ -261,8 +217,6 @@ function libConfig(): UserConfig {
       sourcemap: false,
     },
     plugins: [
-      // Compile .html template imports in theme/ into JS functions in string.
-      themeTemplates() as PluginOption,
       {
         name: "cjs-shims",
         renderChunk(code, _chunk, outputOptions) {
@@ -292,10 +246,6 @@ function docsConfig(): UserConfig {
     root: resolve(PKG_DIR, "app"),
     publicDir: resolve(PKG_DIR, "public"),
     plugins: [
-      // Virtual module plugin — no ordering constraint needed since virtual
-      // module IDs (virtual:lark-docs/*) are never intercepted by
-      // larkMvcPlugin7 or Vite's built-in HTML handler.
-      themeTemplates() as PluginOption,
       ...larkDocsPlugin({
         config: larkDocsConfig,
       }),

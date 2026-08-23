@@ -26,14 +26,10 @@
  * HMR hot-swaps view code without a full page reload, preserving view-local
  * state (counter values, form input, scroll-derived data) across updates.
  *
- * ## Two HMR layers
- *
- * 1. **Template layer** (`.html` changes): `hotSwapByTemplate(old, new)`
- *    finds every mounted view whose template function matches the old
- *    reference, replaces it, and force-renders.
- *
- * 2. **View setup layer** (`.ts` changes): `hotSwapByView(old, new)` updates
- *    the view-registry and runs `hotSwapView` on every matching frame.
+ * A view module (`.tsx` / `.ts` with a `defineView` default export) contains
+ * both the setup function and its `jsxTemplate` closure, so a single swap
+ * layer suffices: `hotSwapByView(old, new)` updates the view-registry and
+ * runs `hotSwapView` on every matching frame.
  *
  * ## State preservation strategy
  *
@@ -55,7 +51,7 @@ import { parseUri } from "./utils";
 import { getViewClassRegistry } from "./view-registry";
 import { unregisterEvents, registerEvents, destroyAllResources } from "./view";
 import { setCurrentCtx } from "./hooks";
-import type { ViewSetup, ViewTemplate, FrameObj } from "./types";
+import type { ViewSetup, FrameObj } from "./types";
 import { Frame } from "./frame";
 
 /**
@@ -102,35 +98,6 @@ export function hotSwapView(frame: FrameObj, newSetup: ViewSetup): void {
 }
 
 /**
- * Template-only HMR: find every mounted view whose template function matches
- * `oldTemplate`, replace it with `newTemplate`, and force-render.
- *
- * Event handlers are NOT re-delegated because they live in the `events` map
- * returned by the setup function, not in the template. Only the template
- * function reference is swapped.
- *
- * @param oldTemplate - The previous template function reference
- * @param newTemplate - The new template function reference
- */
-export function hotSwapByTemplate(oldTemplate: ViewTemplate, newTemplate: ViewTemplate): boolean {
-  if (!oldTemplate || !newTemplate || oldTemplate === newTemplate) return false;
-  let swapped = false;
-  for (const [, frame] of Frame.getAll()) {
-    const view = frame.view;
-    if (!view || view.getTemplate() !== oldTemplate) continue;
-    view.setTemplate(newTemplate);
-    if (view.signature.value > 0) {
-      view.signature.value++;
-      view.fire("render");
-      destroyAllResources(view, false);
-      view.updater.forceDigest();
-    }
-    swapped = true;
-  }
-  return swapped;
-}
-
-/**
  * View setup HMR: update the view-registry and hot-swap every frame using
  * `oldSetup` with `newSetup`.
  *
@@ -163,18 +130,16 @@ export function hotSwapByView(oldSetup: ViewSetup, newSetup: ViewSetup): boolean
 }
 
 // ─── Global HMR handle ────────────────────────────────────────────────
-// Expose hotSwapByTemplate / hotSwapByView on globalThis so that the
-// auto-injected HMR snippets (see ./hmr-inject.ts) can call them WITHOUT
-// importing "@lark.js/mvc".
+// Expose hotSwapByView on globalThis so that the auto-injected HMR snippets
+// (see ./hmr-inject.ts) can call it WITHOUT importing "@lark.js/mvc".
 //
 // Why a global instead of import/require("@lark.js/mvc"):
 // Under Module Federation (@lark.js/mvc shared singleton), ANY reference
 // to @lark.js/mvc inside an HMR accept callback registers the calling
-// module (compiled .html template / .ts view) as a shared consumer.
-// Webpack then marks the main chunk — which initializes the MF shared
-// scope — as needing a hot-update. But since main's code didn't actually
-// change, no main.<hash>.hot-update.js is emitted, so the HMR runtime
-// request 404s:
+// view module as a shared consumer. Webpack then marks the main chunk —
+// which initializes the MF shared scope — as needing a hot-update. But
+// since main's code didn't actually change, no main.<hash>.hot-update.js
+// is emitted, so the HMR runtime request 404s:
 //   ChunkLoadError: Loading hot update chunk main failed.
 //   (missing: http://localhost:<port>/main.<hash>.hot-update.js)
 // The accept callback never runs → UI never updates.
@@ -186,7 +151,6 @@ export function hotSwapByView(oldSetup: ViewSetup, newSetup: ViewSetup): boolean
 // so they are already defined when this top-level code runs.
 if (typeof globalThis !== "undefined" && !globalThis.__lark_hmr__) {
   globalThis.__lark_hmr__ = {
-    hotSwapByTemplate,
     hotSwapByView,
   };
 }

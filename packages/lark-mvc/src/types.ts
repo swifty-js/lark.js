@@ -46,7 +46,7 @@
  * ## Design principles
  *
  * - Functional API — no `class`, no `this`, no `prototype`, no `mixin`
- * - Zero runtime dependencies (Babel is build-time only)
+ * - Zero dependencies
  * - Real DOM diff via `innerHTML` + keyed comparison (not virtual DOM by default)
  * - Module Federation support for micro-frontends
  */
@@ -253,10 +253,10 @@ export interface FrameInvokeEntry {
 // ============================================================
 
 /**
- * Compiled template function signature.
- * Called with `(data, viewId, refData)` by the Updater at render time.
- * Runtime helpers (encodeHTML/strSafe/refFn) are imported by the compiled
- * module from `@lark.js/mvc/runtime`, not passed as arguments.
+ * Template function signature.
+ * Called with `(data, viewId, refData)` by the Updater at render time and
+ * must return an HTML string. Produced by `jsxTemplate()` (which serializes
+ * the JSX VNode tree), or hand-written for fully custom rendering.
  */
 export type ViewTemplate = (data: unknown, viewId: string, refData: unknown) => string;
 
@@ -405,8 +405,9 @@ export interface UpdaterApi {
   snapshot: () => UpdaterApi;
   altered: () => boolean | undefined;
   refData: Record<string, unknown>;
+  /** Resolve a refFn token (emitted by the JSX serializer for object/function
+   *  values) back to the live value; non-token inputs pass through. */
   translate: (data: unknown) => unknown;
-  parse: (expr: string) => unknown;
   getChangedKeys: () => ReadonlySet<string>;
 }
 
@@ -914,10 +915,4 @@ export interface DomElement extends Element {
   cachedCompareKey?: string | undefined;
   /** Whether auto-generated ID */
   autoId?: number;
-}
-
-/** Options for compileTemplate() */
-export interface CompileOptions {
-  /** Global variable names to destructure from $$ (refData) */
-  globalVars?: string[];
 }

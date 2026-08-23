@@ -21,7 +21,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { parseUri, toUri, setData, translateData, EMPTY_STRING_SET } from "../src/utils";
+import { parseUri, toUri, setData, EMPTY_STRING_SET } from "../src/utils";
 
 describe("utils", () => {
   describe("parseUri", () => {
@@ -104,29 +104,6 @@ describe("utils", () => {
       setData({ secret: "x", visible: "y" }, old, changed, excludes);
       expect(changed.has("secret")).toBe(false);
       expect(changed.has("visible")).toBe(true);
-    });
-  });
-
-  describe("translateData", () => {
-    it("resolves SPLITTER+digits ref tokens", () => {
-      const SPLITTER = "\x1e";
-      const refs = { [`${SPLITTER}1`]: { wrapped: true } };
-      expect(translateData(refs, `${SPLITTER}1`)).toEqual({ wrapped: true });
-    });
-
-    it("leaves non-ref strings untouched", () => {
-      const refs = {};
-      expect(translateData(refs, "plain")).toBe("plain");
-      // SPLITTER prefix but not all digits → not a ref
-      expect(translateData(refs, "\x1eABC")).toBe("\x1eABC");
-    });
-
-    it("recursively resolves refs inside objects", () => {
-      const SPLITTER = "\x1e";
-      const refs = { [`${SPLITTER}1`]: { actual: 1 } };
-      const params: Record<string, unknown> = { obj: `${SPLITTER}1` };
-      translateData(refs, params);
-      expect(params).toEqual({ obj: { actual: 1 } });
     });
   });
 });

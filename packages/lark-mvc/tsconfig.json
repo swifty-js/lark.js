@@ -24,7 +24,10 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@lark.js/mvc/jsx-dev-runtime": ["./src/jsx-dev-runtime.ts"],
+      "@lark.js/mvc/jsx-runtime": ["./src/jsx-runtime.ts"],
+      "@lark.js/mvc": ["./src/index.ts"]
     },
     "allowJs": true,
     // File Layout
@@ -36,8 +39,15 @@
     "strict": true,
     "target": "esnext",
     "types": ["node", "vitest/globals"],
-    // "jsx": "react-jsx",
+    "jsx": "react-jsx",
+    "jsxImportSource": "@lark.js/mvc",
     "verbatimModuleSyntax": true
   },
-  "include": ["src/**/*.ts", "tests/**/*.test.ts", "tsup.config.ts", "vitest.config.ts"]
+  "include": [
+    "src/**/*.ts",
+    "tests/**/*.test.ts",
+    "tests/**/*.test.tsx",
+    "tsup.config.ts",
+    "vitest.config.ts"
+  ]
 }

@@ -23,7 +23,7 @@
 /**
  * Real-DOM Diff Engine (string-mode rendering pipeline).
  *
- * The Updater uses this engine: the compiled template produces an HTML string,
+ * The Updater uses this engine: the view template produces an HTML string,
  * which is parsed into a temporary DOM tree via
  * `document.implementation.createHTMLDocument`, then diffed against the live
  * DOM using keyed comparison.
@@ -131,13 +131,17 @@ export function domGetNode(html: string, refNode: Element): Element {
   const wrap = wrapMeta[tag] || wrapMeta["_"];
   tmp.innerHTML = wrap[1] + html;
 
+  // Descend through the wrapper elements so the returned container's
+  // children are the parsed template roots (e.g. for "<tr>…" the wrapper is
+  // <table><tbody> and the container to diff against is the <tbody>).
+  let node: Element = tmp;
   let j = wrap[0];
   while (j--) {
-    const last = tmp.lastChild;
-    if (last) tmp.replaceChildren(last);
+    const inner = node.lastElementChild;
+    if (inner) node = inner;
   }
 
-  return tmp;
+  return node;
 }
 
 /**

@@ -226,40 +226,11 @@ export function createUpdater(viewId: string): UpdaterApi {
    * Resolve a SPLITTER-prefixed reference token to its original JS value.
    *
    * Used to restore object references that were tokenized by `refFn` during
-   * template compilation (the `{{@expr}}` operator).
+   * JSX serialization (object/function attribute and `prop:` values).
    */
   function translate(dataVal: unknown): unknown {
     if (typeof dataVal !== "string" || !isRefToken(dataVal)) return dataVal;
     return hasOwnProperty(refData, dataVal) ? refData[dataVal] : dataVal;
-  }
-
-  /**
-   * Safe path parser — resolves dotted paths (`a.b.c`) or numeric literals
-   * from `refData` without `eval`.
-   *
-   * Returns `undefined` for invalid paths. Only identifier-based dotted
-   * paths are supported — no computed access, no function calls.
-   */
-  function parse(expr: string): unknown {
-    const trimmed = expr.trim();
-    if (!trimmed) return undefined;
-
-    // Pure numeric literal — return as number.
-    if (/^-?\d+(?:\.\d+)?$/.test(trimmed)) {
-      return Number(trimmed);
-    }
-
-    // Dotted property path: identifier(.identifier)*
-    if (!/^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/.test(trimmed)) {
-      return undefined;
-    }
-
-    let cur: unknown = refData;
-    for (const segment of trimmed.split(".")) {
-      if (cur == null || typeof cur !== "object") return undefined;
-      cur = Reflect.get(cur, segment);
-    }
-    return cur;
   }
 
   /**
@@ -293,7 +264,6 @@ export function createUpdater(viewId: string): UpdaterApi {
     altered,
     refData,
     translate,
-    parse,
     getChangedKeys,
   };
   return api;

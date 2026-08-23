@@ -26,7 +26,7 @@
  * Mirrors the Webpack integration but returns a Promise directly
  * (Rspack async loaders must return the result, not call this.callback()).
  * Only .md files are handled — configure the @lark.js/mvc rspack
- * integration separately for .html templates.
+ * integration separately for view HMR.
  *
  * Usage:
  * ```ts

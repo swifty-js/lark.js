@@ -20,8 +20,8 @@
  * SOFTWARE.
  */
 
-import { State, defineView, useResource } from "@lark.js/mvc";
-import type { ViewSetup, ViewTemplate } from "@lark.js/mvc";
+import { State, defineView, jsxTemplate, raw, useResource } from "@lark.js/mvc";
+import type { ViewSetup } from "@lark.js/mvc";
 import { z } from "zod";
 import { icons } from "./icons";
 
@@ -32,6 +32,73 @@ const TocHeadingSchema = z.looseObject({
 });
 const TocHeadingsSchema = z.array(TocHeadingSchema);
 type TocHeading = z.infer<typeof TocHeadingSchema>;
+
+interface TocHeadingVM extends TocHeading {
+  isActive: boolean;
+}
+
+interface TocData {
+  inline: boolean;
+  headings: TocHeadingVM[];
+  markerTop: number;
+  markerHeight: number;
+  markerShow: boolean;
+}
+
+const template = jsxTemplate<TocData>(
+  ({ inline, headings, markerTop, markerHeight, markerShow }) => (
+    <div>
+      {headings.length > 0 && (
+        <div
+          class={
+            inline
+              ? "not-prose border-muted/80 bg-muted/30 my-6 rounded-xl border p-4"
+              : ""
+          }
+        >
+          <p class="text-muted-foreground flex items-center gap-1.5 font-mono text-[11px] font-semibold tracking-[0.14em] uppercase">
+            <span class="size-3.5 [&>svg]:size-full">{raw(icons.list)}</span>
+            On this page
+          </p>
+          <div class="relative mt-3">
+            <span
+              aria-hidden="true"
+              class="bg-muted/80 absolute inset-y-0 left-0 w-px"
+            ></span>
+            <span
+              aria-hidden="true"
+              class={[
+                "bg-primary absolute left-0 w-px rounded-full transition-[top,height,opacity] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]",
+                !markerShow && "opacity-0",
+              ]}
+              style={`top: ${markerTop}px; height: ${markerHeight}px`}
+            ></span>
+            <ul class="space-y-px pl-3">
+              {headings.map((heading) => (
+                <li class="relative">
+                  <a
+                    href={`#${heading.slug}`}
+                    data-slug={heading.slug}
+                    onClick="scrollToHeading"
+                    class={[
+                      "block py-1 text-xs leading-snug transition-colors duration-200",
+                      heading.level >= 3 && "pl-3",
+                      heading.isActive
+                        ? "text-primary font-medium"
+                        : "text-muted-foreground hover:text-foreground",
+                    ]}
+                  >
+                    {heading.text}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
+    </div>
+  ),
+);
 
 function decodedLocationHash(): string {
   try {
@@ -47,7 +114,7 @@ function decodedLocationHash(): string {
  * Renders h2/h3 headings for the current page. Supports two placements:
  * right rail (default) and inline ([[toc]] directive, params.inline).
  */
-export function createTocView(template: ViewTemplate): ViewSetup {
+export function createTocView(): ViewSetup {
   return defineView((ctx, params?: unknown) => {
     const inline =
       !!params &&
@@ -56,7 +123,6 @@ export function createTocView(template: ViewTemplate): ViewSetup {
       params.inline === "true";
 
     ctx.updater.set({
-      icons,
       inline,
       headings: [],
       markerTop: 0,

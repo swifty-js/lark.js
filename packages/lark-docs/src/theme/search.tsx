@@ -28,8 +28,15 @@
  * Open/close state is driven by State.searchOpen.
  */
 import MiniSearch, { type SearchResult } from "minisearch";
-import { State, Router, defineView, useEffect } from "@lark.js/mvc";
-import type { ViewSetup, ViewTemplate } from "@lark.js/mvc";
+import {
+  State,
+  Router,
+  defineView,
+  jsxTemplate,
+  raw,
+  useEffect,
+} from "@lark.js/mvc";
+import type { ViewSetup } from "@lark.js/mvc";
 import { z } from "zod";
 import { icons } from "./icons";
 import { escapeHtml } from "../utils/escape-html";
@@ -59,13 +66,160 @@ const GetSearchIndexSchema = z.custom<GetSearchIndexFn>(
 
 const MAX_RESULTS = 12;
 
-export function createSearchView(template: ViewTemplate): ViewSetup {
+interface SearchResultVM {
+  title: string;
+  link: string;
+  excerpt: string;
+  pageTitle: string;
+  highlightedTitle: string;
+  highlightedExcerpt: string;
+}
+
+interface SearchData {
+  isOpen: boolean;
+  query: string;
+  results: SearchResultVM[];
+  hasSearched: boolean;
+  activeIndex: number;
+  indexSize: number;
+}
+
+const template = jsxTemplate<SearchData>(
+  ({ isOpen, query, results, hasSearched, activeIndex, indexSize }) => (
+    <div>
+      {isOpen && (
+        <div
+          class="animate-overlay-in fixed inset-0 z-50 overflow-y-auto"
+          id="docs-search-overlay"
+          onClick="onOverlayClick"
+        >
+          <div class="bg-foreground/25 fixed inset-0 backdrop-blur-[2px] dark:bg-black/50"></div>
+
+          <div class="flex min-h-full items-start justify-center p-4 pt-[10vh]">
+            <div
+              id="docs-search-dialog"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Search documentation"
+              class="animate-dialog-in border-muted bg-background relative w-full max-w-xl overflow-hidden rounded-xl border shadow-[0_16px_48px_-16px_rgb(0_0_0/0.25)]"
+              onKeydown="onDialogKey"
+            >
+              <div class="border-muted flex items-center gap-2.5 border-b px-4">
+                <span class="text-muted-foreground size-4 shrink-0 opacity-70 [&>svg]:size-full">
+                  {raw(icons.search)}
+                </span>
+                <input
+                  type="text"
+                  id="docs-search-input"
+                  class="placeholder:text-muted-foreground/60 h-12 min-w-0 flex-1 bg-transparent text-sm outline-none"
+                  placeholder="Search documentation…"
+                  autocomplete="off"
+                  spellcheck="false"
+                  onInput="onSearchInput"
+                />
+                {query && (
+                  <button
+                    class="text-muted-foreground hover:text-foreground grid size-6 place-items-center rounded transition-colors duration-150"
+                    onClick="clearQuery"
+                    aria-label="Clear search"
+                  >
+                    <span class="size-3.5 [&>svg]:size-full">
+                      {raw(icons.x)}
+                    </span>
+                  </button>
+                )}
+                <kbd class="text-muted-foreground border-muted bg-background/80 hidden rounded border px-1.5 py-0.5 font-mono text-[10px] font-medium sm:block">
+                  esc
+                </kbd>
+              </div>
+
+              <div class="max-h-[50vh] overflow-y-auto overscroll-contain p-2">
+                {results.length > 0 ? (
+                  <ul class="flex flex-col gap-0.5">
+                    {results.map((result, idx) => (
+                      <li>
+                        <a
+                          data-href={result.link}
+                          data-index={idx}
+                          onClick="goToResult"
+                          onMouseover="onResultHover"
+                          class={[
+                            "flex flex-col gap-0.5 rounded-lg px-3 py-2.5 transition-colors duration-100",
+                            idx === activeIndex
+                              ? "bg-accent/70"
+                              : "hover:bg-accent/40",
+                          ]}
+                        >
+                          {result.pageTitle && (
+                            <p class="text-muted-foreground/70 text-[11px] leading-none font-medium">
+                              {result.pageTitle}
+                            </p>
+                          )}
+                          <p class="text-foreground text-[13px] leading-snug font-medium">
+                            {raw(result.highlightedTitle)}
+                          </p>
+                          {result.excerpt && (
+                            <p class="text-muted-foreground line-clamp-2 text-xs leading-relaxed">
+                              {raw(result.highlightedExcerpt)}
+                            </p>
+                          )}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                ) : hasSearched ? (
+                  <div class="flex flex-col items-center justify-center gap-1.5 py-10 text-center">
+                    <span class="text-muted-foreground/50 size-8 [&>svg]:size-full">
+                      {raw(icons.search)}
+                    </span>
+                    <p class="text-muted-foreground text-xs">
+                      No results for “
+                      <span class="text-foreground font-medium">{query}</span>”
+                    </p>
+                  </div>
+                ) : (
+                  <div class="flex flex-col items-center justify-center py-10 text-center">
+                    <p class="text-muted-foreground/60 text-xs">
+                      {indexSize > 0
+                        ? `Search across ${indexSize} sections`
+                        : "Type to search…"}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div class="border-muted text-muted-foreground flex items-center gap-3 border-t px-4 py-2.5 font-mono text-[10px]">
+                <span class="flex items-center gap-1">
+                  <kbd class="border-muted rounded border px-1 py-px">↑</kbd>
+                  <kbd class="border-muted rounded border px-1 py-px">
+                    ↓
+                  </kbd>{" "}
+                  navigate
+                </span>
+                <span class="flex items-center gap-1">
+                  <kbd class="border-muted rounded border px-1 py-px">↵</kbd>{" "}
+                  open
+                </span>
+                <span class="flex items-center gap-1">
+                  <kbd class="border-muted rounded border px-1 py-px">esc</kbd>{" "}
+                  close
+                </span>
+                <span class="ml-auto opacity-60">miniSearch</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  ),
+);
+
+export function createSearchView(): ViewSetup {
   return defineView((ctx) => {
     let mini: MiniSearch | null = null;
     let seq = 0;
 
     ctx.updater.set({
-      icons,
       results: [],
       hasSearched: false,
       query: "",

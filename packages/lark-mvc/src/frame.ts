@@ -28,7 +28,7 @@
  * with closure-based methods. The `Frame` singleton provides static-like
  * registry methods (get, getAll, getRoot, createRoot, on, off, fire).
  */
-import { SPLITTER, LARK_VIEW, LARK_PROP_PREFIX, LARK_EVENT_PREFIX, isRefToken } from "./common";
+import { SPLITTER, LARK_VIEW, LARK_PROP_PREFIX, LARK_EVENT_PREFIX } from "./common";
 import {
   hasOwnProperty,
   parseUri,
@@ -36,9 +36,7 @@ import {
   funcWithTry,
   noop,
   assign,
-  translateData,
   ensureElementId,
-  isRecord,
 } from "./utils";
 import { createEmitter } from "./event-emitter";
 import { unmark } from "./mark";
@@ -111,7 +109,6 @@ export function createFrame(id: string, parentId?: string): FrameObj {
 
     mountView(viewPathArg: string, viewInitParams?: Record<string, unknown>): void {
       const node = document.getElementById(frame.id);
-      const pId = frame.parentId;
 
       // Store original template before alter
       if (!frame.hasAltered && node) {
@@ -130,12 +127,8 @@ export function createFrame(id: string, parentId?: string): FrameObj {
 
       viewPath = viewPathArg;
 
-      // Translate query params from parent view's refData
-      const params = parsed.params;
-      translateQuery(pId ?? frame.id, viewPathArg, params);
-
       // Merge init params
-      const initParams: Record<string, unknown> = { ...params };
+      const initParams: Record<string, unknown> = { ...parsed.params };
       if (viewInitParams) {
         assign(initParams, viewInitParams);
       }
@@ -285,16 +278,11 @@ export function createFrame(id: string, parentId?: string): FrameObj {
       // Helper: read p-lark-* from a v-lark element, resolving ref tokens
       const readProps = (el: Element): Record<string, unknown> => {
         const props: Record<string, unknown> = {};
-        const parentRefData = frame.view?.updater.refData;
+        const parentUpdater = frame.view?.updater;
         for (const attr of el.attributes) {
           if (attr.name.startsWith(LARK_PROP_PREFIX)) {
             const propName = attr.name.slice(LARK_PROP_PREFIX.length);
-            const val = attr.value;
-            if (parentRefData && isRefToken(val)) {
-              props[propName] = hasOwnProperty(parentRefData, val) ? parentRefData[val] : val;
-            } else {
-              props[propName] = val;
-            }
+            props[propName] = parentUpdater ? parentUpdater.translate(attr.value) : attr.value;
           }
         }
         return props;
@@ -654,45 +642,6 @@ function notifyAlter(frameInstance: FrameObj, data: { id: string }): void {
         parent.readyMap.delete(frameInstance.id);
         notifyAlter(parent, data);
       }
-    }
-  }
-}
-
-// ============================================================
-// TranslateQuery: translate SPLITTER-prefixed params from parent
-// ============================================================
-
-/**
- * Translate SPLITTER-prefixed reference tokens in child-view params back to
- * their original JS values from the parent view's `refData`.
- *
- * When a template uses `{{@value}}` inside a `v-lark` attribute, the compiler
- * emits a SPLITTER-prefixed token instead of the raw value. This function
- * resolves those tokens so the child view receives the actual objects.
- */
-function translateQuery(pId: string, src: string, params: Record<string, string>): void {
-  const parentFrame = frameRegistry.get(pId);
-  const parentView = parentFrame?.view;
-  if (!parentView) return;
-
-  const parentRefData = parentView.updater.refData;
-  if (!parentRefData) return;
-
-  // If viewPath contains SPLITTER, translate params
-  if (src.indexOf(SPLITTER) > 0) {
-    translateData(parentRefData, params);
-    const splitterValue = Reflect.get(params, SPLITTER);
-    if (isRecord(splitterValue)) {
-      // Merge translated params from the SPLITTER key into the params object
-      for (const k in splitterValue) {
-        if (hasOwnProperty(splitterValue, k)) {
-          const v = splitterValue[k];
-          if (typeof v === "string") {
-            params[k] = v;
-          }
-        }
-      }
-      Reflect.deleteProperty(params, SPLITTER);
     }
   }
 }

@@ -31,8 +31,8 @@
  * Key difference from React hooks: Lark's setup runs ONCE (not on every
  * render). `useState` returns a `[getter, setter]` pair where the getter
  * always reads from `ctx.updater.data` — avoiding stale closures. The
- * template (compiled from `.html`) reads from `updater.data` independently
- * of the setup function's closures.
+ * template (a `jsxTemplate()` render function) reads from `updater.data`
+ * independently of the setup function's closures.
  */
 import type { ViewCtx, AnyFunc } from "./types";
 import { bindStore } from "./store";

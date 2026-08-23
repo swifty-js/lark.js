@@ -55,7 +55,7 @@ import { Frame } from "./frame";
 import type { FrameObj } from "./types";
 import { EventDelegator } from "./event-delegator";
 import { defineView } from "./view";
-import { hotSwapByTemplate, hotSwapByView } from "./hmr";
+import { hotSwapByView } from "./hmr";
 import type { AnyFunc, FrameworkConfig, ViewCtx, ChangeEvent, FrameworkApi } from "./types";
 
 // ============================================================
@@ -412,15 +412,15 @@ export const Framework: FrameworkApi = {
    * Boot the framework.
    */
   boot(cfg?: FrameworkConfig): void {
-    // Register HMR swap functions on globalThis so that auto-injected HMR
-    // snippets (in compiled .html/.ts modules) can call them WITHOUT
-    // importing @lark.js/mvc (which would create MF shared-consumer side
-    // effects and trigger ChunkLoadError). Done in boot() rather than at
-    // hmr.ts module load to guarantee execution — webpack tree-shaking can
-    // drop hmr.ts's top-level side-effect when its exports are unused by the
-    // app (e.g. boot.ts only imports Framework + registerViewClass).
+    // Register the HMR swap function on globalThis so that auto-injected HMR
+    // snippets (in view modules) can call it WITHOUT importing @lark.js/mvc
+    // (which would create MF shared-consumer side effects and trigger
+    // ChunkLoadError). Done in boot() rather than at hmr.ts module load to
+    // guarantee execution — webpack tree-shaking can drop hmr.ts's top-level
+    // side-effect when its exports are unused by the app (e.g. boot.ts only
+    // imports Framework + registerViewClass).
     if (typeof globalThis !== "undefined" && !globalThis.__lark_hmr__) {
-      globalThis["__lark_hmr__"] = { hotSwapByTemplate, hotSwapByView };
+      globalThis["__lark_hmr__"] = { hotSwapByView };
     }
     // Merge configuration
     if (cfg && typeof cfg === "object") {

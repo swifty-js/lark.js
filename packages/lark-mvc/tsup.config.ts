@@ -46,15 +46,6 @@ export default defineConfig([
     tsconfig: "./tsconfig.build.json",
   },
   {
-    entry: ["src/compiler.ts"],
-    dts: true,
-    format: ["esm", "cjs"],
-    minify: false,
-    noExternal: ["@babel/parser", "@babel/types"],
-    sourcemap: false,
-    tsconfig: "./tsconfig.build.json",
-  },
-  {
     // Rspack / Webpack / Vite plugin entries — each needs __filename shim to
     // resolve to its own file (not a shared chunk) for the LarkMvcPlugin to
     // locate the loader at runtime. splitting: false ensures each ESM entry
@@ -63,16 +54,18 @@ export default defineConfig([
     dts: true,
     format: ["esm", "cjs"],
     minify: false,
-    noExternal: ["@babel/parser", "@babel/types"],
+    noExternal: [],
     shims: true,
     splitting: false,
     sourcemap: false,
     tsconfig: "./tsconfig.build.json",
   },
   {
-    // Template runtime — imported by compiled `.html` modules. Kept tiny so
-    // pulling in `@lark.js/mvc/runtime` doesn't drag the whole framework in.
-    entry: ["src/runtime.ts"],
+    // JSX automatic runtime — imported by compiled JSX modules
+    // (jsxImportSource: "@lark.js/mvc"). Pure VNode factories with zero
+    // framework imports, kept tiny so the runtime doesn't drag the whole
+    // framework into consumer chunks.
+    entry: ["src/jsx-runtime.ts", "src/jsx-dev-runtime.ts"],
     dts: true,
     format: ["esm", "cjs"],
     minify: false,

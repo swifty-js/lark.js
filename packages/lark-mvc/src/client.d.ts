@@ -24,19 +24,19 @@
  * Ambient type declarations for Lark Mvc's DOM and module augmentations.
  *
  * Lark attaches metadata to DOM elements (frame references, compare-key
- * caches, range-event tags) and relies on the `import.meta.hot` HMR context.
- * This file declares those augmentations so application TypeScript code can
- * access them without `as any` casts.
+ * caches) and relies on the `import.meta.hot` HMR context. This file declares
+ * those augmentations so application TypeScript code can access them without
+ * `as any` casts.
  *
- * Also declares module types for `*.html` (compiled template functions) and
- * `*.css` imports so bundlers resolve them correctly.
+ * Also declares module types for `*.css` imports so bundlers resolve them
+ * correctly. Templates are written in JSX/TSX (`jsxTemplate` +
+ * `@lark.js/mvc/jsx-runtime`) — there is no separate template file format.
  */
-import type { FrameApi, FrameworkApi, StateApi, RouterApi, ViewSetup, ViewTemplate } from "./types";
+import type { FrameApi, ViewSetup } from "./index";
 declare global {
   /** Scheduler API (Chrome 94+) — used by `Framework.task` for time-slicing. */
   var scheduler: Scheduler;
   var __lark_hmr__: {
-    hotSwapByTemplate: (oldTemplate: ViewTemplate, newTemplate: ViewTemplate) => boolean;
     hotSwapByView: (oldSetup: ViewSetup, newSetup: ViewSetup) => boolean;
   };
 
@@ -61,7 +61,7 @@ declare global {
   interface Element {
     /** DOM diff cache flag — 1 when `cachedCompareKey` is valid */
     compareKeyCached?: number | undefined;
-    /** Cached compare key (from `id`, `#`, or `v-lark` path) for keyed diff */
+    /** Cached compare key (from `id` or `v-lark` path) for keyed diff */
     cachedCompareKey?: string | undefined;
     /** `v-lark` attribute — declares a child view embedding point */
     "v-lark"?: string | undefined;
@@ -72,9 +72,4 @@ declare global {
 declare module "*.css" {
   const content: string;
   export default content;
-}
-
-declare module "*.html" {
-  const template: ViewTemplate;
-  export default template;
 }

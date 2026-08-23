@@ -24,16 +24,10 @@
  * Theme view barrel exports.
  *
  * Exports factory functions that create lark-mvc view setups for each
- * theme component. Each factory takes a single argument: the pre-compiled
- * template to render with.
+ * theme component. Templates live inline in each view module as JSX
+ * (`jsxTemplate`) — no separate template files or virtual modules.
  */
 import { registerViewClass } from "@lark.js/mvc";
-
-import docLayoutTemplate from "virtual:lark-docs/docs-layout";
-import sidebarTemplate from "virtual:lark-docs/sidebar";
-import tocTemplate from "virtual:lark-docs/toc";
-import searchTemplate from "virtual:lark-docs/search";
-import themeToggleTemplate from "virtual:lark-docs/theme-toggle";
 
 import { createDocsLayoutView } from "./docs-layout";
 import { createSidebarView } from "./sidebar";
@@ -54,17 +48,11 @@ import { createThemeToggleView } from "./theme-toggle";
  * ```
  */
 export function registerThemeViews(): void {
-  registerViewClass(
-    "theme/docs-layout",
-    createDocsLayoutView(docLayoutTemplate),
-  );
-  registerViewClass("theme/sidebar", createSidebarView(sidebarTemplate));
-  registerViewClass("theme/toc", createTocView(tocTemplate));
-  registerViewClass("theme/search", createSearchView(searchTemplate));
-  registerViewClass(
-    "theme/theme-toggle",
-    createThemeToggleView(themeToggleTemplate),
-  );
+  registerViewClass("theme/docs-layout", createDocsLayoutView());
+  registerViewClass("theme/sidebar", createSidebarView());
+  registerViewClass("theme/toc", createTocView());
+  registerViewClass("theme/search", createSearchView());
+  registerViewClass("theme/theme-toggle", createThemeToggleView());
 }
 
 // Re-export factories and helpers for advanced users who want custom

@@ -1,5 +1,4 @@
-import { defineView } from "@lark.js/mvc";
-import template from "./button.html";
+import { defineView, jsxTemplate } from "@lark.js/mvc";
 import styles from "./button.module.css";
 
 export interface ButtonProps {
@@ -8,6 +7,30 @@ export interface ButtonProps {
   size: "sm" | "md" | "lg";
   disabled: boolean;
 }
+
+interface ButtonData {
+  label: string;
+  disabled: boolean;
+  waVariant: string;
+  waAppearance: string;
+  waSize: string;
+}
+
+const template = jsxTemplate<ButtonData>(
+  ({ label, disabled, waVariant, waAppearance, waSize }) => (
+    <wa-button
+      class={styles["button"]}
+      type="button"
+      variant={waVariant}
+      appearance={waAppearance}
+      size={waSize}
+      disabled={disabled}
+      onClick="press"
+    >
+      {label}
+    </wa-button>
+  ),
+);
 
 const variantMap = {
   primary: { waVariant: "brand", waAppearance: "filled" },
@@ -29,7 +52,6 @@ export default defineView((ctx, params) => {
     variant: props.variant ?? "primary",
     size: props.size ?? "md",
     disabled: props.disabled ?? false,
-    styles,
   });
 
   const assign = (): boolean | undefined => {

@@ -21,25 +21,26 @@
  */
 
 /**
- * @lark.js/mvc Webpack Integration for Template Compilation
+ * @lark.js/mvc Webpack Integration.
  *
- * Provides two integration modes:
+ * Injects state-preserving view HMR into every module whose default export
+ * is a `defineView(...)` setup (`.ts` / `.tsx` / `.js` / `.jsx`). Editing a
+ * view — its `jsxTemplate` JSX included — hot-swaps all mounted instances in
+ * place without a full reload.
  *
- * 1. **Loader** (larkMvcLoader) — Direct file transformation
- *    - Transforms .html files into JS function modules
- *    - Requires manual webpack.config.mjs setup
+ * The JSX transform itself is the responsibility of your TS/JS loader
+ * (babel-loader / swc-loader / ts-loader): configure the automatic runtime
+ * with `jsxImportSource: "@lark.js/mvc"`, e.g. in tsconfig.json:
  *
- * 2. **Plugin** (LarkMvcPlugin) — Auto-registers the loader
- *    - Automatically configures the loader rule for .html files
- *    - Zero-config: just add the plugin to your webpack config
- *    - Recommended approach for most use cases
+ * ```jsonc
+ * { "compilerOptions": { "jsx": "react-jsx", "jsxImportSource": "@lark.js/mvc" } }
+ * ```
  *
- * Features:
- * - All template operators: = (escape), ! (raw), @ (ref lookup), : (binding)
- * - @event attribute processing with \x1f prefix + \x1e separator
- * - __lark_enc_html__ (HTML entity encode), __lark_str_safe__ (null-safe toString), __lark_ref_fn__ (reference lookup)
- * - View ID injection
- * - Auto variable extraction via AST analysis (Babel)
+ * Two integration modes:
+ *
+ * 1. **Plugin** (LarkMvcPlugin) — auto-registers the HMR loader rule.
+ *    Zero-config, recommended.
+ * 2. **Loader** (larkMvcLoader) — manual rule setup.
  *
  * Usage with Plugin (recommended):
  * ```js
@@ -57,30 +58,20 @@
  * export default {
  *   module: {
  *     rules: [{
- *       test: /\.html$/,
+ *       test: /\.[jt]sx?$/,
+ *       exclude: /node_modules/,
+ *       enforce: 'pre',
  *       loader: '@lark.js/mvc/webpack',
  *     }],
  *   },
  * };
  * ```
  */
-import { compileTemplate, extractGlobalVars } from "./compiler";
-import { injectTemplateHmrSnippet, injectViewHmrSnippet } from "./hmr-inject";
-export type LarkMvcWebpackLoaderOptions = {
-  hmr?: "view";
-};
-
-/** Webpack loader context */
-interface LoaderContext {
-  /** Whether in development mode */
-  dev?: boolean;
-  /** Loader options */
-  getOptions: () => LarkMvcWebpackLoaderOptions;
-}
+import { injectViewHmrSnippet } from "./hmr-inject";
 
 /** Plugin options */
-export interface LarkMvcWebpackPluginOptions extends LarkMvcWebpackLoaderOptions {
-  /** File extension to match (default: /\.html$/) */
+export interface LarkMvcWebpackPluginOptions {
+  /** View-module extensions to match (default: /\.[jt]sx?$/) */
   test?: RegExp;
   /** Exclude pattern (default: /node_modules/) */
   exclude?: RegExp;
@@ -88,65 +79,34 @@ export interface LarkMvcWebpackPluginOptions extends LarkMvcWebpackLoaderOptions
 
 /**
  * Webpack loader entry point.
- * Compiles .html template files into JS function modules.
  *
- * Uses this.callback() for async result delivery — this is the standard
- * webpack pattern for async loaders. Unlike rspack, webpack 5 does not
- * reliably support returning a Promise from the loader function; the
- * callback approach works across all webpack 5.x versions.
+ * Injects the view HMR snippet into `defineView` modules. Runs with
+ * `enforce: "pre"` (before ts-loader/babel/SWC), receiving raw source — the
+ * injected code is plain `import.meta.webpackHot` JavaScript, valid in both
+ * TS and TSX. Non-view modules pass through untouched.
  */
-async function larkMvcLoader(this: LoaderContext, source: string): Promise<string> {
+function larkMvcLoader(this: unknown, source: string): string {
   try {
-    const options = this.getOptions() || {};
-    const { hmr } = options;
-
-    // View HMR mode: inject view-class HMR into .ts files that import .html.
-    // This is the webpack equivalent of Vite's `transform` hook — ensures .ts
-    // view file changes self-accept and hot-swap in place, preserving state.
-    if (hmr === "view") {
-      return injectViewHmrSnippet(source, "webpack");
-    }
-
-    const globalVars = await extractGlobalVars(source);
-    const compiled = await compileTemplate(source, {
-      globalVars,
-    });
-    // Auto-inject HMR: the compiled template module self-accepts, so
-    // .html changes hot-swap the template on all mounted views without
-    // a full page reload — no user-side code required (like React/Vue).
-
-    return injectTemplateHmrSnippet(compiled, "webpack");
+    return injectViewHmrSnippet(source, "webpack");
   } catch (err) {
     console.error(err);
-    return "";
+    return source;
   }
 }
 
 /**
- * Webpack plugin that auto-registers the @lark.js/mvc loader.
+ * Webpack plugin that auto-registers the @lark.js/mvc HMR loader.
  *
- * This is the recommended integration approach. The plugin:
- * 1. Automatically adds a loader rule for .html files
- * 2. Passes through all configuration options
- * 3. Handles edge cases (e.g., excluding node_modules)
- *
- * Usage:
- * ```js
- * import { LarkMvcPlugin } from '@lark.js/mvc/webpack';
- *
- * export default {
- *   plugins: [
- *     new LarkMvcPlugin(),
- *   ],
- * };
- * ```
+ * This is the recommended integration approach. The plugin adds a single
+ * `enforce: "pre"` rule over script modules; the loader is a fast no-op for
+ * files without a `defineView(...)` call.
  */
 class LarkMvcPlugin {
   private options: LarkMvcWebpackPluginOptions;
 
   constructor(options: LarkMvcWebpackPluginOptions = {}) {
     this.options = {
-      test: /\.html$/,
+      test: /\.[jt]sx?$/,
       exclude: /node_modules/,
       ...options,
     };
@@ -165,45 +125,22 @@ class LarkMvcPlugin {
   }): void {
     const { test, exclude } = this.options;
 
-    // Push the loader rule into webpack's module.rules
     compiler.options.module = compiler.options.module || {};
     compiler.options.module.rules = compiler.options.module.rules || [];
 
-    // Rule 1: .html template compilation + HMR injection.
-    // `type: "javascript/auto"` ensures webpack treats the loader output as a
-    // JavaScript module (not an asset), which is required for
-    // `import.meta.webpackHot` to be available at runtime.
+    // View HMR injection rule. `enforce: "pre"` ensures this loader runs
+    // BEFORE ts-loader/SWC/babel, receiving the raw TypeScript/TSX source.
     compiler.options.module.rules.push({
       test,
       exclude,
-      type: "javascript/auto",
-      use: [
-        {
-          // Resolve the loader path (this file).
-          // __filename is provided by tsup's ESM shim (shims: true) in ESM output,
-          // and is a native CJS global in CJS output.
-          loader: __filename,
-        },
-      ],
-    });
-
-    // Rule 2: .ts/.js view file HMR injection.
-    // This is the webpack equivalent of Vite's `transform` hook. When a .ts
-    // view file (one that imports a .html template) changes, the injected
-    // HMR code makes the module self-accept and hot-swap the view setup
-    // function in place — preserving view-local state.
-    //
-    // `enforce: "pre"` ensures this loader runs BEFORE ts-loader/SWC,
-    // receiving the raw TypeScript source. The injected code is TypeScript-
-    // compatible (uses `import.meta.webpackHot` which TS recognizes).
-    compiler.options.module.rules.push({
-      test: /\.[jt]s$/,
-      exclude: /node_modules/,
       enforce: "pre",
       use: [
         {
-          loader: __filename,
-          options: { hmr: "view" },
+          // Resolve the loader path (this file). __filename comes from tsup's
+          // ESM shim in ESM output and is native in CJS output. Webpack's
+          // loader-runner loads loaders with require(), so from the ESM build
+          // we point at the .cjs sibling instead (require(esm) needs newer Node).
+          loader: __filename.endsWith(".js") ? __filename.slice(0, -3) + ".cjs" : __filename,
         },
       ],
     });

@@ -29,7 +29,9 @@
     "strict": true,
     "target": "esnext",
     "types": ["node", "vitest/globals"],
+    "jsx": "react-jsx",
+    "jsxImportSource": "@lark.js/mvc",
     "verbatimModuleSyntax": true
   },
-  "include": ["./**/*.ts", "./**/*.d.ts"]
+  "include": ["./**/*.ts", "./**/*.tsx", "./**/*.d.ts"]
 }

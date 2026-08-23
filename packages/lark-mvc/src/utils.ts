@@ -24,19 +24,12 @@
  * Lark framework utility functions.
  */
 
-import { URL_QUERY_HASH_REGEXP, URL_PARAM_REGEXP, IS_URL_PARAMS, isRefToken } from "./common";
+import { URL_QUERY_HASH_REGEXP, URL_PARAM_REGEXP, IS_URL_PARAMS } from "./common";
 import type { AnyFunc, ParsedUri } from "./types";
 
 // ============================================================
 // Type guards
 // ============================================================
-
-/** Check if value is a plain object (not null, not array, typeof object) */
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  if (typeof value !== "object" || value === null) return false;
-  const proto = Object.getPrototypeOf(value);
-  return proto === null || proto === Object.prototype;
-}
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -52,11 +45,6 @@ export function asRecord(value: unknown): Record<string, unknown> {
 /** Check if value is primitive or function (not a complex object) */
 function isPrimitiveOrFunc(value: unknown): boolean {
   return !value || (typeof value !== "object" && typeof value !== "function");
-}
-
-/** Check if value is primitive (not object, not function) */
-function isPrimitive(value: unknown): boolean {
-  return !value || typeof value !== "object";
 }
 
 // ============================================================
@@ -181,36 +169,6 @@ export function setData(
     }
   }
   return changed;
-}
-
-/**
- * Translate compiled refData references back to their original values.
- *
- * A reference token has the exact shape `SPLITTER + ascii decimal digits`
- * (as emitted by `refFn`). This shape check ensures user data that
- * merely happens to begin with the SPLITTER character is never mistaken
- * for a ref.
- */
-
-export function translateData(data: object, value: unknown): unknown {
-  if (isPrimitive(value)) {
-    const prop = String(value);
-    if (isRefToken(prop) && hasOwnProperty(data, prop)) {
-      return Reflect.get(data, prop);
-    }
-    return value;
-  }
-  if (isPlainObject(value) || Array.isArray(value)) {
-    for (const p in value) {
-      if (hasOwnProperty(value, p)) {
-        const val = Reflect.get(value, p);
-        const newVal = translateData(data, val);
-        Reflect.set(value, p, newVal);
-      }
-    }
-    return value;
-  }
-  return value;
 }
 
 // ============================================================

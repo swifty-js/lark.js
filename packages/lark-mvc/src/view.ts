@@ -601,8 +601,7 @@ export function mountCtx(frame: FrameObj, setup: ViewSetup, params?: unknown): V
 
   // Wire ctx to frame BEFORE render so that updater.digest() → runDigest()
   // can find `frame.view` and read the template. Without this, runDigest's
-  // `const view = frame?.view` is undefined and the render is a no-op —
-  // the root cause of the blank-page bug in lark-demo.
+  // `const view = frame?.view` is undefined and the render is a no-op
   frame.view = ctx;
 
   // Register events

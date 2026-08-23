@@ -1,8 +1,7 @@
-# Build Integration, Config, HMR & Devtool
+# Build Integration, Config, HMR
 
 Source of truth: `src/vite.ts`, `src/webpack.ts`, `src/rspack.ts`,
-`src/hmr-inject.ts`, `src/hmr.md`, `src/framework.ts`, `src/module-loader.ts`,
-`src/devtool.ts`, plus `packages/lark-demo` for the reference setup.
+`src/hmr-inject.ts`, `src/hmr.md`, `src/framework.ts`, `src/module-loader.ts`.
 
 ## Bundler plugins
 
@@ -70,7 +69,6 @@ reference) so `*.html` / `*.css` imports type-check.
 | `extensions`       | `string[]`                                  | —                           | Extension view paths loaded at startup                          |
 | `initModule`       | `string`                                    | —                           | Init module loaded at startup                                   |
 | `projectName`      | `string`                                    | —                           | Micro-frontend bridge: local vs remote view paths               |
-| `devtool`          | `boolean`                                   | `false`                     | Install Frame Devtool Bridge (postMessage)                      |
 | `skipViewRendered` | `boolean`                                   | —                           | Skip rendered checks                                            |
 
 `Framework.getConfig()` / `getConfig(key)` reads, `setConfig(patch)` merges.
@@ -81,7 +79,7 @@ validity tokens), `generateId(prefix?)`, `ensureNodeId(el)`,
 `nodeInside(a, b)`, `dispatchEvent(target, type, init?)`,
 `waitZoneViewsRendered(viewId, timeout?)`, `isBooted()`.
 
-## Lazy view loading (chunk-split pattern from lark-demo)
+## Lazy view loading
 
 When `mountView` hits an unregistered path it calls `use(path)` →
 `config.require`. Without `require`, a raw dynamic `import()` fallback is
@@ -144,17 +142,6 @@ Bundler differences (`src/hmr-inject.ts` — important when debugging HMR):
 - Swap functions are reached via `globalThis.__lark_hmr__` (registered in
   `Framework.boot`) instead of importing `@lark.js/mvc` — importing would
   register the module as an MF shared consumer and cause ChunkLoadError.
-
-## Devtool bridge
-
-`Framework.boot({ devtool: true })` installs a `postMessage` listener
-(`installFrameDevtoolBridge` from `@lark.js/mvc/devtool`). Protocol:
-`LARK_DEVTOOL_PING` → `PONG`; `REQUEST_TREE` → `TREE` (serialized frame tree
-with per-view info: rendered flag, signature, observed keys, event keys,
-resource keys, updater snapshot); `TREE_DELTA` pushed on frame add/remove
-(deduped via JSON compare, only when embedded in an iframe). The
-`packages/lark-devtool` panel loads the target app in an iframe and consumes
-this protocol.
 
 ## Project scaffolding conventions
 

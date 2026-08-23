@@ -12,7 +12,7 @@ description: >-
   user reads, writes, debugs, reviews, or extends code that imports from
   "@lark.js/mvc" (or any sub-path like /vite, /webpack, /rspack, /runtime,
   /compiler, /devtool, /client), works under packages/lark-mvc,
-  packages/lark-demo, or packages/lark-docs, or mentions any of these
+  or packages/lark-docs, or mentions any of these
   symbols and concepts — Framework.boot, defineView, ViewCtx, ViewSetup,
   useState, useEffect, useStore, useUrlState, useInterval, useTimeout,
   useResource, useEvent, createStore, computed, bindStore, State, Router,
@@ -185,8 +185,3 @@ boilerplate by hand.
 | [references/services.md](references/services.md)                       | `createService`, endpoint metadata, caching/dedup/queueing, `PayloadApi`, `createCache`, `createEmitter`                                                          |
 | [references/build-and-hmr.md](references/build-and-hmr.md)             | Vite/Webpack/Rspack integration, `FrameworkConfig` (full table), lazy loading & Module Federation, HMR internals, Devtool Bridge, project scaffolding conventions |
 | [references/rendering-internals.md](references/rendering-internals.md) | Updater/digest semantics, real-DOM diff, keyed diff (`id`/`#` compare keys), task scheduler — read when rendering/perf                                            |
-
-Real-world example code lives in `packages/lark-demo` (chunk-split app with
-nested components, stores, Module Federation) and `packages/lark-docs/app`
-(docs site built on the framework). `packages/lark-vscode` provides editor
-support (syntax highlighting, go-to-definition for `v-lark`/`@event`).

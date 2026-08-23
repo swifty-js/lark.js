@@ -23,21 +23,24 @@
 /**
  * Theme view barrel exports.
  *
- * Exports factory functions that create lark-mvc view setups for each
- * theme component. Templates live inline in each view module as JSX
- * (`jsxTemplate`) — no separate template files or virtual modules.
+ * Exports factory functions that create lark-mvc view components for each
+ * theme piece. Templates live inline in each view module as JSX
+ * (`jsxTemplate`); embedded components (sidebar, toc, search, theme-toggle)
+ * are imported directly by the layout and need no registry entries.
  */
 import { registerViewClass } from "@lark.js/mvc";
 
 import { createDocsLayoutView } from "./docs-layout";
-import { createSidebarView } from "./sidebar";
 import { createTocView } from "./toc";
-import { createSearchView } from "./search";
-import { createThemeToggleView } from "./theme-toggle";
 
 /**
- * Register all five built-in theme views (docs-layout, sidebar, toc, search,
- * theme-toggle) with the lark-mvc view registry.
+ * Register the theme views that are mounted by NAME:
+ *
+ * - `theme/docs-layout` — the route target every generated docs route
+ *   points at (see the generated `routes` map).
+ * - `theme/toc-inline` — mounted from raw HTML emitted by the `[[toc]]`
+ *   markdown directive (registered-path HTML carries no props, so the
+ *   inline flag is baked into the factory).
  *
  * Must be called BEFORE `Framework.boot()` so the views exist when the
  * default view is mounted during boot:
@@ -49,14 +52,11 @@ import { createThemeToggleView } from "./theme-toggle";
  */
 export function registerThemeViews(): void {
   registerViewClass("theme/docs-layout", createDocsLayoutView());
-  registerViewClass("theme/sidebar", createSidebarView());
-  registerViewClass("theme/toc", createTocView());
-  registerViewClass("theme/search", createSearchView());
-  registerViewClass("theme/theme-toggle", createThemeToggleView());
+  registerViewClass("theme/toc-inline", createTocView({ inline: true }));
 }
 
 // Re-export factories and helpers for advanced users who want custom
-// registration or to override individual theme views.
+// registration or to compose individual theme components.
 export { createDocsLayoutView } from "./docs-layout";
 export { createSidebarView } from "./sidebar";
 export { createTocView } from "./toc";

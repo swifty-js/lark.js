@@ -28,7 +28,7 @@
  * Nested items are flattened into depth-annotated rows.
  */
 import { State, Router, defineView, jsxTemplate, raw } from "@lark.js/mvc";
-import type { ViewSetup } from "@lark.js/mvc";
+import type { LarkView, LarkEvent } from "@lark.js/mvc";
 import { z } from "zod";
 import { icons } from "./icons";
 import type { SidebarItem } from "../types";
@@ -73,87 +73,6 @@ interface SidebarData {
   sidebarGroups: SidebarGroup[];
 }
 
-const template = jsxTemplate<SidebarData>(({ sidebarGroups }) => (
-  <nav class="flex flex-col" aria-label="Documentation">
-    {sidebarGroups.map((group) => (
-      <div class="mb-6">
-        <button
-          data-key={group.key}
-          onClick="toggleGroup"
-          aria-expanded={group.collapsed ? "false" : "true"}
-          class="group text-muted-foreground hover:text-foreground flex w-full items-center justify-between rounded-md px-2 py-1.5 font-mono text-[11px] font-semibold tracking-[0.14em] uppercase transition-colors duration-200"
-        >
-          {group.text}
-          <span
-            class={[
-              "size-3.5 opacity-60 transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] [&>svg]:size-full",
-              group.collapsed && "-rotate-90",
-            ]}
-          >
-            {raw(icons.chevronDown)}
-          </span>
-        </button>
-        <div
-          class={[
-            "grid transition-[grid-template-rows,opacity] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]",
-            group.collapsed
-              ? "grid-rows-[0fr] opacity-0"
-              : "grid-rows-[1fr] opacity-100",
-          ]}
-        >
-          <div class="overflow-hidden">
-            <ul class="border-muted/70 mt-1.5 ml-2 border-l pl-px">
-              {group.rows.map((row) => (
-                <li>
-                  {row.isGroup ? (
-                    <button
-                      data-key={row.key}
-                      onClick="toggleNested"
-                      aria-expanded={row.groupOpen ? "true" : "false"}
-                      class={[
-                        "flex w-full items-center gap-1.5 rounded-md py-1.5 pr-2 text-[13px] font-medium transition-colors duration-200",
-                        row.containsActive
-                          ? "text-foreground"
-                          : "text-muted-foreground hover:text-foreground",
-                      ]}
-                      style={`padding-left: ${row.padPx}px`}
-                    >
-                      <span
-                        class={[
-                          "size-3.5 shrink-0 opacity-60 transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] [&>svg]:size-full",
-                          row.groupOpen && "rotate-90",
-                        ]}
-                      >
-                        {raw(icons.chevronRight)}
-                      </span>
-                      {row.text}
-                    </button>
-                  ) : (
-                    <a
-                      data-href={row.link}
-                      onClick="navigateTo"
-                      aria-current={row.isActive ? "page" : undefined}
-                      class={[
-                        "relative -ml-px block border-l-2 py-1.5 pr-2 text-[13px] leading-snug transition-[color,background-color,border-color] duration-200",
-                        row.isActive
-                          ? "border-primary bg-primary/8 text-primary font-medium"
-                          : "hover:border-muted hover:bg-accent/50 hover:text-foreground text-muted-foreground border-transparent",
-                      ]}
-                      style={`padding-left: ${row.padPx}px`}
-                    >
-                      {row.text}
-                    </a>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      </div>
-    ))}
-  </nav>
-));
-
 function stripSlash(p: string): string {
   return p.replace(/\/+$/, "") || "/";
 }
@@ -185,7 +104,7 @@ function formatPrefix(prefix: string, baseUrl = "/"): string {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-export function createSidebarView(): ViewSetup {
+export function createSidebarView(): LarkView {
   return defineView((ctx) => {
     ctx.observeLocation([], true);
 
@@ -243,40 +162,119 @@ export function createSidebarView(): ViewSetup {
 
     assign();
 
-    return {
-      template,
-      assign,
-      events: {
-        "toggleGroup<click>": (e: Event) => {
-          const el = findDataAttr(e.target, "key");
-          if (!el) return;
-          const key = el.dataset["key"] ?? "";
-          groupCollapsed.set(key, !(groupCollapsed.get(key) ?? false));
-          ctx.updater.snapshot();
-          assign();
-          ctx.updater.digest();
-        },
-        "toggleNested<click>": (e: Event) => {
-          const el = findDataAttr(e.target, "key");
-          if (!el) return;
-          const key = el.dataset["key"] ?? "";
-          nestedCollapsed.set(key, !(nestedCollapsed.get(key) ?? false));
-          ctx.updater.snapshot();
-          assign();
-          ctx.updater.digest();
-        },
-        "navigateTo<click>": (e: Event) => {
-          const href = findDataHref(e.target);
-          if (href) {
-            Router.to(href);
-            // Close the mobile drawer if open.
-            if (State.get("drawerOpen")) {
-              State.set({ drawerOpen: false }).digest();
-            }
-          }
-        },
-      },
+    const toggleGroup = (e: LarkEvent): void => {
+      const el = findDataAttr(e.target, "key");
+      if (!el) return;
+      const key = el.dataset["key"] ?? "";
+      groupCollapsed.set(key, !(groupCollapsed.get(key) ?? false));
+      ctx.updater.snapshot();
+      assign();
+      ctx.updater.digest();
     };
+
+    const toggleNested = (e: LarkEvent): void => {
+      const el = findDataAttr(e.target, "key");
+      if (!el) return;
+      const key = el.dataset["key"] ?? "";
+      nestedCollapsed.set(key, !(nestedCollapsed.get(key) ?? false));
+      ctx.updater.snapshot();
+      assign();
+      ctx.updater.digest();
+    };
+
+    const navigateTo = (e: LarkEvent): void => {
+      const href = findDataHref(e.target);
+      if (href) {
+        Router.to(href);
+        // Close the mobile drawer if open.
+        if (State.get("drawerOpen")) {
+          State.set({ drawerOpen: false }).digest();
+        }
+      }
+    };
+
+    const template = jsxTemplate<SidebarData>(({ sidebarGroups }) => (
+      <nav class="flex flex-col" aria-label="Documentation">
+        {sidebarGroups.map((group) => (
+          <div class="mb-6">
+            <button
+              data-key={group.key}
+              onClick={toggleGroup}
+              aria-expanded={group.collapsed ? "false" : "true"}
+              class="group text-muted-foreground hover:text-foreground flex w-full items-center justify-between rounded-md px-2 py-1.5 font-mono text-[11px] font-semibold tracking-[0.14em] uppercase transition-colors duration-200"
+            >
+              {group.text}
+              <span
+                class={[
+                  "size-3.5 opacity-60 transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] [&>svg]:size-full",
+                  group.collapsed && "-rotate-90",
+                ]}
+              >
+                {raw(icons.chevronDown)}
+              </span>
+            </button>
+            <div
+              class={[
+                "grid transition-[grid-template-rows,opacity] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]",
+                group.collapsed
+                  ? "grid-rows-[0fr] opacity-0"
+                  : "grid-rows-[1fr] opacity-100",
+              ]}
+            >
+              <div class="overflow-hidden">
+                <ul class="border-muted/70 mt-1.5 ml-2 border-l pl-px">
+                  {group.rows.map((row) => (
+                    <li>
+                      {row.isGroup ? (
+                        <button
+                          data-key={row.key}
+                          onClick={toggleNested}
+                          aria-expanded={row.groupOpen ? "true" : "false"}
+                          class={[
+                            "flex w-full items-center gap-1.5 rounded-md py-1.5 pr-2 text-[13px] font-medium transition-colors duration-200",
+                            row.containsActive
+                              ? "text-foreground"
+                              : "text-muted-foreground hover:text-foreground",
+                          ]}
+                          style={`padding-left: ${row.padPx}px`}
+                        >
+                          <span
+                            class={[
+                              "size-3.5 shrink-0 opacity-60 transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] [&>svg]:size-full",
+                              row.groupOpen && "rotate-90",
+                            ]}
+                          >
+                            {raw(icons.chevronRight)}
+                          </span>
+                          {row.text}
+                        </button>
+                      ) : (
+                        <a
+                          data-href={row.link}
+                          onClick={navigateTo}
+                          aria-current={row.isActive ? "page" : undefined}
+                          class={[
+                            "relative -ml-px block border-l-2 py-1.5 pr-2 text-[13px] leading-snug transition-[color,background-color,border-color] duration-200",
+                            row.isActive
+                              ? "border-primary bg-primary/8 text-primary font-medium"
+                              : "hover:border-muted hover:bg-accent/50 hover:text-foreground text-muted-foreground border-transparent",
+                          ]}
+                          style={`padding-left: ${row.padPx}px`}
+                        >
+                          {row.text}
+                        </a>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </div>
+        ))}
+      </nav>
+    ));
+
+    return { template, assign };
   });
 }
 

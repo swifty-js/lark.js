@@ -27,7 +27,7 @@ import {
   useState,
   useResource,
 } from "@lark.js/mvc";
-import type { ViewSetup } from "@lark.js/mvc";
+import type { LarkView } from "@lark.js/mvc";
 import { icons } from "./icons";
 
 const STORAGE_KEY = "lark-docs-theme";
@@ -35,31 +35,6 @@ const STORAGE_KEY = "lark-docs-theme";
 interface ThemeToggleData {
   dark: boolean;
 }
-
-const template = jsxTemplate<ThemeToggleData>(({ dark }) => (
-  <button
-    class="hover:bg-accent/60 text-muted-foreground hover:text-foreground relative grid size-8 place-items-center rounded-md transition-colors duration-200"
-    onClick="toggle"
-    aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
-  >
-    <span
-      class={[
-        "absolute size-4.5 transition-[opacity,transform] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] [&>svg]:size-full",
-        dark ? "rotate-0 opacity-100" : "scale-50 -rotate-90 opacity-0",
-      ]}
-    >
-      {raw(icons.moon)}
-    </span>
-    <span
-      class={[
-        "absolute size-4.5 transition-[opacity,transform] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] [&>svg]:size-full",
-        dark ? "scale-50 rotate-90 opacity-0" : "rotate-0 opacity-100",
-      ]}
-    >
-      {raw(icons.sun)}
-    </span>
-  </button>
-));
 
 function systemPrefersDark(): boolean {
   return window.matchMedia("(prefers-color-scheme: dark)").matches;
@@ -76,7 +51,7 @@ function isDark(): boolean {
   return systemPrefersDark();
 }
 
-export function createThemeToggleView(): ViewSetup {
+export function createThemeToggleView(): LarkView {
   return defineView(() => {
     const [getDark, setDark] = useState("dark", isDark());
 
@@ -93,20 +68,42 @@ export function createThemeToggleView(): ViewSetup {
       destroy: () => observer.disconnect(),
     });
 
-    return {
-      template,
-      events: {
-        "toggle<click>": () => {
-          const next = !getDark();
-          setDark(next);
-          document.documentElement.classList.toggle("dark", next);
-          try {
-            localStorage.setItem(STORAGE_KEY, next ? "dark" : "light");
-          } catch {
-            // storage unavailable
-          }
-        },
-      },
+    const toggle = (): void => {
+      const next = !getDark();
+      setDark(next);
+      document.documentElement.classList.toggle("dark", next);
+      try {
+        localStorage.setItem(STORAGE_KEY, next ? "dark" : "light");
+      } catch {
+        // storage unavailable
+      }
     };
+
+    const template = jsxTemplate<ThemeToggleData>(({ dark }) => (
+      <button
+        class="hover:bg-accent/60 text-muted-foreground hover:text-foreground relative grid size-8 place-items-center rounded-md transition-colors duration-200"
+        onClick={toggle}
+        aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
+      >
+        <span
+          class={[
+            "absolute size-4.5 transition-[opacity,transform] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] [&>svg]:size-full",
+            dark ? "rotate-0 opacity-100" : "scale-50 -rotate-90 opacity-0",
+          ]}
+        >
+          {raw(icons.moon)}
+        </span>
+        <span
+          class={[
+            "absolute size-4.5 transition-[opacity,transform] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] [&>svg]:size-full",
+            dark ? "scale-50 rotate-90 opacity-0" : "rotate-0 opacity-100",
+          ]}
+        >
+          {raw(icons.sun)}
+        </span>
+      </button>
+    ));
+
+    return { template };
   });
 }

@@ -52,6 +52,19 @@ describe("compileMarkdown", () => {
     expect(result).toContain("This is a test.");
   });
 
+  it("compiles [[toc]] to the registered toc-inline placeholder", async () => {
+    const source = "# Page\n\n[[toc]]\n\n## Section";
+    const result = await compileMarkdown(source, {
+      config: baseConfig,
+      filePath: "docs/index.md",
+    });
+
+    // Raw registered-path HTML carries no props — the inline flag is baked
+    // into the `theme/toc-inline` factory (see registerThemeViews).
+    expect(result).toContain('v-lark=\\"theme/toc-inline\\"');
+    expect(result).not.toContain("p-lark");
+  });
+
   it("extracts pageData from frontmatter", async () => {
     const source = `---
 title: My Page

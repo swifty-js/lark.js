@@ -358,7 +358,7 @@ Links starting with `/` or `#` are rendered as-is and use the browser's default 
 
 ### Table of Contents
 
-Insert `[[toc]]` anywhere in your markdown to render a table of contents inline. The `[[toc]]` marker is compiled to `<div v-lark="theme/toc" p-lark-inline="true"></div>`, which mounts the TOC theme View in inline mode at that position. The default theme already shows a TOC in the right rail on `xl+` screens, so inline `[[toc]]` is only needed for in-content tables of contents.
+Insert `[[toc]]` anywhere in your markdown to render a table of contents inline. The `[[toc]]` marker is compiled to `<div v-lark="theme/toc-inline"></div>`, which mounts the registered inline TOC variant at that position (the inline flag is baked into the registered factory — raw HTML carries no component props). The default theme already shows a TOC in the right rail on `xl+` screens, so inline `[[toc]]` is only needed for in-content tables of contents.
 
 ### Admonition Containers
 
@@ -440,14 +440,14 @@ docs-layout (root)
 |   +-- Mobile menu button (opens drawer, below lg)
 |   +-- Site title (hour-aware clock logo)
 |   +-- Nav items (hidden below md)
-|   +-- Search trigger (⌘K) + theme toggle (v-lark="theme/theme-toggle")
+|   +-- Search trigger (⌘K) + theme toggle (imported <ThemeToggle/> component)
 +-- Three-column grid (max-w-360, centered)
-|   +-- Sidebar (236px, left, visible on lg+; v-lark="theme/sidebar")
+|   +-- Sidebar (236px, left, visible on lg+; imported <Sidebar/> component)
 |   +-- Content (prose max-w-none; skeleton while loading; 404 state)
-|   +-- TOC (224px, right, visible on xl+; v-lark="theme/toc")
+|   +-- TOC (224px, right, visible on xl+; imported <Toc/> component)
 +-- Prev/Mvc pager (bottom of content, flattened from sidebar order)
 +-- Mobile navigation drawer (focus trap, Escape to close)
-+-- Search dialog (v-lark="theme/search", when search enabled)
++-- Search dialog (imported <Search/> component, when search enabled)
 ```
 
 The layout view stays mounted across all `/docs/*` routes. When the user navigates, `observeLocation` triggers an async `render()` that calls `loadContent(path)` to fetch the new page's compiled markdown, then updates the view data. The compiled markdown HTML is rendered inline via `contentHtml`.

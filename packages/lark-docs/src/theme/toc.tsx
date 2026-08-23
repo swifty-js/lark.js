@@ -21,7 +21,7 @@
  */
 
 import { State, defineView, jsxTemplate, raw, useResource } from "@lark.js/mvc";
-import type { ViewSetup } from "@lark.js/mvc";
+import type { LarkView, LarkEvent } from "@lark.js/mvc";
 import { z } from "zod";
 import { icons } from "./icons";
 
@@ -45,61 +45,6 @@ interface TocData {
   markerShow: boolean;
 }
 
-const template = jsxTemplate<TocData>(
-  ({ inline, headings, markerTop, markerHeight, markerShow }) => (
-    <div>
-      {headings.length > 0 && (
-        <div
-          class={
-            inline
-              ? "not-prose border-muted/80 bg-muted/30 my-6 rounded-xl border p-4"
-              : ""
-          }
-        >
-          <p class="text-muted-foreground flex items-center gap-1.5 font-mono text-[11px] font-semibold tracking-[0.14em] uppercase">
-            <span class="size-3.5 [&>svg]:size-full">{raw(icons.list)}</span>
-            On this page
-          </p>
-          <div class="relative mt-3">
-            <span
-              aria-hidden="true"
-              class="bg-muted/80 absolute inset-y-0 left-0 w-px"
-            ></span>
-            <span
-              aria-hidden="true"
-              class={[
-                "bg-primary absolute left-0 w-px rounded-full transition-[top,height,opacity] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]",
-                !markerShow && "opacity-0",
-              ]}
-              style={`top: ${markerTop}px; height: ${markerHeight}px`}
-            ></span>
-            <ul class="space-y-px pl-3">
-              {headings.map((heading) => (
-                <li class="relative">
-                  <a
-                    href={`#${heading.slug}`}
-                    data-slug={heading.slug}
-                    onClick="scrollToHeading"
-                    class={[
-                      "block py-1 text-xs leading-snug transition-colors duration-200",
-                      heading.level >= 3 && "pl-3",
-                      heading.isActive
-                        ? "text-primary font-medium"
-                        : "text-muted-foreground hover:text-foreground",
-                    ]}
-                  >
-                    {heading.text}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      )}
-    </div>
-  ),
-);
-
 function decodedLocationHash(): string {
   try {
     return decodeURIComponent(window.location.hash);
@@ -112,16 +57,14 @@ function decodedLocationHash(): string {
  * TocView - heading outline with scroll-spy and animated marker.
  *
  * Renders h2/h3 headings for the current page. Supports two placements:
- * right rail (default) and inline ([[toc]] directive, params.inline).
+ * right rail (default) and inline — the `[[toc]]` markdown directive mounts
+ * the `theme/toc-inline` registered variant created with
+ * `createTocView({ inline: true })` (raw registered-path HTML carries no
+ * props, so the flag is baked into the factory).
  */
-export function createTocView(): ViewSetup {
-  return defineView((ctx, params?: unknown) => {
-    const inline =
-      !!params &&
-      typeof params === "object" &&
-      "inline" in params &&
-      params.inline === "true";
-
+export function createTocView(options?: { inline?: boolean }): LarkView {
+  const inline = options?.inline === true;
+  return defineView((ctx) => {
     ctx.updater.set({
       inline,
       headings: [],
@@ -252,24 +195,77 @@ export function createTocView(): ViewSetup {
       setTimeout(syncMarker, 0);
     };
 
-    return {
-      template,
-      assign,
-      events: {
-        "scrollToHeading<click>": (e: Event) => {
-          e.preventDefault();
-          let el = e.target instanceof HTMLElement ? e.target : null;
-          while (el && !el.dataset["slug"]) el = el.parentElement;
-          const slug = el ? (el.dataset["slug"] ?? null) : null;
-          if (!slug) return;
-          const target = document.getElementById(slug);
-          if (!target) return;
-          if (decodedLocationHash() !== `#${slug}`) {
-            history.pushState(null, "", `#${slug}`);
-          }
-          target.scrollIntoView({ behavior: "smooth", block: "start" });
-        },
-      },
+    const scrollToHeading = (e: LarkEvent): void => {
+      e.preventDefault();
+      let el = e.target instanceof HTMLElement ? e.target : null;
+      while (el && !el.dataset["slug"]) el = el.parentElement;
+      const slug = el ? (el.dataset["slug"] ?? null) : null;
+      if (!slug) return;
+      const target = document.getElementById(slug);
+      if (!target) return;
+      if (decodedLocationHash() !== `#${slug}`) {
+        history.pushState(null, "", `#${slug}`);
+      }
+      target.scrollIntoView({ behavior: "smooth", block: "start" });
     };
+
+    const template = jsxTemplate<TocData>(
+      ({ inline: isInline, headings, markerTop, markerHeight, markerShow }) => (
+        <div>
+          {headings.length > 0 && (
+            <div
+              class={
+                isInline
+                  ? "not-prose border-muted/80 bg-muted/30 my-6 rounded-xl border p-4"
+                  : ""
+              }
+            >
+              <p class="text-muted-foreground flex items-center gap-1.5 font-mono text-[11px] font-semibold tracking-[0.14em] uppercase">
+                <span class="size-3.5 [&>svg]:size-full">
+                  {raw(icons.list)}
+                </span>
+                On this page
+              </p>
+              <div class="relative mt-3">
+                <span
+                  aria-hidden="true"
+                  class="bg-muted/80 absolute inset-y-0 left-0 w-px"
+                ></span>
+                <span
+                  aria-hidden="true"
+                  class={[
+                    "bg-primary absolute left-0 w-px rounded-full transition-[top,height,opacity] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]",
+                    !markerShow && "opacity-0",
+                  ]}
+                  style={`top: ${markerTop}px; height: ${markerHeight}px`}
+                ></span>
+                <ul class="space-y-px pl-3">
+                  {headings.map((heading) => (
+                    <li class="relative">
+                      <a
+                        href={`#${heading.slug}`}
+                        data-slug={heading.slug}
+                        onClick={scrollToHeading}
+                        class={[
+                          "block py-1 text-xs leading-snug transition-colors duration-200",
+                          heading.level >= 3 && "pl-3",
+                          heading.isActive
+                            ? "text-primary font-medium"
+                            : "text-muted-foreground hover:text-foreground",
+                        ]}
+                      >
+                        {heading.text}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
+        </div>
+      ),
+    );
+
+    return { template, assign };
   });
 }

@@ -23,8 +23,9 @@
 /**
  * Custom markdown-it plugin: [[toc]] directive.
  *
- * Replaces `[[toc]]` in markdown content with a `<div v-lark="theme/toc">`
- * placeholder (marked inline) that gets mounted as a TocView at runtime.
+ * Replaces `[[toc]]` in markdown content with a
+ * `<div v-lark="theme/toc-inline">` placeholder that gets mounted as an
+ * inline TocView at runtime.
  */
 import type MarkdownIt from "markdown-it";
 
@@ -44,11 +45,11 @@ export function tocPlugin(md: MarkdownIt): void {
     return true;
   });
 
-  // The placeholder is injected via contentHtml, which never passes through
-  // the lark-mvc template compiler — so the `*prop` shorthand would not be
-  // rewritten. Emit the runtime attribute `p-lark-inline` directly, which
-  // mountZone reads when constructing the TocView's props.
+  // The placeholder is injected via contentHtml (raw registered-path HTML),
+  // which carries no component props — mountZone resolves the registered
+  // `theme/toc-inline` variant whose factory bakes in the inline flag
+  // (see registerThemeViews).
   md.renderer.rules["toc_placeholder"] = () => {
-    return '<div v-lark="theme/toc" p-lark-inline="true"></div>';
+    return '<div v-lark="theme/toc-inline"></div>';
   };
 }

@@ -24,17 +24,13 @@ import {
   defineView,
   jsxTemplate,
   raw,
-  useState,
+  signal,
   useResource,
 } from "@lark.js/mvc";
 import type { LarkView } from "@lark.js/mvc";
 import { icons } from "./icons";
 
 const STORAGE_KEY = "lark-docs-theme";
-
-interface ThemeToggleData {
-  dark: boolean;
-}
 
 function systemPrefersDark(): boolean {
   return window.matchMedia("(prefers-color-scheme: dark)").matches;
@@ -53,12 +49,11 @@ function isDark(): boolean {
 
 export function createThemeToggleView(): LarkView {
   return defineView(() => {
-    const [getDark, setDark] = useState("dark", isDark());
+    const dark = signal(isDark());
 
     // Keep in sync if another instance or devtools flips the class.
     const observer = new MutationObserver(() => {
-      const nowDark = document.documentElement.classList.contains("dark");
-      if (nowDark !== getDark()) setDark(nowDark);
+      dark.value = document.documentElement.classList.contains("dark");
     });
     observer.observe(document.documentElement, {
       attributes: true,
@@ -69,8 +64,8 @@ export function createThemeToggleView(): LarkView {
     });
 
     const toggle = (): void => {
-      const next = !getDark();
-      setDark(next);
+      const next = !dark.value;
+      dark.value = next;
       document.documentElement.classList.toggle("dark", next);
       try {
         localStorage.setItem(STORAGE_KEY, next ? "dark" : "light");
@@ -79,16 +74,18 @@ export function createThemeToggleView(): LarkView {
       }
     };
 
-    const template = jsxTemplate<ThemeToggleData>(({ dark }) => (
+    const template = jsxTemplate(() => (
       <button
         class="hover:bg-accent/60 text-muted-foreground hover:text-foreground relative grid size-8 place-items-center rounded-md transition-colors duration-200"
         onClick={toggle}
-        aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
+        aria-label={dark.value ? "Switch to light mode" : "Switch to dark mode"}
       >
         <span
           class={[
             "absolute size-4.5 transition-[opacity,transform] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] [&>svg]:size-full",
-            dark ? "rotate-0 opacity-100" : "scale-50 -rotate-90 opacity-0",
+            dark.value
+              ? "rotate-0 opacity-100"
+              : "scale-50 -rotate-90 opacity-0",
           ]}
         >
           {raw(icons.moon)}
@@ -96,7 +93,9 @@ export function createThemeToggleView(): LarkView {
         <span
           class={[
             "absolute size-4.5 transition-[opacity,transform] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] [&>svg]:size-full",
-            dark ? "scale-50 rotate-90 opacity-0" : "rotate-0 opacity-100",
+            dark.value
+              ? "scale-50 rotate-90 opacity-0"
+              : "rotate-0 opacity-100",
           ]}
         >
           {raw(icons.sun)}

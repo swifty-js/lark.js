@@ -41,15 +41,17 @@
  *   serial queuing, and lifecycle events
  * - **Frame** — view lifecycle management (mount/unmount, parent-child tree,
  *   cross-view method invocation)
- * - **Updater** — per-view data binding with change detection and DOM diff
  *
  * ## Design principles
  *
  * - Functional API — no `class`, no `this`, no `prototype`, no `mixin`
- * - Zero dependencies
+ * - Signals-based reactivity (`@preact/signals-core`) — read = subscribe,
+ *   write = re-render; shallow (reference) comparison
  * - Real DOM diff via `innerHTML` + keyed comparison (not virtual DOM by default)
  * - Module Federation support for micro-frontends
  */
+
+import type { Signal } from "@preact/signals-core";
 
 // ============================================================
 // Function types
@@ -254,20 +256,13 @@ export interface FrameInvokeEntry {
 
 /**
  * Template function signature.
- * Called with `(data, viewId, refData)` by the Updater at render time and
- * must return an HTML string. Produced by `jsxTemplate()` (which serializes
- * the JSX VNode tree), or hand-written for fully custom rendering.
+ * Called with `(viewId, refData)` inside the view's render effect and must
+ * return an HTML string. Produced by `jsxTemplate()` (which serializes the
+ * JSX VNode tree), or hand-written for fully custom rendering. Reactive data
+ * is read via closures (signals, `params`, `State`, stores) — every signal
+ * read during the call subscribes the view.
  */
-export type ViewTemplate = (data: unknown, viewId: string, refData: unknown) => string;
-
-export interface ViewLocationObserved {
-  /** Whether observing location */
-  flag: number;
-  /** Keys to observe */
-  keys: string[];
-  /** Whether observing path */
-  observePath: boolean;
-}
+export type ViewTemplate = (viewId: string, refData: Record<string, unknown>) => string;
 
 export interface ViewResourceEntry {
   /** The resource entity */
@@ -388,30 +383,6 @@ export interface CacheApi<T = unknown> {
 }
 
 /**
- * Functional updater API.
- *
- * Returned by `createUpdater()`. `refData` is a property.
- * `set()` returns the API object for chaining.
- */
-export interface UpdaterApi {
-  get: <T = unknown>(key?: string) => T;
-  set: (data: Record<string, unknown>, excludes?: ReadonlySet<string>) => UpdaterApi;
-  digest: (
-    data?: Record<string, unknown>,
-    excludes?: ReadonlySet<string>,
-    callback?: () => void,
-  ) => void;
-  forceDigest: () => void;
-  snapshot: () => UpdaterApi;
-  altered: () => boolean | undefined;
-  refData: Record<string, unknown>;
-  /** Resolve a refFn token (emitted by the JSX serializer for object/function
-   *  values) back to the live value; non-token inputs pass through. */
-  translate: (data: unknown) => unknown;
-  getChangedKeys: () => ReadonlySet<string>;
-}
-
-/**
  * Mutable reference cell — used for `signature` and `rendered` on `ViewCtx`.
  * Wraps mutable state in a `Ref<T>` to avoid getter/setter syntax.
  */
@@ -430,8 +401,13 @@ export interface ViewCtx {
   id: string;
   /** Owner frame reference */
   owner: FrameObj;
-  /** Updater API for data binding */
-  updater: UpdaterApi;
+  /** Ref-token store read by templates (JSX object/function values). */
+  refData: Record<string, unknown>;
+  /** Resolve a refFn token (emitted by the JSX serializer for object/function
+   *  values) back to the live value; non-token inputs pass through. */
+  translate(data: unknown): unknown;
+  /** Keyed signals created via `useSignal` — reused across HMR re-setups. */
+  signals: Map<string, Signal<unknown>>;
   /** Signature: >0 means active, incremented on render, 0 = destroyed */
   signature: Ref<number>;
   /** Whether rendered at least once */
@@ -439,23 +415,15 @@ export interface ViewCtx {
   /** View template function (accessed via getTemplate/setTemplate) */
   getTemplate(): ViewTemplate | undefined;
   setTemplate(v: ViewTemplate | undefined): void;
-  /** Location observation config */
-  locationObserved: ViewLocationObserved;
-  /** Observed state keys (declared via observeState) */
-  getObservedStateKeys(): string[] | undefined;
   /** Resource map */
   resources: Record<string, ViewResourceEntry>;
   /** Internal emitter for lifecycle events ("destroy", "render", etc.) */
   emitter: EmitterApi;
-  /** Wrapped render method */
-  renderMethod?: AnyFunc;
   /** Event handlers returned by setup (accessed via getEvents/setEvents) */
   getEvents(): Record<string, AnyFunc> | undefined;
   setEvents(v: Record<string, AnyFunc> | undefined): void;
   /** Cleanup functions registered by useEffect */
   cleanups: Array<() => void>;
-  /** assign function returned by setup — invoked by the framework on render */
-  setAssign(v: ((options?: unknown) => boolean | undefined) | undefined): void;
 
   // Lifecycle / framework API methods
   render(): void;
@@ -464,8 +432,6 @@ export interface ViewCtx {
     fn: Fn,
     context?: unknown,
   ): (...args: Parameters<Fn>) => ReturnType<Fn> | undefined;
-  observeLocation(params: string | string[] | Record<string, unknown>, observePath?: boolean): void;
-  observeState(keys: string | string[]): void;
   capture(key: string, resource?: unknown, destroyOnRender?: boolean): unknown;
   release(key: string, destroy?: boolean): unknown;
   fire(
@@ -502,8 +468,13 @@ export interface FrameObj {
   readyCount: number;
   readyMap: Set<string>;
   emitter: EmitterApi;
-  /** Dispatcher visit tag (set during dispatcherUpdate walk) */
-  dispatcherUpdateTag?: number;
+  /**
+   * Reactive props store — one signal per prop key behind a stable proxy.
+   * The proxy is passed to the child setup as `params`; reading a key inside
+   * a tracked region (template/computed/effect) subscribes the reader.
+   * `mountZone` batch-writes fresh props each parent render.
+   */
+  paramsStore?: { signals: Map<string, Signal<unknown>>; proxy: Record<string, unknown> };
   /**
    * Child→parent event trampolines, keyed by event name. The frame emitter
    * subscribes ONE stable wrapper per name; each parent render swaps
@@ -530,16 +501,15 @@ export interface FrameObj {
  * View setup function — the functional API for defining views.
  *
  * Called once on mount with a `ViewCtx` and optional init params.
- * Returns a descriptor with `template` and optional `assign`.
- * Events are declared as inline functions in the JSX template
- * (`onClick={() => ...}`) — there is no events map.
+ * Returns a descriptor with `template`. Reactive data is read inside the
+ * template via signals/`params`/`State`/stores (read = subscribe); events
+ * are declared as inline functions in the JSX template (`onClick={() => ...}`).
  */
 export type ViewSetup<T = unknown> = (ctx: ViewCtx, params?: T) => ViewSetupResult;
 
 /** The descriptor returned by a view setup function. */
 export interface ViewSetupResult {
   template?: ViewTemplate;
-  assign?: (options?: unknown) => boolean | undefined;
 }
 
 /** Class attribute value: string, array (falsy entries dropped), or truthy-key map. */
@@ -671,17 +641,6 @@ export interface StateApi {
    * @returns Function that registers destroy cleanup on a ctx
    */
   clean(keys: string): (ctx: { on: (event: string, handler: () => void) => void }) => void;
-  /**
-   * Detect data changes and dispatch changed event.
-   * After set, must explicitly call `digest()` to dispatch changed event and notify views to update.
-   * @param data Optional data object, if provided calls `set()` first to set data
-   * @param excludes Set of keys to exclude from change tracking
-   */
-  digest(data?: Record<string, unknown>, excludes?: ReadonlySet<string>): void;
-  /**
-   * Get the set of keys changed in the most recent digest.
-   */
-  diff: () => ReadonlySet<string>;
   onChanged?: (e?: ChangeEvent) => void;
 }
 
@@ -835,13 +794,6 @@ export interface FrameworkApi {
    * @param eventInit CustomEvent init options
    */
   dispatchEvent(target: EventTarget, eventType: string, eventInit?: CustomEventInit): void;
-  /**
-   * Execute a function in try-catch with chunked scheduling.
-   * @param fn Function to execute
-   * @param args Arguments to pass
-   * @param context `this` context
-   */
-  task(fn: AnyFunc, args?: unknown[], context?: unknown): void;
   /**
    * Wait for all views in a zone to be rendered.
    * Returns WAIT_OK if rendered, WAIT_TIMEOUT_OR_NOT_FOUND if timeout or not found.

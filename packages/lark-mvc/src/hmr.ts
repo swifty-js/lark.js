@@ -33,24 +33,23 @@
  *
  * ## State preservation strategy
  *
- * `hotSwapView` preserves the entire `ViewCtx` — `updater.data`, `resources`,
- * `emitter`, `signature`, `id`, and `owner` all stay the same. It:
- * 1. Runs old `useEffect` cleanups (this includes the JSX event wiring
- *    cleanup, which unbinds delegated event types and strips `__jsx*`
- *    handlers)
+ * `hotSwapView` preserves the entire `ViewCtx` — `signals` (keyed
+ * `useSignal` state), `refData`, `resources`, `emitter`, `signature`, `id`,
+ * and `owner` all stay the same. It:
+ * 1. Runs old `useEffect` cleanups — this disposes the old render effect
+ *    and the JSX event wiring cleanup (unbinds delegated event types and
+ *    strips `__jsx*` handlers)
  * 2. Destroys `destroyOnRender` resources
- * 3. Re-runs `newSetup(ctx)` — the same ctx instance
- * 4. Updates template/assign from the new descriptor
- * 5. Increments signature, fires `render`, destroys transient resources,
- *    and calls `updater.forceDigest()` — the re-render re-wires inline
- *    handlers from scratch
- *
- * Because the setup function re-runs against the preserved ctx, any data set
- * via `ctx.updater.set()` in the previous setup survives the swap.
+ * 3. Re-runs `newSetup(ctx)` — the same ctx instance, inside `untracked()`;
+ *    `useSignal(key, ...)` calls find and reuse the preserved signals
+ * 4. Updates the template from the new descriptor
+ * 5. Creates a fresh render effect — its first run re-renders with the new
+ *    template and re-wires inline handlers from scratch
  */
 import { parseUri } from "./utils";
+import { untracked } from "./reactive";
 import { getViewClassRegistry, resolveSetup, aliasViewName } from "./view-registry";
-import { destroyAllResources } from "./view";
+import { destroyAllResources, createRenderEffect } from "./view";
 import { setCurrentCtx } from "./hooks";
 import type { ViewSetup, ViewSetupResult, FrameObj, LarkView } from "./types";
 import { Frame } from "./frame";
@@ -59,8 +58,8 @@ import { Frame } from "./frame";
  * Hot-swap a single frame's view setup in place, preserving the `ViewCtx`.
  *
  * This is the building block for state-preserving HMR. The existing ctx is
- * reused — only the setup function, template, and assign are replaced. See
- * the module-level docs for the full step-by-step sequence.
+ * reused — only the setup function and template are replaced. See the
+ * module-level docs for the full step-by-step sequence.
  *
  * @param frame - The frame whose view should be hot-swapped
  * @param newSetup - The new view setup (or branded component) from the updated module
@@ -73,26 +72,30 @@ export function hotSwapView(frame: FrameObj, newSetup: ViewSetup | LarkView<neve
     if (vp) frame.mountView(vp);
     return;
   }
+  // Cleanups include the old render-effect dispose and the JSX event wiring
+  // teardown — after this, no stale effect can re-run the old template.
   for (let i = oldView.cleanups.length - 1; i >= 0; i--) {
     oldView.cleanups[i]();
   }
   oldView.cleanups.length = 0;
   destroyAllResources(oldView, false);
-  // Set currentCtx so hooks inside the new setup can access the ctx
+  // Set currentCtx so hooks inside the new setup can access the ctx.
+  // untracked(): setup-body signal reads must not subscribe anything.
   setCurrentCtx(oldView);
   let descriptor: ViewSetupResult;
   try {
-    descriptor = setupFn(oldView, undefined);
+    descriptor = untracked(() => setupFn(oldView, undefined));
   } finally {
     setCurrentCtx(null);
   }
   oldView.setTemplate(descriptor.template);
-  if (descriptor.assign) oldView.setAssign(descriptor.assign);
   if (oldView.signature.value > 0) {
-    oldView.signature.value++;
-    oldView.fire("render");
-    destroyAllResources(oldView, false);
-    oldView.updater.forceDigest();
+    if (oldView.getTemplate()) {
+      // Fresh render effect — first run renders the new template.
+      createRenderEffect(oldView);
+    } else {
+      oldView.endUpdate();
+    }
   }
 }
 

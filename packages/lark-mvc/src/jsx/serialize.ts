@@ -43,6 +43,7 @@
  */
 
 import { encodeHTML, strSafe, refFn, SPLITTER, LARK_VIEW, LARK_PROP } from "../common";
+import { Signal } from "../reactive";
 import { ensureViewName } from "../view-registry";
 import {
   Fragment,
@@ -60,7 +61,7 @@ import type { AnyFunc } from "../types";
 export interface SerializeCtx {
   /** Owning view (frame) id — prefixes event attributes. */
   viewId: string;
-  /** The view updater's refData store for `refFn` tokens. */
+  /** The view's refData store for `refFn` tokens. */
   refData: Record<string, unknown>;
   /** Collected inline handlers: `"__jsxN<type>"` → fn. */
   handlers: Map<string, AnyFunc>;
@@ -92,6 +93,11 @@ function refToken(ctx: SerializeCtx, value: unknown): string {
   const token = refFn(ctx.refData, value, "");
   ctx.usedTokens.add(token);
   return token;
+}
+
+/** Unwrap a Signal to its current value (tracked read); pass anything else through. */
+function unwrapSignal(value: unknown): unknown {
+  return value instanceof Signal ? value.value : value;
 }
 
 /** HTML void elements — serialized without a closing tag. */
@@ -186,7 +192,7 @@ function styleToString(value: unknown): string {
  */
 export function serialize(node: JSXNode, ctx: SerializeCtx): string {
   // Bare template calls may hand in a refData object without the refFn
-  // counter (the updater normally initializes it) — repair defensively.
+  // counter (createCtx normally initializes it) — repair defensively.
   if (typeof ctx.refData[SPLITTER] !== "number") {
     ctx.refData[SPLITTER] = 1;
   }
@@ -207,6 +213,11 @@ function serializeNode(node: JSXNode, ctx: SerializeCtx): string {
   }
   if (isRawHTML(node)) {
     return strSafe(node.html);
+  }
+  // Signal child ({count} without .value) — unwrap and recurse. The tracked
+  // read happens inside the render effect, subscribing the view.
+  if (node instanceof Signal) {
+    return serializeNode(node.value as JSXNode, ctx);
   }
   if (isVNode(node)) {
     return serializeVNode(node, ctx);
@@ -293,14 +304,16 @@ function serializeElement(tag: string, vnode: VNode, ctx: SerializeCtx): string 
   const props = vnode.props;
 
   // id precedence: explicit `id` prop, else `key` (keyed-diff compare key)
-  const rawId = props["id"];
+  const rawId = unwrapSignal(props["id"]);
   const idValue = rawId != null ? strSafe(rawId) : vnode.key;
 
   let attrs = "";
   let classValue = "";
 
   for (const name of Object.keys(props)) {
-    const value = props[name];
+    // Signal attribute values unwrap here (tracked read); component props
+    // are packed by serializeViewTag and deliberately stay wrapped.
+    const value = unwrapSignal(props[name]);
     if (name === "children" || name === "key" || name === "id") continue;
 
     if (!ATTR_NAME_REGEXP.test(name)) {
@@ -348,7 +361,7 @@ function serializeElement(tag: string, vnode: VNode, ctx: SerializeCtx): string 
     }
     if (value === false || value == null) continue;
     if (typeof value === "object" || typeof value === "function") {
-      // Live-reference token — resolvable via updater.translate
+      // Live-reference token — resolvable via ctx.translate
       attrs += ` ${name}="${encodeHTML(refToken(ctx, value))}"`;
       continue;
     }

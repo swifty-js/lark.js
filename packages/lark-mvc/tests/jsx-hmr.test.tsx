@@ -21,14 +21,16 @@
  */
 
 /**
- * HMR tests for JSX views: hotSwapByView must preserve updater data, render
- * the new JSX markup, re-wire inline handlers, and keep the EventDelegator
- * bind/unbind refcount balanced across consecutive swaps.
+ * HMR tests for JSX views: hotSwapByView must preserve keyed signal state,
+ * render the new JSX markup, re-wire inline handlers, and keep the
+ * EventDelegator bind/unbind refcount balanced across consecutive swaps.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { hotSwapByView } from "../src/hmr";
 import { defineView } from "../src/view";
+import { useSignal } from "../src/hooks";
+import { signal, type Signal } from "../src/reactive";
 import { Frame, createFrame, registerViewClass, invalidateViewClass } from "../src/frame";
 import { getViewClassRegistry, ensureViewName } from "../src/view-registry";
 import { EventDelegator } from "../src/event-delegator";
@@ -61,15 +63,14 @@ function click(el: Element): void {
 
 /** Build a JSX view setup whose markup carries `label` and an inline handler. */
 function makeJsxSetup(label: string, onHit: (label: string) => void) {
-  return defineView((ctx) => {
-    // Initialize once — hotSwapView re-runs setup against the preserved ctx
-    if (ctx.updater.get("count") === undefined) {
-      ctx.updater.set({ count: 0 });
-    }
+  return defineView(() => {
+    // Keyed signal — hotSwapView re-runs setup against the preserved ctx
+    // and useSignal reuses the stored signal (state survives the swap).
+    const count = useSignal("count", 0);
     return {
-      template: jsxTemplate<{ count: number }>(({ count }) => (
+      template: jsxTemplate(() => (
         <div class={label}>
-          <span data-role="count">{count}</span>
+          <span data-role="count">{count.value}</span>
           <button data-role="hit" onClick={() => onHit(label)}>
             hit
           </button>
@@ -97,7 +98,7 @@ describe("JSX views + HMR", () => {
     frame.mountView("jsx/hmr");
     await flush();
 
-    frame.view!.updater.set({ count: 9 }).digest();
+    (frame.view!.signals.get("count") as Signal<number>).value = 9;
     await flush();
     expect(document.querySelector("#jsx-hmr [data-role='count']")!.textContent).toBe("9");
 
@@ -105,8 +106,8 @@ describe("JSX views + HMR", () => {
     hotSwapByView(OldView, NewView);
     await flush();
 
-    // Data preserved, new markup rendered
-    expect(frame.view!.updater.get<number>("count")).toBe(9);
+    // Keyed signal state preserved, new markup rendered
+    expect(document.querySelector("#jsx-hmr [data-role='count']")!.textContent).toBe("9");
     expect(document.querySelector("#jsx-hmr .gen-new")).toBeTruthy();
     expect(document.querySelector("#jsx-hmr .gen-old")).toBeNull();
     expect(getViewClassRegistry()["jsx/hmr"]).toBe(NewView.setup);
@@ -157,16 +158,13 @@ describe("JSX views + HMR", () => {
   });
 
   it("swapped-in view can change its inline event types safely", async () => {
-    const V1 = defineView((ctx) => {
-      ctx.updater.set({});
-      return {
-        template: jsxTemplate(() => (
-          <button data-role="a" onClick={() => undefined}>
-            a
-          </button>
-        )),
-      };
-    });
+    const V1 = defineView(() => ({
+      template: jsxTemplate(() => (
+        <button data-role="a" onClick={() => undefined}>
+          a
+        </button>
+      )),
+    }));
     registerViewClass("jsx/hmr-types", V1);
 
     const frame = makeFrame("jsx-hmr-types");
@@ -174,12 +172,9 @@ describe("JSX views + HMR", () => {
     await flush();
 
     const seen: string[] = [];
-    const V2 = defineView((ctx) => {
-      ctx.updater.set({});
-      return {
-        template: jsxTemplate(() => <input data-role="b" onInput={() => seen.push("input")} />),
-      };
-    });
+    const V2 = defineView(() => ({
+      template: jsxTemplate(() => <input data-role="b" onInput={() => seen.push("input")} />),
+    }));
     hotSwapByView(V1, V2);
     await flush();
 
@@ -193,17 +188,20 @@ describe("JSX views + HMR", () => {
   });
 
   it("aliases the new component to the old auto-registered name (stale parent imports keep matching)", async () => {
-    const Old = defineView((ctx) => {
-      ctx.updater.set({});
-      return { template: jsxTemplate(() => <i data-role="gen">old</i>) };
-    });
+    const Old = defineView(() => ({
+      template: jsxTemplate(() => <i data-role="gen">old</i>),
+    }));
+    const parentTick = signal(0);
     // Auto-register by serializing through a parent template once
     registerViewClass(
       "jsx/hmr-alias-parent",
-      defineView((ctx) => {
-        ctx.updater.digest({});
-        return { template: jsxTemplate(() => <Old id="alias-child" />) };
-      }),
+      defineView(() => ({
+        template: jsxTemplate(() => (
+          <div data-tick={parentTick.value}>
+            <Old id="alias-child" />
+          </div>
+        )),
+      })),
     );
     const frame = makeFrame("jsx-hmr-alias");
     frame.mountView("jsx/hmr-alias-parent");
@@ -213,10 +211,9 @@ describe("JSX views + HMR", () => {
     const childBefore = Frame.get("alias-child");
     expect(childBefore?.view).toBeTruthy();
 
-    const New = defineView((ctx) => {
-      ctx.updater.set({});
-      return { template: jsxTemplate(() => <i data-role="gen">new</i>) };
-    });
+    const New = defineView(() => ({
+      template: jsxTemplate(() => <i data-role="gen">new</i>),
+    }));
     hotSwapByView(Old, New);
     await flush();
 
@@ -226,7 +223,7 @@ describe("JSX views + HMR", () => {
     expect(document.querySelector("#jsx-hmr-alias [data-role='gen']")!.textContent).toBe("new");
 
     // Parent re-render must not remount the child frame
-    frame.view!.updater.set({ tick: 1 }).digest();
+    parentTick.value = 1;
     await flush();
     expect(Frame.get("alias-child")).toBe(childBefore);
   });

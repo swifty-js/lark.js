@@ -24,29 +24,47 @@
  * View system — functional API for defining and managing views.
  *
  * A view is defined by a setup function that receives a `ViewCtx` and
- * returns `{ template, events, assign? }`. The ctx provides all framework
- * APIs (updater, events, capture/release, observe, etc.) via closures — no
- * `this` binding, no `class`, no `prototype`, no `mixin`.
+ * returns `{ template }`. The ctx provides all framework APIs (refData,
+ * capture/release, events, etc.) via closures — no `this` binding, no
+ * `class`, no `prototype`, no `mixin`.
+ *
+ * ## Reactive rendering
+ *
+ * Every mounted view runs its template inside ONE `@preact/signals-core`
+ * `effect()` — the render effect. Any signal read during template evaluation
+ * (view-local `signal()`s, `params.key`, `State.get(key)`, store state,
+ * `Router.parse()`) subscribes the view; writing a subscribed signal re-runs
+ * the effect synchronously (writes inside `batch()` coalesce). There is no
+ * manual digest, no dirty-checking, no dispatcher walk — the effect IS the
+ * dirty check.
  *
  * ## Lifecycle
  *
  * 1. **Setup** — `mountCtx(frame, setup, params)` creates a `ViewCtx`, sets it
- *    as the current hooks context, runs `setup(ctx, params)`, then wires the
- *    returned `template` / `events` / `assign` onto the ctx.
- * 2. **Render** — `ctx.render()` increments `signature`, fires `render`,
- *    destroys transient resources, and calls `updater.digest()`.
- * 3. **Destroy** — `unmountCtx(ctx)` runs `useEffect` cleanups, unregisters
- *    events, destroys all resources, fires `destroy`, and sets `signature = 0`.
+ *    as the current hooks context, runs `setup(ctx, params)` inside
+ *    `untracked()` (so signal reads in the setup body never leak into an
+ *    enclosing render effect), then wires the returned `template` onto the ctx.
+ * 2. **Render** — the render effect's first run is the initial render; each
+ *    run increments `signature`, fires `render`, destroys transient
+ *    resources, evaluates the template (tracked), applies the DOM diff, and
+ *    calls `endUpdate` inside `untracked()` (child views mounted by
+ *    `mountZone` own their own render effects).
+ * 3. **Destroy** — `unmountCtx(ctx)` runs `useEffect` cleanups (including the
+ *    render-effect dispose), destroys all resources, fires `destroy`, and
+ *    sets `signature = 0`.
  *
  * ## Async safety
  *
  * `ctx.wrapAsync(fn)` captures `signature` at wrap time; the wrapped function
  * only executes if `signature` still matches — stale callbacks after a view
- * re-render or destroy are silently dropped.
+ * re-render or destroy are silently dropped. Note that ANY reactive re-render
+ * bumps `signature`.
  */
-import { hasOwnProperty, funcWithTry, noop } from "./utils";
+import { hasOwnProperty, funcWithTry, noop, getById } from "./utils";
+import { SPLITTER, isRefToken } from "./common";
+import { domGetNode, domSetChildNodes, applyDomOps, applyIdUpdates, createDomRef } from "./dom";
+import { signal, effect, untracked, type Signal } from "./reactive";
 import { createEmitter } from "./event-emitter";
-import { createUpdater } from "./updater";
 import { setCurrentCtx } from "./hooks";
 import { VIEW_MARK } from "./jsx/vnode";
 import { resolveSetup } from "./view-registry";
@@ -59,7 +77,6 @@ import type {
   ViewSetup,
   ViewSetupResult,
   FrameObj,
-  ViewLocationObserved,
   ViewResourceEntry,
   ViewTemplate,
 } from "./types";
@@ -74,9 +91,10 @@ let warnedDirectCall = false;
  * Define a view component via a setup function (hooks style).
  *
  * The setup function runs once on mount, receives a `ViewCtx` and the props
- * passed at the JSX usage site, and returns `{ template, assign? }`. Hooks
- * (`useState`, `useEffect`, etc.) can be called inside setup. Events are
- * inline functions in the template JSX.
+ * passed at the JSX usage site, and returns `{ template }`. Hooks
+ * (`useSignal`, `useEffect`, etc.) can be called inside setup. Events are
+ * inline functions in the template JSX; reactive data is read inside the
+ * template via signals (read = subscribe).
  *
  * The returned `LarkView` is used directly as a JSX tag — the serializer
  * intercepts it and mounts the view through the Frame tree. Calling it like
@@ -85,9 +103,9 @@ let warnedDirectCall = false;
  * @example
  * const Counter = defineView<{ step: number; onChange: (d?: object) => void }>(
  *   (ctx, params) => {
- *     const [getCount, setCount] = useState("count", 0);
- *     const template = jsxTemplate<{ count: number }>(({ count }) => (
- *       <button onClick={() => setCount(getCount() + (params?.step ?? 1))}>{count}</button>
+ *     const count = signal(0);
+ *     const template = jsxTemplate(() => (
+ *       <button onClick={() => (count.value += params?.step ?? 1)}>{count.value}</button>
  *     ));
  *     return { template };
  *   },
@@ -124,22 +142,20 @@ export function defineView<P extends object = object>(
  */
 export function createCtx(frame: FrameObj): ViewCtx {
   const id = frame.id;
-  const updater = createUpdater(id);
   const emitter = createEmitter();
   const signature = { value: 0 };
   const rendered = { value: false };
   const resources: Record<string, ViewResourceEntry> = {};
-  const locationObserved: ViewLocationObserved = {
-    flag: 0,
-    keys: [],
-    observePath: false,
-  };
+  const signals = new Map<string, Signal<unknown>>();
+
+  /** Ref-token store for template rendering (JSX object/function values). */
+  const refData: Record<string, unknown> = {};
+  refData[SPLITTER] = 1;
+
   const mutable = {
-    observedStateKeys: undefined as string[] | undefined,
     endUpdatePending: undefined as number | undefined,
     template: undefined as ViewTemplate | undefined,
     events: undefined as Record<string, AnyFunc> | undefined,
-    assignFn: undefined as ((options?: unknown) => boolean | undefined) | undefined,
   };
 
   const cleanups: Array<() => void> = [];
@@ -163,6 +179,19 @@ export function createCtx(frame: FrameObj): ViewCtx {
     emitter.fire(event, data, remove, lastToFirst);
   }
 
+  // ── Ref-token resolution ──
+
+  /**
+   * Resolve a SPLITTER-prefixed reference token to its original JS value.
+   *
+   * Used to restore object references that were tokenized by `refFn` during
+   * JSX serialization (component props, object/function attribute values).
+   */
+  function translate(dataVal: unknown): unknown {
+    if (typeof dataVal !== "string" || !isRefToken(dataVal)) return dataVal;
+    return hasOwnProperty(refData, dataVal) ? refData[dataVal] : dataVal;
+  }
+
   // ── Resource management ──
 
   /**
@@ -174,7 +203,7 @@ export function createCtx(frame: FrameObj): ViewCtx {
    *
    * @param key - Unique resource key
    * @param resource - Object with a `destroy()` method (omit to read)
-   * @param destroyOnRender - If true, destroyed on the next `render()` call
+   * @param destroyOnRender - If true, destroyed on the next render
    * @returns The stored entity (when reading) or the resource (when writing)
    */
   function capture(key: string, resource?: unknown, destroyOnRender = false): unknown {
@@ -202,28 +231,17 @@ export function createCtx(frame: FrameObj): ViewCtx {
   // ── Render lifecycle ──
 
   /**
-   * Render the view: increment signature, fire `render`, destroy transient
-   * resources, then call `updater.digest()` (or `ctx.renderMethod` if set).
+   * Force a re-render through the render effect.
    *
-   * No-op if the view is destroyed (`signature === 0`).
+   * Reactive updates never need this — writing any signal the template reads
+   * re-renders automatically. `render()` exists for non-reactive triggers
+   * (HMR template swaps, imperative refresh).
+   *
+   * Placeholder — `createRenderEffect` rebinds it to bump the effect's
+   * invalidation signal; template-less views keep this no-op.
    */
   function render(): void {
-    if (signature.value > 0) {
-      signature.value++;
-      fire("render");
-      destroyAllResources(ctx, false);
-
-      if (typeof ctx.renderMethod === "function") {
-        funcWithTry(ctx.renderMethod, [], ctx, noop);
-      } else {
-        const assignFn = mutable.assignFn;
-        if (assignFn) {
-          const altered = funcWithTry(assignFn, [], ctx, noop);
-          if (altered === false && rendered.value) return;
-        }
-        updater.digest();
-      }
-    }
+    // no template → nothing to re-render
   }
 
   // ── Update zones ──
@@ -283,61 +301,6 @@ export function createCtx(frame: FrameObj): ViewCtx {
     };
   }
 
-  // ── Location observation ──
-
-  /**
-   * Declare which URL params/path this view observes.
-   *
-   * When any observed key changes (via `Router.to()` or back/forward), the
-   * framework calls `ctx.render()` to re-render the view.
-   *
-   * Accepts a string (`"page,size"`), an array (`["page", "size"]`), or an
-   * options object (`{ params: [...], observePath: true }`).
-   */
-  function observeLocation(
-    params: string | string[] | Record<string, unknown>,
-    observePath = false,
-  ): void {
-    locationObserved.flag = 1;
-
-    if (typeof params === "object" && !Array.isArray(params)) {
-      const opts = params;
-      if (opts["path"]) {
-        observePath = true;
-      }
-      const paramKeys = opts["params"];
-      if (typeof paramKeys === "string" || Array.isArray(paramKeys)) {
-        params = paramKeys;
-      }
-    }
-
-    locationObserved.observePath = observePath;
-
-    if (params) {
-      if (typeof params === "string") {
-        locationObserved.keys = params.split(",");
-      } else if (Array.isArray(params)) {
-        locationObserved.keys = params;
-      }
-    }
-  }
-
-  // ── State observation ──
-
-  /**
-   * Declare which `State` keys this view observes.
-   *
-   * When any observed key changes (via `State.digest()`), the framework calls
-   * `ctx.render()` to re-render the view.
-   */
-  function observeState(keys: string | string[]): void {
-    if (typeof keys === "string") {
-      mutable.observedStateKeys = keys.split(",");
-    } else {
-      mutable.observedStateKeys = keys;
-    }
-  }
-
   // ── Getters/setters as functions (no getter/setter syntax) ──
   function getTemplate(): ViewTemplate | undefined {
     return mutable.template;
@@ -345,40 +308,31 @@ export function createCtx(frame: FrameObj): ViewCtx {
   function setTemplate(v: ViewTemplate | undefined): void {
     mutable.template = v;
   }
-  function getObservedStateKeys(): string[] | undefined {
-    return mutable.observedStateKeys;
-  }
   function getEvents(): Record<string, AnyFunc> | undefined {
     return mutable.events;
   }
   function setEvents(v: Record<string, AnyFunc> | undefined): void {
     mutable.events = v;
   }
-  function setAssign(v: ((options?: unknown) => boolean | undefined) | undefined): void {
-    mutable.assignFn = v;
-  }
 
   const ctx: ViewCtx = {
     id,
     owner: frame,
-    updater,
+    refData,
+    translate,
+    signals,
     signature,
     rendered,
     getTemplate,
     setTemplate,
-    locationObserved,
-    getObservedStateKeys,
     resources,
     emitter,
     getEvents,
     setEvents,
     cleanups,
-    setAssign,
     render,
     endUpdate,
     wrapAsync,
-    observeLocation,
-    observeState,
     capture,
     release,
     fire,
@@ -387,6 +341,63 @@ export function createCtx(frame: FrameObj): ViewCtx {
   };
 
   return ctx;
+}
+
+// ============================================================
+// Render effect — the single reactive render pipeline
+// ============================================================
+
+/**
+ * One render pass: bump signature, fire `render`, destroy transient
+ * resources, evaluate the template (TRACKED — signal reads subscribe the
+ * render effect), apply the DOM diff, then mount child zones inside
+ * `untracked()` so child setups/renders never leak dependencies into this
+ * view's effect.
+ */
+function renderCore(ctx: ViewCtx, invalidate: Signal<number>): void {
+  // Read the manual-invalidation signal FIRST so `ctx.render()` always
+  // re-triggers, even when a previous pass bailed before touching signals.
+  invalidate.value;
+  if (ctx.signature.value <= 0) return;
+
+  ctx.signature.value++;
+  ctx.fire("render");
+  destroyAllResources(ctx, false);
+
+  const template = ctx.getTemplate();
+  const node = getById(ctx.id);
+  if (typeof template !== "function" || !node) return;
+
+  const html = template(ctx.id, ctx.refData);
+  const newDom = domGetNode(html, node);
+  const ref = createDomRef();
+  domSetChildNodes(node, newDom, ref, ctx.owner);
+  applyIdUpdates(ref.idUpdates);
+  applyDomOps(ref.domOps);
+  untracked(() => ctx.endUpdate(ctx.id));
+}
+
+/**
+ * Create the view's render effect. The first run is the initial render.
+ * The dispose function is pushed into `ctx.cleanups` (run by `unmountCtx`
+ * and by HMR before re-setup).
+ *
+ * Errors thrown during a render pass are routed through `funcWithTry` to the
+ * global error sink (`config.error`) instead of propagating to whichever
+ * signal write happened to trigger the pass.
+ */
+export function createRenderEffect(ctx: ViewCtx): void {
+  const invalidate = signal(0);
+  // Rebind ctx.render to bump THIS effect's invalidation signal.
+  ctx.render = () => {
+    if (ctx.signature.value > 0) {
+      invalidate.value++;
+    }
+  };
+  const dispose = effect(() => {
+    funcWithTry(renderCore, [ctx, invalidate], null, noop);
+  });
+  ctx.cleanups.push(dispose);
 }
 
 // ============================================================
@@ -457,18 +468,22 @@ export function runInvokes(frame: FrameObj): void {
 // ============================================================
 
 /**
- * Mount a view: create ctx, run setup, render.
+ * Mount a view: create ctx, run setup, create the render effect.
  *
  * Called by `frame.mountView` (via `doMountView`) after the setup function
  * is loaded. Steps:
  * 1. Create a `ViewCtx` via `createCtx(frame)`
- * 2. Set it as the current hooks context (`setCurrentCtx`) so `useState` /
- *    `useEffect` / `useStore` can access it during setup
- * 3. Run `setup(ctx, params)` — returns `{ template, assign? }`
- * 4. Wire template/assign onto the ctx
+ * 2. Set it as the current hooks context (`setCurrentCtx`) so `useSignal` /
+ *    `useEffect` / hooks can access it during setup
+ * 3. Run `setup(ctx, params)` inside `untracked()` — returns `{ template }`.
+ *    Untracked because a synchronous mount can happen inside the PARENT's
+ *    render effect (mountZone); signal reads in the child setup body must
+ *    not subscribe the parent.
+ * 4. Wire the template onto the ctx
  * 5. Activate: `signature.value = 1`, `frame.view = ctx`
- * 6. Render via `ctx.render()` (or `ctx.endUpdate()` if no template) —
- *    inline JSX handlers are wired during render by `jsxTemplate`
+ * 6. Create the render effect — its first run is the initial render (inline
+ *    JSX handlers are wired during render by `jsxTemplate`). Views without
+ *    a template call `ctx.endUpdate()` directly.
  */
 export function mountCtx(
   frame: FrameObj,
@@ -478,33 +493,28 @@ export function mountCtx(
   const ctx = createCtx(frame);
   const setupFn = resolveSetup(setup);
 
-  // Set currentCtx so hooks (useState, useEffect, etc.) can access the ctx
+  // Set currentCtx so hooks (useSignal, useEffect, etc.) can access the ctx
   // during setup execution. Must be reset to null after setup completes.
   setCurrentCtx(ctx);
   let descriptor: ViewSetupResult;
   try {
-    // Run setup — returns { template, assign? }
-    descriptor = setupFn(ctx, params);
+    descriptor = untracked(() => setupFn(ctx, params));
   } finally {
     setCurrentCtx(null);
   }
 
   ctx.setTemplate(descriptor.template);
-  if (descriptor.assign) {
-    ctx.setAssign(descriptor.assign);
-  }
 
   // Activate
   ctx.signature.value = 1;
 
-  // Wire ctx to frame BEFORE render so that updater.digest() → runDigest()
-  // can find `frame.view` and read the template. Without this, runDigest's
-  // `const view = frame?.view` is undefined and the render is a no-op
+  // Wire ctx to frame BEFORE the first render so that the render pass can
+  // find `frame.view` (mountZone, event wiring) and the template.
   frame.view = ctx;
 
   // Render
   if (ctx.getTemplate()) {
-    ctx.render();
+    createRenderEffect(ctx);
   } else {
     ctx.endUpdate();
   }
@@ -513,9 +523,9 @@ export function mountCtx(
 }
 
 /**
- * Unmount a view: run `useEffect` cleanups (which include the JSX event
- * wiring cleanup — it unbinds delegated event types), destroy resources,
- * fire `destroy`, and set `signature = 0`.
+ * Unmount a view: run `useEffect` cleanups (which include the render-effect
+ * dispose and the JSX event wiring cleanup — it unbinds delegated event
+ * types), destroy resources, fire `destroy`, and set `signature = 0`.
  *
  * Called by `frame.unmountView`.
  */

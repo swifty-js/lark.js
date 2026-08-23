@@ -109,11 +109,32 @@ export interface RawHTML {
 }
 
 /**
- * Anything renderable as JSX content: elements, raw HTML, text-ish primitives
- * (`string` / `number`), skipped values (`boolean` / `null` / `undefined` —
- * enables `{cond && <div/>}`), or arrays thereof.
+ * Structural shape of a readable signal (`@preact/signals-core` `Signal` /
+ * `ReadonlySignal`). Signals used as children or attribute values are
+ * auto-unwrapped by the serializer — the `.value` read happens inside the
+ * view's render effect and subscribes the view.
  */
-export type JSXNode = VNode | RawHTML | string | number | boolean | null | undefined | JSXNode[];
+export interface SignalNode {
+  readonly value: JSXNode;
+  peek(): JSXNode;
+}
+
+/**
+ * Anything renderable as JSX content: elements, raw HTML, text-ish primitives
+ * (`string` / `number`), readable signals (auto-unwrapped), skipped values
+ * (`boolean` / `null` / `undefined` — enables `{cond && <div/>}`), or arrays
+ * thereof.
+ */
+export type JSXNode =
+  | VNode
+  | RawHTML
+  | SignalNode
+  | string
+  | number
+  | boolean
+  | null
+  | undefined
+  | JSXNode[];
 
 /**
  * Create a VNode. Shared by `jsx` / `jsxs` / `jsxDEV`.

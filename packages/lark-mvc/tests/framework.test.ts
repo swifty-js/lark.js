@@ -23,6 +23,8 @@
 import { describe, it, expect } from "vitest";
 import { Framework } from "../src/framework";
 import { defineView } from "../src/view";
+import { State } from "../src/state";
+import { Frame, createFrame, registerViewClass } from "../src/frame";
 import { getViewClass } from "../src/view-registry";
 import type { ChangeEvent } from "../src/types";
 
@@ -523,9 +525,57 @@ describe("Framework", () => {
     });
   });
 
-  describe("task", () => {
-    it("is a function that queues deferred execution", () => {
-      expect(typeof Framework.task).toBe("function");
+  describe("State reactivity (dispatcher-less)", () => {
+    it("State.set re-renders only views whose templates read the key", async () => {
+      const readerEl = document.createElement("div");
+      readerEl.id = "fw-reader";
+      document.body.appendChild(readerEl);
+      const bystanderEl = document.createElement("div");
+      bystanderEl.id = "fw-bystander";
+      document.body.appendChild(bystanderEl);
+
+      let readerRenders = 0;
+      let bystanderRenders = 0;
+
+      registerViewClass(
+        "fw/reader",
+        defineView(() => ({
+          template: () => {
+            readerRenders++;
+            return `<i>${String(State.get("fwTitle") ?? "")}</i>`;
+          },
+        })),
+      );
+      registerViewClass(
+        "fw/bystander",
+        defineView(() => ({
+          template: () => {
+            bystanderRenders++;
+            return "<i>static</i>";
+          },
+        })),
+      );
+
+      const readerFrame = createFrame("fw-reader");
+      readerFrame.mountView("fw/reader");
+      const bystanderFrame = createFrame("fw-bystander");
+      bystanderFrame.mountView("fw/bystander");
+      await new Promise((r) => setTimeout(r, 0));
+
+      expect(readerRenders).toBe(1);
+      expect(bystanderRenders).toBe(1);
+
+      State.set({ fwTitle: "hello" }); // no digest call — reads subscribed
+      expect(readerRenders).toBe(2);
+      expect(bystanderRenders).toBe(1);
+      expect(readerEl.innerHTML).toContain("hello");
+
+      readerFrame.unmountView();
+      bystanderFrame.unmountView();
+      readerEl.remove();
+      bystanderEl.remove();
+      Frame.getAll().delete("fw-reader");
+      Frame.getAll().delete("fw-bystander");
     });
   });
 

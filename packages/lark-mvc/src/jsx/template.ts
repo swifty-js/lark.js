@@ -34,7 +34,7 @@
  * Inline functions (`onClick={() => ...}`) are collected during serialization
  * under per-render generated names (`__jsx1`, `__jsx2`, ... — the counter
  * resets every render, and the handler-map swap + DOM diff complete
- * synchronously inside the same digest, so names never go stale):
+ * synchronously inside the same render pass, so names never go stale):
  *
  * 1. Each render, stale `__jsx*` keys are removed from the view's handler
  *    map and the fresh handlers are merged in (the delegator reads the map
@@ -45,7 +45,7 @@
  * 3. A single cleanup pushed into `ctx.cleanups` unbinds those types and
  *    strips `__jsx*` keys — the sole unbinder, running in `unmountCtx`
  *    (src/view.ts) and `hotSwapView` (src/hmr.ts); HMR re-wires from
- *    scratch on the post-swap `forceDigest`.
+ *    scratch on the post-swap render-effect rebuild.
  */
 
 import { Frame } from "../frame";
@@ -64,30 +64,29 @@ const jsxWiring = new WeakMap<ViewCtx, { boundTypes: Set<string> }>();
 /**
  * Adapt a JSX render function into a `ViewTemplate`.
  *
- * The render function receives the view's `updater.data` object and returns
- * JSX content. Return it as the `template` from a view setup:
+ * The render function takes no arguments — it reads reactive data via
+ * closures (view-local signals, `params`, `State.get(key)`, store state).
+ * It runs inside the view's render effect, so every signal read subscribes
+ * the view; writing a subscribed signal re-renders automatically.
  *
  * @example
  * ```tsx
- * type Data = { count: number };
- * const template = jsxTemplate<Data>(({ count }) => (
- *   <div>
- *     <p>Count: {count}</p>
- *     <button onClick={() => setCount(count + 1)}>+1</button>
- *   </div>
- * ));
  * export default defineView((ctx) => {
- *   const [, setCount] = useState("count", 0);
+ *   const count = signal(0);
+ *   const template = jsxTemplate(() => (
+ *     <div>
+ *       <p>Count: {count.value}</p>
+ *       <button onClick={() => count.value++}>+1</button>
+ *     </div>
+ *   ));
  *   return { template };
  * });
  * ```
  */
-export function jsxTemplate<T = Record<string, unknown>>(
-  render: (data: T & { vId: string }) => JSXNode,
-): ViewTemplate {
-  return function template(data, viewId, refData): string {
-    const sctx = createSerializeCtx(viewId, (refData || {}) as Record<string, unknown>);
-    const html = serialize(render((data || {}) as T & { vId: string }), sctx);
+export function jsxTemplate(render: () => JSXNode): ViewTemplate {
+  return function template(viewId, refData): string {
+    const sctx = createSerializeCtx(viewId, refData);
+    const html = serialize(render(), sctx);
     pruneRefData(sctx);
     wireInlineHandlers(viewId, sctx);
     return html;

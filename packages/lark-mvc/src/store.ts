@@ -23,19 +23,27 @@
 /**
  * @lark.js/mvc Store
  *
- * Zustand-aligned state management for Lark Mvc.
+ * Zustand-aligned state management, backed by per-key signals.
  *
  * Core API:
  * - createStore(name, creator): define a store with (set, get) => initialState
- * - store.getState(): read current state snapshot
- * - store.setState(partial | updater): shallow-merge state and notify listeners
- * - store.subscribe(listener): listen for state changes
+ * - store.getState(): stable tracked proxy — reading a key inside a tracked
+ *   region (template / computed / useSignalEffect) subscribes the reader to
+ *   THAT key only
+ * - store.setState(partial | updater): batch-write keys and notify listeners
+ * - store.subscribe(listener): manual (state, prevState) listener
  * - store.destroy(): tear down the store
- * - computed(deps, fn): derived state that auto-recomputes when deps change
- * - bindStore(view, store, selector?): Lark View lifecycle binding
+ * - `computed(fn)` (from the reactive core) declares derived state — its
+ *   dependencies are tracked automatically, no deps array
+ *
+ * ## Reactivity (shallow)
+ *
+ * Key values are compared by reference (`Object.is`). Mutating a nested field
+ * or pushing into an array does NOT notify — replace the reference:
+ * `set({ list: [...get().list, item] })`.
  */
 
-import type { AnyFunc } from "./types";
+import { signal, batch, untracked, Signal, type ReadonlySignal } from "./reactive";
 
 // ---- Types ----------------------------------------------------------------
 
@@ -48,47 +56,16 @@ export interface StoreApi<T = object> {
   destroy(): void;
 }
 
+/**
+ * Creator return shape: each key holds either its plain initial value, an
+ * action function, or a `computed(fn)` (ReadonlySignal) derived slot.
+ */
+type StateInit<T> = { [K in keyof T]: T[K] | ReadonlySignal<T[K]> };
+
 type StateCreator<T> = (
   set: (partial: Partial<T> | ((prev: T) => Partial<T>)) => void,
   get: () => T,
-) => T;
-
-// ---- Computed marker -------------------------------------------------------
-
-const COMPUTED_BRAND = Symbol("lark-store-computed");
-
-interface ComputedMarker<T = unknown> {
-  [COMPUTED_BRAND]: true;
-  deps: readonly string[];
-  fn: () => T;
-}
-
-function isComputedMarker(val: unknown): val is ComputedMarker {
-  return val !== null && typeof val === "object" && Reflect.get(val, COMPUTED_BRAND) === true;
-}
-
-/**
- * Declare a derived (computed) store property.
- *
- * Usage inside a `createStore` creator:
- * ```ts
- * const store = createStore("counter", (set, get) => ({
- *   count: 0,
- *   doubled: computed(["count"], () => get().count * 2),
- * }));
- * ```
- *
- * `deps` lists the state keys the computed reads. Whenever any dep changes
- * via `setState`, the computed re-evaluates before listeners are notified.
- * Writes to a computed key via `setState` are silently ignored.
- */
-export function computed<T>(deps: readonly string[], fn: () => T): T {
-  // The marker object is branded with a symbol; callers treat the return
-  // value as type T but the store reads the marker via isComputedMarker.
-  // This cast is unavoidable: the function returns a sentinel that mimics T
-  // for the caller but is intercepted by createStore.
-  return { [COMPUTED_BRAND]: true, deps, fn } as T;
-}
+) => StateInit<T>;
 
 // ---- Store registry --------------------------------------------------------
 
@@ -102,106 +79,118 @@ const storeRegistry = new Map<string, StoreApi>();
  * The `creator` function receives `(set, get)` and executes **once** during
  * store creation. Lark iterates the return value:
  * - **Functions** become actions (attached to state, unaffected by `setState`)
- * - **`computed(deps, fn)`** markers occupy derived slots — `fn()` runs once
- *   for the initial value and recomputes whenever any dep key changes via
- *   `setState`
- * - **All other fields** become initial state
+ * - **`computed(fn)` signals** occupy derived slots — dependencies are
+ *   tracked automatically (reads of `get().x` inside the computed subscribe
+ *   it to that key), and `getState().derivedKey` unwraps the current value
+ * - **All other fields** become signal-backed state keys
  *
- * State is a plain object — no Proxy. All writes go through `setState` or
- * actions. Writing to a computed key via `setState` is silently ignored.
+ * `getState()` returns a stable proxy: property reads go through the key
+ * signals, so reads inside a view template subscribe that view to exactly
+ * the keys it uses. Writes to computed/action keys via `setState` are
+ * silently ignored.
  *
  * @param name - Unique store name for the global registry
  * @param creator - Factory function `(set, get) => initialState`
  * @returns A `StoreApi` with `getState` / `setState` / `subscribe` / `destroy`
+ *
+ * @example
+ * ```ts
+ * const store = createStore("counter", (set, get) => ({
+ *   count: 0,
+ *   doubled: computed(() => get().count * 2),
+ *   increment: () => set({ count: get().count + 1 }),
+ * }));
+ * ```
  */
 export function createStore<T extends object>(name: string, creator: StateCreator<T>): StoreApi<T> {
   /** Listeners notified on every state change. */
   const listeners = new Set<Listener<T>>();
-  /** Computed-property definitions keyed by state key. */
-  const computedDefs = new Map<string, ComputedMarker>();
-  /** Set of keys that are computed (writes ignored by setState). */
-  const computedKeys = new Set<string>();
-  /** Set of keys that are actions (writes ignored by setState). */
+  /** Signal per plain state key. */
+  const keySignals = new Map<string, Signal<unknown>>();
+  /** Derived (computed) slots keyed by state key. */
+  const derived = new Map<string, ReadonlySignal<unknown>>();
+  /** Action keys (functions — writes ignored by setState). */
   const actionKeys = new Set<string>();
+  /**
+   * Plain snapshot mirror (state + actions + last derived values). Serves as
+   * the proxy target so `ownKeys` / spread / `Object.keys` behave like a
+   * plain object, and as the `prevState` source for listeners.
+   */
+  const mirror: Record<string, unknown> = {};
 
-  let state: T;
   let destroyed = false;
 
-  /** Read the current state snapshot. */
-  const getState = (): T => state;
+  const proxy = new Proxy(mirror, {
+    get(target, prop, receiver) {
+      if (typeof prop === "string") {
+        const d = derived.get(prop);
+        if (d) return d.value; // tracked read
+        const s = keySignals.get(prop);
+        if (s) return s.value; // tracked read
+      }
+      return Reflect.get(target, prop, receiver); // actions / unknown keys
+    },
+  }) as T;
+
+  /** Read the stable tracked state proxy. */
+  const getState = (): T => proxy;
+
+  /** Refresh the mirror's derived-value snapshot (untracked reads). */
+  const syncDerived = (): void => {
+    for (const [key, d] of derived) {
+      mirror[key] = untracked(() => d.value);
+    }
+  };
 
   /**
-   * Shallow-merge `partial` into state and notify listeners.
+   * Batch-merge `partial` into state and notify listeners.
    *
    * Accepts a partial object or an updater function `(prev) => partial`.
-   * Computed keys and action keys are skipped. If no value actually changed
-   * (determined via `Object.is`), the update is a no-op — listeners are NOT
-   * notified. After merging, any computed property whose deps changed is
-   * recomputed before listeners fire.
+   * Computed and action keys are skipped. If no value actually changed
+   * (`Object.is`), the update is a no-op — listeners are NOT notified.
+   * Unknown keys create new signal-backed slots (zustand semantics).
    */
   const setState = (partial: Partial<T> | ((prev: T) => Partial<T>)): void => {
     if (destroyed) return;
-    const prevState = state;
-    const resolved = typeof partial === "function" ? partial(prevState) : partial;
+    const resolved = typeof partial === "function" ? partial(proxy) : partial;
 
-    const nextState = { ...prevState };
+    const prevState = { ...mirror } as T;
     let changed = false;
 
-    for (const key in resolved) {
-      if (
-        Object.prototype.hasOwnProperty.call(resolved, key) &&
-        !computedKeys.has(key) &&
-        !actionKeys.has(key)
-      ) {
+    batch(() => {
+      for (const key of Object.keys(resolved)) {
+        if (derived.has(key) || actionKeys.has(key)) continue;
         const newVal = Reflect.get(resolved, key);
-        if (!Object.is(Reflect.get(prevState, key), newVal)) {
-          Reflect.set(nextState, key, newVal);
+        let sig = keySignals.get(key);
+        if (!sig) {
+          sig = signal(newVal);
+          keySignals.set(key, sig);
+          mirror[key] = newVal;
+          changed = true;
+          continue;
+        }
+        if (!Object.is(mirror[key], newVal)) {
+          mirror[key] = newVal;
+          sig.value = newVal;
           changed = true;
         }
       }
-    }
+      if (changed) {
+        syncDerived();
+      }
+    });
 
     if (!changed) return;
 
-    state = nextState as T;
-
-    recomputeIfNeeded(prevState);
-
     for (const listener of listeners) {
-      listener(state, prevState);
+      listener(proxy, prevState);
     }
   };
 
   /**
-   * Recompute derived (computed) properties whose deps changed in the
-   * latest `setState`.
-   *
-   * Runs after `state` is updated but before listeners are notified, so
-   * listeners always see consistent state + derived values.
-   */
-  const recomputeIfNeeded = (prevState: T): void => {
-    if (computedDefs.size === 0) return;
-
-    const changedKeys = new Set<string>();
-    for (const key of Object.keys(state)) {
-      if (!Object.is(Reflect.get(state, key), Reflect.get(prevState, key))) {
-        changedKeys.add(key);
-      }
-    }
-
-    for (const [key, def] of computedDefs) {
-      if (def.deps.some((dep) => changedKeys.has(dep))) {
-        const newVal = def.fn();
-        if (!Object.is(Reflect.get(state, key), newVal)) {
-          Reflect.set(state, key, newVal);
-        }
-      }
-    }
-  };
-
-  /**
-   * Subscribe to state changes. The listener receives `(state, prevState)`.
-   * Returns an unsubscribe function.
+   * Subscribe to state changes. The listener receives `(state, prevState)` —
+   * `state` is the stable proxy, `prevState` a plain snapshot taken before
+   * the write. Returns an unsubscribe function.
    */
   const subscribe = (listener: Listener<T>): (() => void) => {
     listeners.add(listener);
@@ -222,110 +211,29 @@ export function createStore<T extends object>(name: string, creator: StateCreato
 
   const api: StoreApi<T> = { getState, setState, subscribe, destroy };
 
-  // Run creator to get initial body
+  // Run creator to get the initial body
   const body = creator(setState, getState);
 
-  // Separate state, actions, and computed
-  const initialState: Record<string, unknown> = {};
-  const actions: Record<string, AnyFunc> = {};
-
+  // Classify: derived signals, actions, plain state keys
   for (const key of Object.keys(body)) {
     const val = Reflect.get(body, key);
-    if (isComputedMarker(val)) {
-      computedDefs.set(key, val);
-      computedKeys.add(key);
-      initialState[key] = undefined;
+    if (val instanceof Signal) {
+      derived.set(key, val as ReadonlySignal<unknown>);
     } else if (typeof val === "function") {
-      // Use Reflect.set to avoid Function→AnyFunc assignment type error
-      Reflect.set(actions, key, val);
+      Reflect.set(mirror, key, val);
       actionKeys.add(key);
     } else {
-      initialState[key] = val;
+      keySignals.set(key, signal(val));
+      mirror[key] = val;
     }
   }
 
-  // Build initial state with actions attached
-  state = { ...initialState, ...actions } as T;
-
-  // Compute initial values for computed properties
-  for (const [key, def] of computedDefs) {
-    Reflect.set(state, key, def.fn());
-  }
+  // Derived initial values compute AFTER all key signals exist (computed is
+  // lazy — first .value read runs the fn, which may call get()).
+  syncDerived();
 
   // Register
   storeRegistry.set(name, api as StoreApi);
 
   return api;
-}
-
-// ---- bindStore (Lark View adapter) -----------------------------------------
-
-interface LarkView {
-  updater: {
-    set: (data: Record<string, unknown>) => unknown;
-    digest: (data?: Record<string, unknown>) => void;
-  };
-  on: (event: string, handler: AnyFunc) => unknown;
-}
-
-function isLarkView(instance: unknown): instance is LarkView {
-  if (!instance || typeof instance !== "object") return false;
-  const updater = Reflect.get(instance, "updater");
-  return (
-    updater !== null &&
-    typeof updater === "object" &&
-    typeof Reflect.get(updater, "set") === "function" &&
-    typeof Reflect.get(updater, "digest") === "function"
-  );
-}
-
-/**
- * Bind a store to a Lark View. Subscribes to state changes and auto-unsubscribes
- * when the view is destroyed.
- *
- * @param view - Lark View instance (must have updater.set/digest and on("destroy"))
- * @param store - Store created via `createStore()`
- * @param selector - Optional function to pick a subset of state for the updater.
- *   If omitted, only non-function state keys are forwarded.
- * @returns unsubscribe function
- *
- * @example
- * ```ts
- * // Observe all state
- * bindStore(this, useCountStore);
- *
- * // Observe with selector
- * bindStore(this, useCountStore, (s) => ({ count: s.count }));
- * ```
- */
-export function bindStore<T>(
-  view: unknown,
-  store: StoreApi<T>,
-  selector?: (state: T) => Record<string, unknown>,
-): () => void {
-  if (!isLarkView(view)) return () => {};
-
-  const extract = (s: T): Record<string, unknown> => {
-    if (selector) return selector(s);
-    const result: Record<string, unknown> = {};
-    for (const key in s) {
-      if (Object.prototype.hasOwnProperty.call(s, key) && typeof s[key] !== "function") {
-        result[key] = s[key];
-      }
-    }
-    return result;
-  };
-
-  // Initial sync
-  view.updater.set(extract(store.getState()));
-  view.updater.digest();
-
-  const off = store.subscribe((state) => {
-    view.updater.set(extract(state));
-    view.updater.digest();
-  });
-
-  view.on("destroy", off);
-
-  return off;
 }

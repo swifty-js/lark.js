@@ -24,17 +24,18 @@
  * Lark Framework — public API barrel export.
  *
  * Re-exports the complete public surface of `@lark.js/mvc` from a single
- * entry point. Consumers can `import { defineView, Framework, State, ... }`
+ * entry point. Consumers can `import { defineView, signal, State, ... }`
  * from `"@lark.js/mvc"` without knowing the internal module layout.
  *
  * ## API surface
  *
  * | Category | Exports |
  * | -------- | ------- |
+ * | Reactive | `signal`, `computed`, `effect`, `batch`, `untracked`, `Signal` |
  * | Framework | `Framework`, `defineView`, `EventDelegator` |
- * | State | `State`, `createStore`, `computed`, `bindStore`, `useUrlState` |
+ * | State | `State`, `createStore`, `useUrlState` |
  * | Router | `Router` |
- * | View | `defineView`, `ViewCtx`, `useState`, `useEffect`, `useStore`, ... |
+ * | View | `defineView`, `ViewCtx`, `useSignal`, `useSignalEffect`, `useEffect`, ... |
  * | Frame | `Frame`, `createFrame`, `registerViewClass`, `invalidateViewClass` |
  * | Service | `createService`, `ServiceApi`, `PayloadApi` |
  * | Types | All types from `./types` via `export *` |
@@ -45,10 +46,16 @@
  * the public API surface without serving external consumers.
  */
 
-// State (cross-view observable data)
+// Reactive core (@preact/signals-core) — the framework's single reactivity
+// primitive set. Reads inside templates/computed/effects subscribe; writes
+// re-render synchronously (batched inside `batch()`).
+export { signal, computed, effect, batch, untracked, Signal } from "./reactive";
+export type { ReadonlySignal } from "./reactive";
+
+// State (cross-view observable data — per-key signals)
 export { State } from "./state";
 
-// Router (history/hash with two-phase change)
+// Router (history/hash with two-phase change; `parse()` is a tracked read)
 export { Router } from "./router";
 
 // Frame (view lifecycle management — functional factory + singleton)
@@ -62,9 +69,9 @@ export { defineView } from "./view";
 
 // Hooks runtime
 export {
-  useState,
+  useSignal,
+  useSignalEffect,
   useEffect,
-  useStore,
   useInterval,
   useTimeout,
   useResource,
@@ -81,11 +88,11 @@ export { EventDelegator } from "./event-delegator";
 // Framework (main entry point)
 export { Framework } from "./framework";
 
-// URL state hook (sync view state with URL params)
+// URL state hook (sync view state with URL params — tracked reads)
 export { useUrlState } from "./url-state";
 
-// Store (zustand-aligned state management)
-export { createStore, computed, bindStore } from "./store";
+// Store (zustand-aligned state management — per-key signals)
+export { createStore } from "./store";
 export type { StoreApi } from "./store";
 
 // JSX (template adapter + helpers; jsx/jsxs live in "@lark.js/mvc/jsx-runtime")

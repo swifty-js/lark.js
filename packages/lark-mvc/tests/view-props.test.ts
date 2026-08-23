@@ -25,16 +25,20 @@
  *
  *   <div v-lark="<registry name>" p-lark="<refData token>"></div>
  *
- * The single `p-lark` token resolves (via the parent updater's refData) to
- * the WHOLE props object. `on[A-Z]*` function values become child→parent
- * event subscriptions through per-frame trampolines; everything else is
- * pushed into the child as data (full `view.render()` on updates).
+ * The single `p-lark` token resolves (via the parent ctx's refData) to the
+ * WHOLE props object. `on[A-Z]*` function values become child→parent event
+ * subscriptions through per-frame trampolines; everything else lands in the
+ * child's reactive `params` proxy (one signal per key). Reading `params.key`
+ * inside the child TEMPLATE subscribes the child — parent re-renders push
+ * fresh values through the signals and only readers re-render (shallow:
+ * reference comparison).
  *
  * Templates here are hand-written strings mimicking exactly what the JSX
  * serializer emits for `<Child .../>` tags.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { defineView } from "../src/view";
+import { signal } from "../src/reactive";
 import { Frame, createFrame, registerViewClass, invalidateViewClass } from "../src/frame";
 import { getViewClassRegistry } from "../src/view-registry";
 import { refFn } from "../src/common";
@@ -70,17 +74,17 @@ function findChild(parentFrame: FrameObj): FrameObj | undefined {
 /**
  * Create a parent template that packs the given props object into ONE
  * refData token — exactly what `serializeViewTag` does for `<Child .../>`.
+ * The build callback runs inside the parent's render effect, so signal
+ * reads inside it subscribe the parent.
  */
-function makePropsTemplate(
-  build: (d: Record<string, unknown>) => Record<string, unknown>,
-): ViewTemplate {
-  return (data: unknown, _viewId: string, refData: unknown) => {
-    const d = (data || {}) as Record<string, unknown>;
-    const ref = refData as Record<string, unknown>;
-    const token = refFn(ref, build(d), "");
+function makePropsTemplate(build: () => Record<string, unknown>): ViewTemplate {
+  return (_viewId, refData) => {
+    const token = refFn(refData, build(), "");
     return `<div v-lark="test/child" p-lark="${token}"></div>`;
   };
 }
+
+type P = Record<string, unknown>;
 
 // ─── Tests ────────────────────────────────────────────────────────────────
 
@@ -100,20 +104,15 @@ describe("component host Props & Events", () => {
       let received = "";
       registerViewClass(
         "test/child",
-        defineView((ctx, params) => {
-          const p = (params || {}) as Record<string, unknown>;
-          received = String(p["msg"] ?? "");
-          ctx.updater.digest({});
+        defineView((_ctx, params) => {
+          received = String((params as P)["msg"] ?? "");
           return { template: () => "<div>child</div>" };
         }),
       );
 
       registerViewClass(
         "test/parent",
-        defineView((ctx) => {
-          ctx.updater.digest({ greeting: "hello" });
-          return { template: makePropsTemplate((d) => ({ msg: d["greeting"] })) };
-        }),
+        defineView(() => ({ template: makePropsTemplate(() => ({ msg: "hello" })) })),
       );
 
       const frame = makeFrame("s1");
@@ -123,65 +122,55 @@ describe("component host Props & Events", () => {
       expect(received).toBe("hello");
     });
 
-    it("updates child props when parent re-renders", async () => {
+    it("updates child reactively when parent re-renders with new props", async () => {
       registerViewClass(
         "test/child",
-        defineView((ctx, params) => {
-          const p = (params || {}) as Record<string, unknown>;
-          ctx.updater.digest({ msg: String(p["msg"] ?? "") });
-          return {
-            template: (data: unknown) => {
-              const d = (data || {}) as Record<string, unknown>;
-              return `<div data-msg="${d["msg"] ?? ""}">child</div>`;
-            },
-          };
-        }),
+        defineView((_ctx, params) => ({
+          template: () => `<div data-msg="${String((params as P)["msg"] ?? "")}">child</div>`,
+        })),
       );
 
+      const greeting = signal("first");
       registerViewClass(
         "test/parent",
-        defineView((ctx) => {
-          ctx.updater.digest({ greeting: "first" });
-          return { template: makePropsTemplate((d) => ({ msg: d["greeting"] })) };
-        }),
+        defineView(() => ({ template: makePropsTemplate(() => ({ msg: greeting.value })) })),
       );
 
       const frame = makeFrame("s2");
       frame.mountView("test/parent");
       await flush();
 
-      // Natural update: set + digest → re-render → mountZone pushes new props
-      frame.view!.updater.set({ greeting: "second" }).digest();
+      const el = () => document.getElementById("s2")!.querySelector("[data-msg]");
+      expect(el()?.getAttribute("data-msg")).toBe("first");
+
+      // Parent signal write → parent re-renders → mountZone pushes the new
+      // props → child's params signal notifies its render effect.
+      greeting.value = "second";
       await flush();
 
-      const childView = findChild(frame)?.view;
-      expect(childView?.updater.get<string>("msg")).toBe("second");
+      expect(el()?.getAttribute("data-msg")).toBe("second");
     });
 
     it("preserves primitive types through the props token (no stringification)", async () => {
-      let received: Record<string, unknown> = {};
+      let received: P = {};
       registerViewClass(
         "test/child",
-        defineView((ctx, params) => {
-          received = { ...(params || {}) } as Record<string, unknown>;
-          ctx.updater.digest({});
+        defineView((_ctx, params) => {
+          received = { ...(params as P) };
           return { template: () => "<div>child</div>" };
         }),
       );
 
       registerViewClass(
         "test/parent",
-        defineView((ctx) => {
-          ctx.updater.digest({});
-          return {
-            template: makePropsTemplate(() => ({
-              count: 42,
-              enabled: false,
-              empty: "",
-              nothing: null,
-            })),
-          };
-        }),
+        defineView(() => ({
+          template: makePropsTemplate(() => ({
+            count: 42,
+            enabled: false,
+            empty: "",
+            nothing: null,
+          })),
+        })),
       );
 
       const frame = makeFrame("s3");
@@ -195,22 +184,20 @@ describe("component host Props & Events", () => {
     });
 
     it("delivers camelCase prop names exactly (never lowercased)", async () => {
-      let received: Record<string, unknown> = {};
+      let received: P = {};
       registerViewClass(
         "test/child",
-        defineView((ctx, params) => {
-          received = { ...(params || {}) } as Record<string, unknown>;
-          ctx.updater.digest({});
+        defineView((_ctx, params) => {
+          received = { ...(params as P) };
           return { template: () => "<div>child</div>" };
         }),
       );
 
       registerViewClass(
         "test/parent",
-        defineView((ctx) => {
-          ctx.updater.digest({});
-          return { template: makePropsTemplate(() => ({ userName: "ada", maxRetryCount: 3 })) };
-        }),
+        defineView(() => ({
+          template: makePropsTemplate(() => ({ userName: "ada", maxRetryCount: 3 })),
+        })),
       );
 
       const frame = makeFrame("s4");
@@ -224,296 +211,223 @@ describe("component host Props & Events", () => {
   });
 
   // ============================================================
-  // 2. Object/Array Props (live references)
+  // 2. Object/Array Props (live references, shallow comparison)
   // ============================================================
   describe("object/array props", () => {
-    it("passes array reference to child", async () => {
-      let received: unknown = null;
+    it("passes array and object references to the child (same identity)", async () => {
+      let receivedArr: unknown = null;
+      let receivedObj: unknown = null;
       registerViewClass(
         "test/child",
-        defineView((ctx, params) => {
-          const p = (params || {}) as Record<string, unknown>;
-          received = p["history"];
-          ctx.updater.digest({});
+        defineView((_ctx, params) => {
+          const p = params as P;
+          receivedArr = p["history"];
+          receivedObj = p["config"];
           return { template: () => "<div>child</div>" };
         }),
       );
 
       const history = ["a", "b", "c"];
+      const config = { theme: "dark", timeout: 5000 };
       registerViewClass(
         "test/parent",
-        defineView((ctx) => {
-          ctx.updater.digest({ history });
-          return { template: makePropsTemplate((d) => ({ history: d["history"] })) };
-        }),
+        defineView(() => ({ template: makePropsTemplate(() => ({ history, config })) })),
       );
 
       const frame = makeFrame("o1");
       frame.mountView("test/parent");
       await flush();
 
-      expect(received).toBe(history);
-      expect(received).toEqual(["a", "b", "c"]);
+      expect(receivedArr).toBe(history);
+      expect(receivedObj).toBe(config);
     });
 
-    it("passes object reference to child", async () => {
-      let received: unknown = null;
+    it("re-renders the child when the parent pushes a NEW array reference", async () => {
       registerViewClass(
         "test/child",
-        defineView((ctx, params) => {
-          const p = (params || {}) as Record<string, unknown>;
-          received = p["config"];
-          ctx.updater.digest({});
-          return { template: () => "<div>child</div>" };
-        }),
+        defineView((_ctx, params) => ({
+          template: () => {
+            const arr = ((params as P)["items"] as unknown[]) ?? [];
+            return `<div data-len="${arr.length}">${arr.length}</div>`;
+          },
+        })),
       );
 
-      const config = { theme: "dark", timeout: 5000 };
+      const items = signal<number[]>([1]);
       registerViewClass(
         "test/parent",
-        defineView((ctx) => {
-          ctx.updater.digest({ config });
-          return { template: makePropsTemplate((d) => ({ config: d["config"] })) };
-        }),
+        defineView(() => ({ template: makePropsTemplate(() => ({ items: items.value })) })),
       );
 
       const frame = makeFrame("o2");
       frame.mountView("test/parent");
       await flush();
 
-      expect(received).toBe(config);
-      expect(received).toEqual({ theme: "dark", timeout: 5000 });
+      const el = () => document.getElementById("o2")!.querySelector("[data-len]");
+      expect(el()?.getAttribute("data-len")).toBe("1");
+
+      items.value = [...items.value, 2, 3]; // replace the reference
+      await flush();
+      expect(el()?.getAttribute("data-len")).toBe("3");
     });
 
-    it("updates child when parent pushes to array", async () => {
+    it("does NOT re-render the child on in-place mutation (shallow semantics)", async () => {
+      let childRenders = 0;
       registerViewClass(
         "test/child",
-        defineView((ctx, params) => {
-          const p = (params || {}) as Record<string, unknown>;
-          const h = Array.isArray(p["history"]) ? p["history"] : [];
-          ctx.updater.digest({ history: h });
-          return {
-            template: (data: unknown) => {
-              const d = (data || {}) as Record<string, unknown>;
-              const arr = (d["history"] as unknown[]) || [];
-              return `<div data-len="${arr.length}">${arr.length}</div>`;
-            },
-          };
-        }),
+        defineView((_ctx, params) => ({
+          template: () => {
+            childRenders++;
+            const arr = ((params as P)["items"] as unknown[]) ?? [];
+            return `<div data-len="${arr.length}">${arr.length}</div>`;
+          },
+        })),
       );
 
-      const arr: string[] = ["a"];
+      const items = [1, 2];
+      const parentTick = signal(0);
       registerViewClass(
         "test/parent",
-        defineView((ctx) => {
-          ctx.updater.digest({ history: arr });
-          return { template: makePropsTemplate((d) => ({ history: d["history"] })) };
-        }),
+        defineView(() => ({
+          template: makePropsTemplate(() => ({ items, tick: parentTick.value })),
+        })),
       );
 
       const frame = makeFrame("o3");
       frame.mountView("test/parent");
       await flush();
+      const initial = childRenders;
 
-      const childEl3 = document.getElementById("o3")!.querySelector("[data-len]");
-      expect(childEl3?.getAttribute("data-len")).toBe("1");
-
-      arr.push("b", "c");
-      frame.view!.updater.set({ history: arr }).digest();
+      items.push(3); // mutate in place — same reference
+      parentTick.value++; // parent re-renders, pushes the SAME array reference
       await flush();
 
-      const childEl3b = document.getElementById("o3")!.querySelector("[data-len]");
-      expect(childEl3b?.getAttribute("data-len")).toBe("3");
-    });
-
-    it("updates child when parent pops from array", async () => {
-      registerViewClass(
-        "test/child",
-        defineView((ctx, params) => {
-          const p = (params || {}) as Record<string, unknown>;
-          const h = Array.isArray(p["history"]) ? p["history"] : [];
-          ctx.updater.digest({ history: h });
-          return {
-            template: (data: unknown) => {
-              const d = (data || {}) as Record<string, unknown>;
-              const arr = (d["history"] as unknown[]) || [];
-              return `<div data-len="${arr.length}">${arr.length}</div>`;
-            },
-          };
-        }),
-      );
-
-      const arr = ["x", "y", "z"];
-      registerViewClass(
-        "test/parent",
-        defineView((ctx) => {
-          ctx.updater.digest({ history: arr });
-          return { template: makePropsTemplate((d) => ({ history: d["history"] })) };
-        }),
-      );
-
-      const frame = makeFrame("o4");
-      frame.mountView("test/parent");
-      await flush();
-
-      const el4 = document.getElementById("o4")!.querySelector("[data-len]");
-      expect(el4?.getAttribute("data-len")).toBe("3");
-
-      arr.pop();
-      frame.view!.updater.set({ history: arr }).digest();
-      await flush();
-
-      const el4b = document.getElementById("o4")!.querySelector("[data-len]");
-      expect(el4b?.getAttribute("data-len")).toBe("2");
-    });
-
-    it("updates child when array length changes", async () => {
-      registerViewClass(
-        "test/child",
-        defineView((ctx, params) => {
-          const p = (params || {}) as Record<string, unknown>;
-          const h = Array.isArray(p["items"]) ? p["items"] : [];
-          ctx.updater.digest({ items: h });
-          return {
-            template: (data: unknown) => {
-              const d = (data || {}) as Record<string, unknown>;
-              const arr = (d["items"] as unknown[]) || [];
-              return `<div data-len="${arr.length}">${arr.length}</div>`;
-            },
-          };
-        }),
-      );
-
-      const items = [1, 2, 3];
-      registerViewClass(
-        "test/parent",
-        defineView((ctx) => {
-          ctx.updater.digest({ items });
-          return { template: makePropsTemplate((d) => ({ items: d["items"] })) };
-        }),
-      );
-
-      const frame = makeFrame("o5");
-      frame.mountView("test/parent");
-      await flush();
-
-      const el5 = document.getElementById("o5")!.querySelector("[data-len]");
-      expect(el5?.getAttribute("data-len")).toBe("3");
-
-      items.length = 1;
-      frame.view!.updater.set({ items }).digest();
-      await flush();
-
-      const el5b = document.getElementById("o5")!.querySelector("[data-len]");
-      expect(el5b?.getAttribute("data-len")).toBe("1");
-    });
-
-    it("updates child when object property is added", async () => {
-      registerViewClass(
-        "test/child",
-        defineView((ctx, params) => {
-          const p = (params || {}) as Record<string, unknown>;
-          const c = (p["config"] as Record<string, unknown>) || {};
-          ctx.updater.digest({ config: c });
-          return {
-            template: (data: unknown) => {
-              const d = (data || {}) as Record<string, unknown>;
-              const c = (d["config"] as Record<string, unknown>) || {};
-              const keys = Object.keys(c).join(",");
-              return `<div data-keys="${keys}">${keys}</div>`;
-            },
-          };
-        }),
-      );
-
-      const config: Record<string, unknown> = { theme: "dark" };
-      registerViewClass(
-        "test/parent",
-        defineView((ctx) => {
-          ctx.updater.digest({ config });
-          return { template: makePropsTemplate((d) => ({ config: d["config"] })) };
-        }),
-      );
-
-      const frame = makeFrame("o6");
-      frame.mountView("test/parent");
-      await flush();
-
-      const el6 = document.getElementById("o6")!.querySelector("[data-keys]");
-      expect(el6?.getAttribute("data-keys")).toBe("theme");
-
-      config["timeout"] = 5000;
-      frame.view!.updater.set({ config }).digest();
-      await flush();
-
-      const el6b = document.getElementById("o6")!.querySelector("[data-keys]");
-      expect(el6b?.getAttribute("data-keys")).toBe("theme,timeout");
-    });
-
-    it("updates child when object property is deleted", async () => {
-      registerViewClass(
-        "test/child",
-        defineView((ctx, params) => {
-          const p = (params || {}) as Record<string, unknown>;
-          const c = (p["config"] as Record<string, unknown>) || {};
-          ctx.updater.digest({ config: c });
-          return {
-            template: (data: unknown) => {
-              const d = (data || {}) as Record<string, unknown>;
-              const c = (d["config"] as Record<string, unknown>) || {};
-              const keys = Object.keys(c).join(",");
-              return `<div data-keys="${keys}">${keys}</div>`;
-            },
-          };
-        }),
-      );
-
-      const config: Record<string, unknown> = { theme: "dark", timeout: 5000 };
-      registerViewClass(
-        "test/parent",
-        defineView((ctx) => {
-          ctx.updater.digest({ config });
-          return { template: makePropsTemplate((d) => ({ config: d["config"] })) };
-        }),
-      );
-
-      const frame = makeFrame("o7");
-      frame.mountView("test/parent");
-      await flush();
-
-      const el7 = document.getElementById("o7")!.querySelector("[data-keys]");
-      expect(el7?.getAttribute("data-keys")).toBe("theme,timeout");
-
-      delete config["timeout"];
-      frame.view!.updater.set({ config }).digest();
-      await flush();
-
-      const el7b = document.getElementById("o7")!.querySelector("[data-keys]");
-      expect(el7b?.getAttribute("data-keys")).toBe("theme");
+      // Child read only `items` (same ref) → no notification. `tick` changed
+      // but is unread by the child template.
+      expect(childRenders).toBe(initial);
     });
   });
 
   // ============================================================
-  // 3. Event Binding (child → parent via function props)
+  // 3. Fine-grained reactivity (per-key subscriptions)
+  // ============================================================
+  describe("fine-grained prop reactivity", () => {
+    it("only re-renders children that READ the changed key", async () => {
+      let childRenders = 0;
+      registerViewClass(
+        "test/child",
+        defineView((_ctx, params) => ({
+          template: () => {
+            childRenders++;
+            return `<div>a=${String((params as P)["a"])}</div>`;
+          },
+        })),
+      );
+
+      const a = signal("a1");
+      const b = signal("b1");
+      registerViewClass(
+        "test/parent",
+        defineView(() => ({
+          template: makePropsTemplate(() => ({ a: a.value, b: b.value })),
+        })),
+      );
+
+      const frame = makeFrame("f1");
+      frame.mountView("test/parent");
+      await flush();
+      const initial = childRenders;
+
+      b.value = "b2"; // parent re-renders; child reads only `a`
+      await flush();
+      expect(childRenders).toBe(initial);
+
+      a.value = "a2";
+      await flush();
+      expect(childRenders).toBe(initial + 1);
+    });
+
+    it("removed props read as undefined (React prop-removal semantics)", async () => {
+      registerViewClass(
+        "test/child",
+        defineView((_ctx, params) => ({
+          template: () => `<div data-flag="${String((params as P)["flag"])}">child</div>`,
+        })),
+      );
+
+      const armed = signal(true);
+      registerViewClass(
+        "test/parent",
+        defineView(() => ({
+          template: makePropsTemplate(() => (armed.value ? { flag: "on" } : {})),
+        })),
+      );
+
+      const frame = makeFrame("f2");
+      frame.mountView("test/parent");
+      await flush();
+
+      const el = () => document.getElementById("f2")!.querySelector("[data-flag]");
+      expect(el()?.getAttribute("data-flag")).toBe("on");
+
+      armed.value = false;
+      await flush();
+      expect(el()?.getAttribute("data-flag")).toBe("undefined");
+    });
+
+    it("a Signal passed as a prop updates the child WITHOUT a parent re-render", async () => {
+      registerViewClass(
+        "test/child",
+        defineView((_ctx, params) => ({
+          template: () => {
+            const sig = (params as P)["count"] as { value: number };
+            return `<div data-count="${sig.value}">child</div>`;
+          },
+        })),
+      );
+
+      let parentRenders = 0;
+      const count = signal(1);
+      registerViewClass(
+        "test/parent",
+        defineView(() => ({
+          template: (_viewId, refData) => {
+            parentRenders++;
+            const token = refFn(refData as Record<string, unknown>, { count }, "");
+            return `<div v-lark="test/child" p-lark="${token}"></div>`;
+          },
+        })),
+      );
+
+      const frame = makeFrame("f3");
+      frame.mountView("test/parent");
+      await flush();
+      const initialParent = parentRenders;
+
+      const el = () => document.getElementById("f3")!.querySelector("[data-count]");
+      expect(el()?.getAttribute("data-count")).toBe("1");
+
+      count.value = 2; // child template reads count.value → re-renders
+      await flush();
+      expect(el()?.getAttribute("data-count")).toBe("2");
+      expect(parentRenders).toBe(initialParent); // parent never re-rendered
+    });
+  });
+
+  // ============================================================
+  // 4. Event Binding (child → parent via function props)
   // ============================================================
   describe("event binding", () => {
     it("calls parent handler when child fires event", async () => {
       const handler = vi.fn();
       registerViewClass(
         "test/child",
-        defineView((ctx) => {
-          ctx.updater.digest({});
-          void ctx;
-          return { template: () => "<div>child</div>" };
-        }),
+        defineView(() => ({ template: () => "<div>child</div>" })),
       );
 
       registerViewClass(
         "test/parent",
-        defineView((ctx) => {
-          ctx.updater.digest({});
-          return { template: makePropsTemplate(() => ({ onCustomEvent: handler })) };
-        }),
+        defineView(() => ({ template: makePropsTemplate(() => ({ onCustomEvent: handler })) })),
       );
 
       const frame = makeFrame("e1");
@@ -530,24 +444,18 @@ describe("component host Props & Events", () => {
       let received: unknown;
       registerViewClass(
         "test/child",
-        defineView((ctx) => {
-          ctx.updater.digest({});
-          return { template: () => "<div>child</div>" };
-        }),
+        defineView(() => ({ template: () => "<div>child</div>" })),
       );
 
       registerViewClass(
         "test/parent",
-        defineView((ctx) => {
-          ctx.updater.digest({});
-          return {
-            template: makePropsTemplate(() => ({
-              onDataEvent: (data: Record<string, unknown>) => {
-                received = data;
-              },
-            })),
-          };
-        }),
+        defineView(() => ({
+          template: makePropsTemplate(() => ({
+            onDataEvent: (data: Record<string, unknown>) => {
+              received = data;
+            },
+          })),
+        })),
       );
 
       const frame = makeFrame("e2");
@@ -557,36 +465,30 @@ describe("component host Props & Events", () => {
       findChild(frame)?.view?.owner.fire("dataEvent", { value: 42 });
       await flush();
 
-      expect((received as Record<string, unknown>)["value"]).toBe(42);
+      expect((received as P)["value"]).toBe(42);
     });
 
     it("supports async parent handler", async () => {
       const results: string[] = [];
       registerViewClass(
         "test/child",
-        defineView((ctx) => {
-          ctx.updater.digest({});
-          return { template: () => "<div>child</div>" };
-        }),
+        defineView(() => ({ template: () => "<div>child</div>" })),
       );
 
       registerViewClass(
         "test/parent",
-        defineView((ctx) => {
-          ctx.updater.digest({});
-          return {
-            template: makePropsTemplate(() => ({
-              onAsyncEvent: () => {
-                return new Promise<void>((resolve) => {
-                  setTimeout(() => {
-                    results.push("done");
-                    resolve();
-                  }, 10);
-                });
-              },
-            })),
-          };
-        }),
+        defineView(() => ({
+          template: makePropsTemplate(() => ({
+            onAsyncEvent: () => {
+              return new Promise<void>((resolve) => {
+                setTimeout(() => {
+                  results.push("done");
+                  resolve();
+                }, 10);
+              });
+            },
+          })),
+        })),
       );
 
       const frame = makeFrame("e3");
@@ -603,20 +505,16 @@ describe("component host Props & Events", () => {
       const handler = vi.fn();
       registerViewClass(
         "test/child",
-        defineView((ctx) => {
-          ctx.updater.digest({});
-          return { template: () => "<div>child</div>" };
-        }),
+        defineView(() => ({ template: () => "<div>child</div>" })),
       );
 
       registerViewClass(
         "test/parent",
-        defineView((ctx) => {
-          ctx.updater.digest({});
+        defineView(() => ({
           // onClearHistory → subscribes the frame event "clearHistory";
           // prop names travel inside the token, never through HTML.
-          return { template: makePropsTemplate(() => ({ onClearHistory: handler })) };
-        }),
+          template: makePropsTemplate(() => ({ onClearHistory: handler })),
+        })),
       );
 
       const frame = makeFrame("e4");
@@ -636,23 +534,18 @@ describe("component host Props & Events", () => {
       const calls: string[] = [];
       registerViewClass(
         "test/child",
-        defineView((ctx) => {
-          ctx.updater.digest({});
-          return { template: () => "<div>child</div>" };
-        }),
+        defineView(() => ({ template: () => "<div>child</div>" })),
       );
 
+      const generation = signal("g1");
       registerViewClass(
         "test/parent",
-        defineView((ctx) => {
-          ctx.updater.digest({ generation: "g1" });
-          return {
-            template: makePropsTemplate((d) => ({
-              tick: d["generation"],
-              onPing: () => calls.push(String(d["generation"])),
-            })),
-          };
-        }),
+        defineView(() => ({
+          template: makePropsTemplate(() => {
+            const g = generation.value;
+            return { tick: g, onPing: () => calls.push(g) };
+          }),
+        })),
       );
 
       const frame = makeFrame("e5");
@@ -662,7 +555,7 @@ describe("component host Props & Events", () => {
       findChild(frame)?.view?.owner.fire("ping");
       expect(calls).toEqual(["g1"]);
 
-      frame.view!.updater.set({ generation: "g2" }).digest();
+      generation.value = "g2";
       await flush();
 
       // The SAME frame-emitter subscription now reaches the new closure.
@@ -674,22 +567,17 @@ describe("component host Props & Events", () => {
       const handler = vi.fn();
       registerViewClass(
         "test/child",
-        defineView((ctx) => {
-          ctx.updater.digest({});
-          return { template: () => "<div>child</div>" };
-        }),
+        defineView(() => ({ template: () => "<div>child</div>" })),
       );
 
+      const armed = signal(true);
       registerViewClass(
         "test/parent",
-        defineView((ctx) => {
-          ctx.updater.digest({ armed: 1 });
-          return {
-            template: makePropsTemplate((d) =>
-              d["armed"] ? { flag: 1, onPing: handler } : { flag: 0 },
-            ),
-          };
-        }),
+        defineView(() => ({
+          template: makePropsTemplate(() =>
+            armed.value ? { flag: 1, onPing: handler } : { flag: 0 },
+          ),
+        })),
       );
 
       const frame = makeFrame("e6");
@@ -699,7 +587,7 @@ describe("component host Props & Events", () => {
       findChild(frame)?.view?.owner.fire("ping");
       expect(handler).toHaveBeenCalledTimes(1);
 
-      frame.view!.updater.set({ armed: 0 }).digest();
+      armed.value = false;
       await flush();
 
       // Handler prop removed → trampoline parked, no call, no crash.
@@ -710,18 +598,12 @@ describe("component host Props & Events", () => {
     it("does not crash when child fires an unbound event", async () => {
       registerViewClass(
         "test/child",
-        defineView((ctx) => {
-          ctx.updater.digest({});
-          return { template: () => "<div>child</div>" };
-        }),
+        defineView(() => ({ template: () => "<div>child</div>" })),
       );
 
       registerViewClass(
         "test/parent",
-        defineView((ctx) => {
-          ctx.updater.digest({});
-          return { template: () => `<div v-lark="test/child"></div>` };
-        }),
+        defineView(() => ({ template: () => `<div v-lark="test/child"></div>` })),
       );
 
       const frame = makeFrame("e7");
@@ -733,28 +615,24 @@ describe("component host Props & Events", () => {
   });
 
   // ============================================================
-  // 4. Multiple Props & Edge Cases
+  // 5. Multiple Props & Edge Cases
   // ============================================================
   describe("multiple props & edge cases", () => {
     it("passes multiple props simultaneously", async () => {
-      let received: Record<string, unknown> = {};
+      let received: P = {};
       registerViewClass(
         "test/child",
-        defineView((ctx, params) => {
-          received = { ...(params || {}) } as Record<string, unknown>;
-          ctx.updater.digest({});
+        defineView((_ctx, params) => {
+          received = { ...(params as P) };
           return { template: () => "<div>child</div>" };
         }),
       );
 
       registerViewClass(
         "test/parent",
-        defineView((ctx) => {
-          ctx.updater.digest({ a: "valA", b: "valB", c: "valC" });
-          return {
-            template: makePropsTemplate((d) => ({ a: d["a"], b: d["b"], c: d["c"] })),
-          };
-        }),
+        defineView(() => ({
+          template: makePropsTemplate(() => ({ a: "valA", b: "valB", c: "valC" })),
+        })),
       );
 
       const frame = makeFrame("m1");
@@ -766,113 +644,100 @@ describe("component host Props & Events", () => {
       expect(received["c"]).toBe("valC");
     });
 
-    it("does not touch the child when the host has no props token", async () => {
+    it("does not re-render a prop-less child when the parent re-renders", async () => {
+      let childRenders = 0;
       registerViewClass(
         "test/child",
-        defineView((ctx) => {
-          ctx.updater.digest({ msg: "child" });
-          return { template: () => "<div>child</div>" };
-        }),
+        defineView(() => ({
+          template: () => {
+            childRenders++;
+            return "<div>child</div>";
+          },
+        })),
       );
 
+      const tick = signal(0);
       registerViewClass(
         "test/parent",
-        defineView((ctx) => {
-          ctx.updater.digest({ msg: "parent" });
-          return { template: () => `<div v-lark="test/child"></div>` };
-        }),
+        defineView(() => ({
+          template: () => `<i>${tick.value}</i><div v-lark="test/child"></div>`,
+        })),
       );
 
       const frame = makeFrame("m2");
       frame.mountView("test/parent");
       await flush();
+      const initial = childRenders;
 
-      const childView = findChild(frame)?.view;
-      const spy = vi.spyOn(childView!.updater, "digest");
-      frame.view!.updater.set({ msg: "updated" }).digest();
+      tick.value++;
       await flush();
 
-      expect(spy).not.toHaveBeenCalled();
+      expect(childRenders).toBe(initial);
     });
 
-    it("preserves child's own data when updating props", async () => {
+    it("preserves child-local signal state across prop pushes", async () => {
       registerViewClass(
         "test/child",
-        defineView((ctx, params) => {
-          const p = (params || {}) as Record<string, unknown>;
-          ctx.updater.digest({
-            count: Number(p["count"]) || 0,
-            styles: { color: "red" },
-            msg: "child",
-          });
-          return { template: () => "<div>child</div>" };
+        defineView((_ctx, params) => {
+          const local = signal("child-own");
+          return {
+            template: () =>
+              `<div data-count="${String((params as P)["count"])}" data-local="${local.value}">child</div>`,
+          };
         }),
       );
 
+      const count = signal(5);
       registerViewClass(
         "test/parent",
-        defineView((ctx) => {
-          ctx.updater.digest({ count: 5 });
-          return { template: makePropsTemplate((d) => ({ count: d["count"] })) };
-        }),
+        defineView(() => ({ template: makePropsTemplate(() => ({ count: count.value })) })),
       );
 
       const frame = makeFrame("m3");
       frame.mountView("test/parent");
       await flush();
 
-      frame.view!.updater.set({ count: 10 }).digest();
+      count.value = 10;
       await flush();
 
-      const childView = findChild(frame)?.view;
-      expect(childView?.updater.get<unknown>("styles")).toEqual({
-        color: "red",
-      });
-      expect(childView?.updater.get<string>("msg")).toBe("child");
+      const el = document.getElementById("m3")!.querySelector("[data-count]");
+      expect(el?.getAttribute("data-count")).toBe("10");
+      expect(el?.getAttribute("data-local")).toBe("child-own");
     });
 
-    it("prop pushes run the child's full render (assign re-runs)", async () => {
-      const assignCalls: number[] = [];
+    it("multiple prop changes in one parent render pass render the child once", async () => {
+      let childRenders = 0;
       registerViewClass(
         "test/child",
-        defineView((ctx, params) => {
-          const p = (params || {}) as Record<string, unknown>;
-          ctx.updater.set({ count: Number(p["count"]) || 0 });
-          return {
-            template: (data: unknown) => {
-              const d = (data || {}) as Record<string, unknown>;
-              return `<div data-doubled="${d["doubled"] ?? ""}">child</div>`;
-            },
-            assign: () => {
-              const count = ctx.updater.get<number>("count") ?? 0;
-              assignCalls.push(count);
-              ctx.updater.set({ doubled: count * 2 });
-              return true;
-            },
-          };
-        }),
+        defineView((_ctx, params) => ({
+          template: () => {
+            childRenders++;
+            const p = params as P;
+            return `<div data-sum="${Number(p["a"]) + Number(p["b"])}">child</div>`;
+          },
+        })),
       );
 
+      const a = signal(1);
+      const b = signal(2);
       registerViewClass(
         "test/parent",
-        defineView((ctx) => {
-          ctx.updater.digest({ count: 3 });
-          return { template: makePropsTemplate((d) => ({ count: d["count"] })) };
-        }),
+        defineView(() => ({
+          template: makePropsTemplate(() => ({ a: a.value, b: b.value })),
+        })),
       );
 
       const frame = makeFrame("m4");
       frame.mountView("test/parent");
       await flush();
-      // First render: assign ran once during the child's initial render
-      const initialAssigns = assignCalls.length;
+      const initial = childRenders;
 
-      frame.view!.updater.set({ count: 7 }).digest();
+      a.value = 10; // one parent render → mountZone batch-writes BOTH keys
       await flush();
 
-      expect(assignCalls.length).toBeGreaterThan(initialAssigns);
-      const childEl = document.getElementById("m4")!.querySelector("[data-doubled]");
-      expect(childEl?.getAttribute("data-doubled")).toBe("14");
+      expect(childRenders).toBe(initial + 1);
+      const el = document.getElementById("m4")!.querySelector("[data-sum]");
+      expect(el?.getAttribute("data-sum")).toBe("12");
     });
   });
 });

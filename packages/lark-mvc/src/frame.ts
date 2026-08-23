@@ -38,6 +38,7 @@ import {
   assign,
   ensureElementId,
 } from "./utils";
+import { signal, batch, type Signal } from "./reactive";
 import { createEmitter } from "./event-emitter";
 import { unmark } from "./mark";
 import { mountCtx, unmountCtx, runInvokes } from "./view";
@@ -68,6 +69,103 @@ const staticEmitter = createEmitter();
 /** Type guard: verify a dynamically loaded module is a ViewSetup function */
 function isViewSetup(fn: unknown): fn is ViewSetup {
   return typeof fn === "function";
+}
+
+// ============================================================
+// Reactive params store
+// ============================================================
+
+/**
+ * Per-frame prop mirrors: proxy target (own keys for spread/`in`) and the
+ * set of keys owned by mountZone prop pushes (candidates for removal).
+ */
+const paramsTargets = new WeakMap<FrameObj, Record<string, unknown>>();
+const paramsPropKeys = new WeakMap<FrameObj, Set<string>>();
+
+/**
+ * Get or create the frame's reactive params store: one signal per key behind
+ * a stable proxy. The proxy is handed to the child setup as `params` —
+ * reading a key inside a tracked region (template/computed/effect)
+ * subscribes the reader to that key.
+ */
+function ensureParamsStore(frame: FrameObj): NonNullable<FrameObj["paramsStore"]> {
+  let store = frame.paramsStore;
+  if (!store) {
+    const signals = new Map<string, Signal<unknown>>();
+    const target: Record<string, unknown> = {};
+    const proxy = new Proxy(target, {
+      get(t, prop, receiver) {
+        if (typeof prop === "string") {
+          const sig = signals.get(prop);
+          if (sig) return sig.value; // tracked read
+        }
+        return Reflect.get(t, prop, receiver);
+      },
+    });
+    store = { signals, proxy };
+    frame.paramsStore = store;
+    paramsTargets.set(frame, target);
+    paramsPropKeys.set(frame, new Set());
+  }
+  return store;
+}
+
+/** Write one key into the store (creating its signal on first sight). */
+function writeParamKey(
+  store: NonNullable<FrameObj["paramsStore"]>,
+  target: Record<string, unknown>,
+  key: string,
+  value: unknown,
+): void {
+  target[key] = value;
+  const sig = store.signals.get(key);
+  if (sig) {
+    sig.value = value; // same-value writes are no-ops
+  } else {
+    store.signals.set(key, signal(value));
+  }
+}
+
+/**
+ * Seed initial mount params (URI params + first props). Does NOT register
+ * keys for prop-removal tracking — only `writeParams` (mountZone pushes)
+ * owns removal semantics, so URI params on raw `v-lark` hosts survive
+ * parent re-renders that carry no props.
+ */
+function seedParams(frame: FrameObj, params: Record<string, unknown>): void {
+  const store = ensureParamsStore(frame);
+  const target = paramsTargets.get(frame)!;
+  batch(() => {
+    for (const key of Object.keys(params)) {
+      writeParamKey(store, target, key, params[key]);
+    }
+  });
+}
+
+/**
+ * Push a fresh props object from a parent render (mountZone). Batched:
+ * subscribed child reads re-render once. Keys mountZone previously pushed
+ * but absent this round are removed (`undefined` — React prop-removal
+ * semantics).
+ */
+function writeParams(frame: FrameObj, data: Record<string, unknown>): void {
+  const store = ensureParamsStore(frame);
+  const target = paramsTargets.get(frame)!;
+  const propKeys = paramsPropKeys.get(frame)!;
+  batch(() => {
+    for (const key of propKeys) {
+      if (!hasOwnProperty(data, key)) {
+        propKeys.delete(key);
+        Reflect.deleteProperty(target, key);
+        const sig = store.signals.get(key);
+        if (sig) sig.value = undefined;
+      }
+    }
+    for (const key of Object.keys(data)) {
+      propKeys.add(key);
+      writeParamKey(store, target, key, data[key]);
+    }
+  });
 }
 
 // ============================================================
@@ -284,8 +382,7 @@ export function createFrame(id: string, parentId?: string): FrameObj {
       const readProps = (el: Element): Record<string, unknown> => {
         const token = getAttribute(el, LARK_PROP);
         if (!token) return {};
-        const parentUpdater = frame.view?.updater;
-        const resolved = parentUpdater ? parentUpdater.translate(token) : undefined;
+        const resolved = frame.view ? frame.view.translate(token) : undefined;
         return resolved && typeof resolved === "object"
           ? (resolved as Record<string, unknown>)
           : {};
@@ -313,6 +410,7 @@ export function createFrame(id: string, parentId?: string): FrameObj {
       // The frame emitter subscribes ONE wrapper per event name; each parent
       // render swaps `.current`, so inline closures never go stale. A handler
       // prop removed by the parent parks the trampoline (`current=undefined`).
+      // Handler calls run inside `batch()` — multi-signal writes render once.
       const syncHostEvents = (child: FrameObj, handlers: Record<string, AnyFunc>): void => {
         let map = child.hostEvents;
         if (!map && Object.keys(handlers).length === 0) return;
@@ -329,7 +427,11 @@ export function createFrame(id: string, parentId?: string): FrameObj {
             holder = map[name] = {};
             const h = holder;
             child.on(name, (data?: Record<string, unknown>) => {
-              if (h.current) funcWithTry(h.current, data ? [data] : [], frame.view, noop);
+              if (h.current) {
+                batch(() =>
+                  funcWithTry(h.current as AnyFunc, data ? [data] : [], frame.view, noop),
+                );
+              }
             });
           }
           holder.current = handlers[name];
@@ -341,17 +443,15 @@ export function createFrame(id: string, parentId?: string): FrameObj {
         const elId = el.id || ensureElementId(el, "frame_");
 
         // Already-bound host element: re-sync events and push props into the
-        // existing child view with a full render (assign re-runs).
+        // existing child's params signals. The child re-renders only if its
+        // tracked regions (template/computed/effect) read the changed keys.
         if (htmlElIsBound(el)) {
-          const childFrame = Frame.get(elId);
+          const childFrame = frameRegistry.get(elId);
           const childView = childFrame?.view;
           if (childFrame && childView && childView.signature.value > 0) {
             const { data, handlers } = splitProps(readProps(el));
             syncHostEvents(childFrame, handlers);
-            if (Object.keys(data).length > 0) {
-              childView.updater.set(data);
-              childView.render();
-            }
+            writeParams(childFrame, data);
           }
           return;
         }
@@ -365,11 +465,14 @@ export function createFrame(id: string, parentId?: string): FrameObj {
         mountList.push({ frameId: elId, viewPathArg, data, handlers });
       });
 
-      // Mount each frame with props, then wire child→parent events
+      // Mount each frame with props, then wire child→parent events. The
+      // writeParams call registers prop ownership (removal tracking) — the
+      // values are already seeded, so no notifications fire.
       for (const { frameId, viewPathArg, data, handlers } of mountList) {
         const childFrame = frame.mountFrame(frameId, viewPathArg, data);
         if (childFrame) {
           syncHostEvents(childFrame, handlers);
+          writeParams(childFrame, data);
         }
       }
 
@@ -499,8 +602,14 @@ function doMountView(
   if (!frame) return;
   if (sign !== frame.signature) return; // Frame may have been unmounted
 
+  // Seed the reactive params store and hand the tracked proxy to setup —
+  // `params.key` reads inside the template subscribe the view, and later
+  // parent renders push fresh values through the same signals (mountZone).
+  const store = ensureParamsStore(frame);
+  seedParams(frame, params);
+
   // Create ctx and run setup
-  const ctx = mountCtx(frame, setup, params);
+  const ctx = mountCtx(frame, setup, store.proxy);
   frame.view = ctx;
 
   // Fire created event for child frames

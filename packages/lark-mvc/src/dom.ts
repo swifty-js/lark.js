@@ -248,7 +248,6 @@ export function domSetChildNodes(
   newParent: Element,
   ref: DomRef,
   frame: FrameObj,
-  keys_?: ReadonlySet<string>,
 ): void {
   let oldNode: ChildNode | null = oldParent.lastChild;
   let newNode: ChildNode | null = newParent.firstChild;
@@ -308,7 +307,7 @@ export function domSetChildNodes(
         const c = newKeyedNodes.get(nodeKey);
         if (c) newKeyedNodes.set(nodeKey, c - 1);
       }
-      domSetNode(matched, tempNew, oldParent, ref, frame, keys_);
+      domSetNode(matched, tempNew, oldParent, ref, frame);
     } else if (oldNode) {
       const tempOld = oldNode;
       const oldKey = domGetCompareKey(tempOld);
@@ -318,7 +317,7 @@ export function domSetChildNodes(
         ref.domOps.push([8, oldParent, tempNew, tempOld]);
       } else {
         oldNode = oldNode.nextSibling;
-        domSetNode(tempOld, tempNew, oldParent, ref, frame, keys_);
+        domSetNode(tempOld, tempNew, oldParent, ref, frame);
       }
     } else {
       ref.hasChanged = 1;
@@ -347,7 +346,6 @@ export function domSetNode(
   oldParent: Element,
   ref: DomRef,
   frame: FrameObj,
-  keys_?: ReadonlySet<string>,
 ): void {
   // Narrow once and reuse: when both nodes are Elements, use the Element-typed
   // references rather than repeated `as Element` casts.
@@ -386,7 +384,7 @@ export function domSetNode(
 
         domSetAttributes(oldEl, newEl, ref, !!newLarkView);
         if (updateChildren) {
-          domSetChildNodes(oldEl, newEl, ref, frame, keys_);
+          domSetChildNodes(oldEl, newEl, ref, frame);
         }
       } else if (oldNode.nodeValue !== newNode.nodeValue) {
         // Text or Comment node: update nodeValue

@@ -43,6 +43,7 @@
  */
 import { SPLITTER } from "./common";
 import { funcWithTry, noop } from "./utils";
+import { batch } from "./reactive";
 import type { FrameObj, AnyFunc } from "./types";
 
 // ============================================================
@@ -115,7 +116,8 @@ function domEventProcessor(domEvent: Event): void {
         if (fn) {
           const extendedEvent = domEvent as Event & { eventTarget?: EventTarget | null };
           extendedEvent.eventTarget = target;
-          funcWithTry(fn, [extendedEvent], view, noop);
+          // batch(): multi-signal writes in one handler → one re-render.
+          batch(() => funcWithTry(fn, [extendedEvent], view, noop));
         }
       }
     }

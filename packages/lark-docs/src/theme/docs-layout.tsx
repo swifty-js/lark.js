@@ -26,7 +26,11 @@ import {
   defineView,
   jsxTemplate,
   raw,
+  signal,
+  batch,
+  untracked,
   useEffect,
+  useSignalEffect,
 } from "@lark.js/mvc";
 import type { LarkView, LarkEvent } from "@lark.js/mvc";
 import { createSidebarView } from "./sidebar";
@@ -47,21 +51,6 @@ interface NavLink {
 interface NavItemVM extends NavLink {
   external: boolean;
   active: boolean;
-}
-
-interface DocsLayoutData {
-  clockIcon: string;
-  year: number;
-  loading: boolean;
-  notFound: boolean;
-  drawerOpen: boolean;
-  contentHtml: string;
-  currentPath: string;
-  prevPage: NavLink | null;
-  nextPage: NavLink | null;
-  navItems: NavItemVM[];
-  siteTitle: string;
-  searchEnabled: boolean;
 }
 
 const NAV_ITEM_BASE =
@@ -262,25 +251,20 @@ const Search = createSearchView();
 export function createDocsLayoutView(): LarkView {
   return defineView((ctx) => {
     const clockIcon = clockIcons[new Date().getHours() % 12] ?? clockIcons[0];
-    ctx.updater.set({
-      clockIcon,
-      year: new Date().getFullYear(),
-      loading: true,
-      notFound: false,
-      drawerOpen: false,
-      contentHtml: "",
-      currentPath: "",
-      prevPage: null,
-      nextPage: null,
-      navItems: [],
-      siteTitle: "Documentation",
-      searchEnabled: true,
-    });
+    const year = new Date().getFullYear();
 
-    ctx.observeLocation([], true);
-    ctx.observeState("drawerOpen");
+    const loading = signal(true);
+    const notFound = signal(false);
+    const contentHtml = signal("");
+    const currentPath = signal("");
+    const prevPage = signal<NavLink | null>(null);
+    const nextPage = signal<NavLink | null>(null);
+    const navItems = signal<NavItemVM[]>([]);
+    const siteTitle = signal("Documentation");
+    const searchEnabled = signal(true);
 
     let lastPath = "";
+    let navSeq = 0;
     let drawerSideEffectsActive = false;
     let drawerReturnFocus: HTMLElement | null = null;
 
@@ -288,19 +272,18 @@ export function createDocsLayoutView(): LarkView {
     // boundary and notifies subscribers with the changed route paths; we
     // re-fetch through the State-injected loadContent (guard-wrapped in the
     // consumer boot, so protected pages decrypt with the cached password).
-    // Patch the updater directly instead of re-entering renderMethod: the
-    // cheap path (path === lastPath) never touches contentHtml, and a forced
-    // full render would replay the skeleton and the scroll-to-top logic.
+    // Patch the content signal directly instead of re-running navigation:
+    // a full navigate() would replay the skeleton and the scroll-to-top
+    // logic.
     function applyHotContent(path: string, content: LoadedContent): void {
       if (path !== lastPath) return;
       const cfg = parseDocsConfig(State.get("docsConfig")) ?? FALLBACK_CONFIG;
       State.set({
         currentPageHeadings: content.pageData.headings,
         currentPageTitle: content.pageData.title,
-      }).digest();
+      });
       document.title = `${content.pageData.title} · ${cfg.title}`;
-      ctx.updater.set({ contentHtml: content.contentHtml });
-      ctx.updater.digest();
+      contentHtml.value = content.contentHtml;
       // Same post-render enhancements as a full navigation, minus the
       // page-in animation replay and the scroll-to-top/hash logic.
       setTimeout(() => {
@@ -360,12 +343,12 @@ export function createDocsLayoutView(): LarkView {
         const onKey = (e: KeyboardEvent) => {
           if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
             e.preventDefault();
-            State.set({ searchOpen: !State.get("searchOpen") }).digest();
+            State.set({ searchOpen: !State.get("searchOpen") });
             return;
           }
           if (e.key === "/" && !isTypingTarget(e.target)) {
             e.preventDefault();
-            State.set({ searchOpen: true }).digest();
+            State.set({ searchOpen: true });
           }
         };
         document.addEventListener("keydown", onKey);
@@ -381,7 +364,7 @@ export function createDocsLayoutView(): LarkView {
 
     // `inert` removes the closed drawer from the tab order — it is only
     // translated off-screen, so without it keyboard focus could enter an
-    // aria-hidden subtree. Applied imperatively after each digest because
+    // aria-hidden subtree. Applied imperatively after each render because
     // the DOM diff strips attributes that are not in the template output.
     function syncDrawerInert(open: boolean): void {
       document.getElementById("docs-drawer")?.toggleAttribute("inert", !open);
@@ -415,7 +398,7 @@ export function createDocsLayoutView(): LarkView {
       const onKey = (e: KeyboardEvent) => {
         if (!State.get("drawerOpen")) return;
         if (e.key === "Escape") {
-          State.set({ drawerOpen: false }).digest();
+          State.set({ drawerOpen: false });
           return;
         }
         if (e.key !== "Tab") return;
@@ -440,10 +423,25 @@ export function createDocsLayoutView(): LarkView {
       return () => document.removeEventListener("keydown", onKey);
     });
 
-    ctx.renderMethod = async () => {
+    // Drawer open/close side effects + enhancement replay. Any layout
+    // re-render diffs the article subtree and strips runtime-injected
+    // enhancements (copy buttons, mermaid SVGs) — replay them after the
+    // drawer-driven re-render settles.
+    useSignalEffect(() => {
+      const open = !!State.get("drawerOpen");
+      syncDrawerInert(open);
+      syncDrawerSideEffects(open);
+      const path = lastPath;
+      setTimeout(() => {
+        if (!path || path !== lastPath) return;
+        mountCopyButtons(defaultIcons.copy, defaultIcons.check);
+        renderMermaidBlocks();
+      }, 0);
+    });
+
+    const navigate = async (rawPath: string): Promise<void> => {
       const cfg = parseDocsConfig(State.get("docsConfig")) ?? FALLBACK_CONFIG;
       const loadContent = parseLoadContent(State.get("loadContent"));
-      const rawPath = Router.parse().path || cfg.baseUrl || "/";
 
       const indexMatch = rawPath.match(/^(.*?)(\/index(?:\.md|\.html)?)\/?$/);
       if (indexMatch) {
@@ -453,39 +451,21 @@ export function createDocsLayoutView(): LarkView {
       }
 
       const path = rawPath.replace(/\/+$/, "") || "/";
-      const drawerOpen = !!State.get("drawerOpen");
+      if (path === lastPath) return; // same page (e.g. hash-only change)
 
-      // Cheap path: same page, only drawer/state toggled.
-      if (path === lastPath) {
-        ctx.updater.set({ drawerOpen });
-        ctx.updater.digest();
-        syncDrawerInert(drawerOpen);
-        syncDrawerSideEffects(drawerOpen);
-        // The digest re-renders the whole template, and the DOM diff
-        // reverts runtime-injected enhancements (copy buttons, mermaid
-        // SVGs) wherever the article subtree diverges — replay them.
-        setTimeout(() => {
-          if (path !== lastPath) return;
-          mountCopyButtons(defaultIcons.copy, defaultIcons.check);
-          renderMermaidBlocks();
-        }, 0);
-        return;
-      }
-
-      // Close drawer on navigation.
-      if (drawerOpen) {
-        State.set({ drawerOpen: false }).digest();
-      }
-
-      // Show skeleton while loading.
-      ctx.updater.set({ loading: true, drawerOpen: false });
-      ctx.updater.digest();
+      // Close drawer on navigation; show skeleton while loading.
+      batch(() => {
+        if (State.get("drawerOpen")) {
+          State.set({ drawerOpen: false });
+        }
+        loading.value = true;
+      });
       syncDrawerInert(false);
-      // The cheap path is skipped on full navigation, so the scroll lock
-      // applied while the drawer was open must be released here too.
       syncDrawerSideEffects(false);
 
-      const sig = ctx.signature.value;
+      // Reactive renders bump `signature` on every pass, so guard staleness
+      // with a navigation sequence instead.
+      const mySeq = ++navSeq;
       let content: LoadedContent | null = null;
       try {
         if (loadContent) {
@@ -496,7 +476,7 @@ export function createDocsLayoutView(): LarkView {
       } catch (err) {
         console.warn("[@lark.js/docs] Failed to load content for", path, err);
       }
-      if (ctx.signature.value !== sig) return;
+      if (mySeq !== navSeq || ctx.signature.value <= 0) return;
 
       // Root redirect: "/" or the bare baseUrl has no content of its own —
       // land on the first internal nav link instead of a 404.
@@ -517,17 +497,17 @@ export function createDocsLayoutView(): LarkView {
         State.set({
           currentPageHeadings: content.pageData.headings,
           currentPageTitle: content.pageData.title,
-        }).digest();
+        });
         document.title = `${content.pageData.title} · ${cfg.title}`;
       } else {
         document.title = cfg.title;
       }
 
-      const { prevPage, nextPage } = computePrevMvc(cfg.sidebar, path);
+      const pager = computePrevMvc(cfg.sidebar, path);
 
       // Nav items with active state (prefix match). External links render
       // as real anchors with target="_blank" in the template.
-      const navItems = (cfg.nav ?? []).map((item) => {
+      const nextNavItems = (cfg.nav ?? []).map((item) => {
         const external = /^https?:\/\//.test(item.link);
         const target = item.link.replace(/\/+$/, "") || "/";
         return {
@@ -539,23 +519,22 @@ export function createDocsLayoutView(): LarkView {
         };
       });
 
-      ctx.updater.set({
-        siteTitle: cfg.title,
-        navItems,
-        searchEnabled: cfg.search ?? true,
-        loading: false,
-        notFound: !content,
-        currentPath: path,
-        contentHtml: content?.contentHtml ?? "",
-        prevPage,
-        nextPage,
+      batch(() => {
+        siteTitle.value = cfg.title;
+        navItems.value = nextNavItems;
+        searchEnabled.value = cfg.search ?? true;
+        loading.value = false;
+        notFound.value = !content;
+        currentPath.value = path;
+        contentHtml.value = content?.contentHtml ?? "";
+        prevPage.value = pager.prevPage;
+        nextPage.value = pager.nextPage;
       });
-      ctx.updater.digest();
       syncDrawerInert(false);
 
       // Post-render enhancements.
       setTimeout(() => {
-        if (ctx.signature.value !== sig) return;
+        if (mySeq !== navSeq || ctx.signature.value <= 0) return;
         replayPageIn();
         mountCopyButtons(defaultIcons.copy, defaultIcons.check);
         renderMermaidBlocks();
@@ -570,6 +549,16 @@ export function createDocsLayoutView(): LarkView {
       }, 0);
     };
 
+    // Navigation driver: Router.parse() is the only tracked read, so this
+    // re-runs exactly on route changes. The async body runs untracked —
+    // its State/config reads must not add dependencies (a drawer toggle
+    // re-triggering navigation would replay the skeleton).
+    useSignalEffect(() => {
+      const cfgBase = parseDocsConfig(State.get("docsConfig"))?.baseUrl;
+      const rawPath = Router.parse().path || cfgBase || "/";
+      untracked(() => void navigate(rawPath));
+    });
+
     const navigateTo = (e: LarkEvent): void => {
       const href = findDataHref(e.target);
       if (href) {
@@ -582,7 +571,7 @@ export function createDocsLayoutView(): LarkView {
     };
 
     const navigateHomeDrawer = (): void => {
-      State.set({ drawerOpen: false }).digest();
+      State.set({ drawerOpen: false });
       Router.to(landingLink(parseDocsConfig(State.get("docsConfig"))));
     };
 
@@ -631,308 +620,331 @@ export function createDocsLayoutView(): LarkView {
     };
 
     const openSearch = (): void => {
-      State.set({ searchOpen: true }).digest();
+      State.set({ searchOpen: true });
     };
 
     const openDrawer = (): void => {
-      State.set({ drawerOpen: true }).digest();
+      State.set({ drawerOpen: true });
     };
 
     const closeDrawer = (): void => {
-      State.set({ drawerOpen: false }).digest();
+      State.set({ drawerOpen: false });
     };
 
-    const template = jsxTemplate<DocsLayoutData>((d) => (
-      <div class="bg-background text-foreground min-h-screen font-sans antialiased">
-        {/* Skip to content */}
-        <a
-          href="#main-content"
-          class="bg-primary text-primary-foreground fixed -top-full left-4 z-100 rounded-md px-[0.9rem] py-2 text-[0.8rem] font-medium transition-[top] duration-200 ease-out focus:top-3"
-        >
-          Skip to content
-        </a>
-
-        {/* Ambient background layers */}
-        <div aria-hidden="true" class="pointer-events-none fixed inset-0 -z-10">
-          <div class="absolute inset-0 bg-[radial-gradient(56rem_30rem_at_16%_-10%,color-mix(in_oklab,var(--primary)_10%,transparent),transparent_70%)]"></div>
-          <div class="absolute inset-0 bg-[radial-gradient(44rem_26rem_at_96%_-4%,color-mix(in_oklab,var(--primary)_6%,transparent),transparent_70%)]"></div>
-          <div class="via-primary/40 absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent to-transparent"></div>
-          <div class="docs-grid absolute inset-0 opacity-55 dark:opacity-30"></div>
-        </div>
-
-        {/* Fixed navbar (scroll state toggled via classList in view logic) */}
-        <header
-          id="docs-navbar"
-          class="fixed inset-x-0 top-0 z-40 border-b border-transparent bg-transparent transition-[background-color,border-color,box-shadow,backdrop-filter] duration-300"
-        >
-          <div class="mx-auto flex h-14 max-w-360 items-center gap-2 px-4 lg:px-8">
-            {/* Mobile menu button */}
-            <button
-              class="hover:bg-accent/60 hover:text-foreground text-muted-foreground grid size-8 place-items-center rounded-md transition-colors duration-200 lg:hidden"
-              onClick={openDrawer}
-              aria-label="Open navigation menu"
-            >
-              <span class="size-4.5 [&>svg]:size-full">
-                {raw(defaultIcons.menu)}
-              </span>
-            </button>
-
-            {/* Logo: hour-aware clock + title */}
-            <a class="group flex items-center gap-2.5" onClick={navigateHome}>
-              <span class="text-primary grid size-7 place-items-center transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] group-hover:rotate-12 [&>svg]:size-5">
-                {raw(d.clockIcon)}
-              </span>
-              <span class="font-display text-foreground text-[0.95rem] font-semibold tracking-tight">
-                {d.siteTitle}
-              </span>
-            </a>
-
-            {/* Nav items */}
-            <nav
-              class="ml-4 hidden items-center gap-0.5 md:flex"
-              aria-label="Primary"
-            >
-              {d.navItems.map((item) =>
-                item.external ? (
-                  <a
-                    class="after:bg-primary text-muted-foreground hover:bg-accent/60 hover:text-foreground relative flex items-center gap-1 rounded-md px-3 py-1.5 text-sm transition-colors duration-200 after:absolute after:inset-x-3 after:-bottom-3.25 after:h-0.5 after:origin-left after:scale-x-0 after:rounded-full after:transition-transform after:duration-300 after:ease-[cubic-bezier(0.32,0.72,0,1)] hover:after:scale-x-100"
-                    href={item.link}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    {item.text}
-                    <span class="size-3 opacity-60 [&>svg]:size-full">
-                      {raw(defaultIcons.arrowUpRight)}
-                    </span>
-                  </a>
-                ) : (
-                  <a
-                    class={[
-                      NAV_ITEM_BASE,
-                      item.active
-                        ? "text-foreground font-medium after:scale-x-100"
-                        : "text-muted-foreground hover:bg-accent/60 hover:text-foreground hover:after:scale-x-100",
-                    ]}
-                    data-href={item.link}
-                    onClick={navigateTo}
-                  >
-                    {item.text}
-                  </a>
-                ),
-              )}
-            </nav>
-
-            {/* Right cluster */}
-            <div class="ml-auto flex items-center gap-1.5">
-              {d.searchEnabled && (
-                <>
-                  {/* Search trigger (desktop) */}
-                  <button
-                    onClick={openSearch}
-                    aria-label="Search documentation"
-                    class="group border-muted/80 bg-muted/40 text-muted-foreground hover:border-primary/40 hover:bg-accent/60 hidden h-8 w-52 items-center gap-2 rounded-md border px-2.5 text-left text-xs transition-[border-color,background-color,width] duration-300 sm:flex lg:w-60"
-                  >
-                    <span class="size-3.5 shrink-0 opacity-70 transition-transform duration-300 group-hover:scale-110 [&>svg]:size-full">
-                      {raw(defaultIcons.search)}
-                    </span>
-                    <span class="flex-1 truncate">Search documentation…</span>
-                    <kbd class="text-muted-foreground border-muted bg-background/80 rounded border px-1.5 py-0.5 font-mono text-[10px] font-medium">
-                      ⌘K
-                    </kbd>
-                  </button>
-                  {/* Search trigger (mobile icon) */}
-                  <button
-                    class="hover:bg-accent/60 hover:text-foreground text-muted-foreground grid size-8 place-items-center rounded-md transition-colors duration-200 sm:hidden"
-                    onClick={openSearch}
-                    aria-label="Search documentation"
-                  >
-                    <span class="size-4.5 [&>svg]:size-full">
-                      {raw(defaultIcons.search)}
-                    </span>
-                  </button>
-                </>
-              )}
-
-              {/* Theme toggle */}
-              <ThemeToggle />
-            </div>
-          </div>
-        </header>
-
-        {/* Main grid */}
-        <div class="mx-auto max-w-360 px-4 pt-14 lg:px-8">
-          <div class="grid grid-cols-1 gap-10 lg:grid-cols-[236px_minmax(0,1fr)] xl:grid-cols-[236px_minmax(0,1fr)_224px]">
-            {/* Sidebar (desktop) */}
-            <aside class="hidden lg:block">
-              <div class="sidebar-scroll sticky top-14 max-h-[calc(100vh-3.5rem)] overflow-y-auto py-8 pr-3">
-                <Sidebar />
-              </div>
-            </aside>
-
-            {/* Content */}
-            <main id="main-content" class="min-w-0 scroll-mt-20 py-8 lg:py-10">
-              {d.loading ? (
-                <div class="animate-fade-in space-y-4" role="status">
-                  <div class="skeleton h-9 w-2/5 rounded-lg"></div>
-                  <div class="skeleton mt-6 h-4 w-full rounded-md"></div>
-                  <div class="skeleton h-4 w-11/12 rounded-md"></div>
-                  <div class="skeleton h-4 w-4/5 rounded-md"></div>
-                  <div class="skeleton mt-8 h-44 w-full rounded-xl"></div>
-                  <div class="skeleton mt-4 h-4 w-3/5 rounded-md"></div>
-                  <span class="sr-only">Loading page…</span>
-                </div>
-              ) : d.notFound ? (
-                <div class="animate-fade-in flex flex-col items-start gap-4 py-16">
-                  <span class="border-muted bg-muted/40 text-muted-foreground grid size-12 place-items-center rounded-xl border [&>svg]:size-6">
-                    {raw(defaultIcons.compass)}
-                  </span>
-                  <h1 class="font-display text-3xl font-semibold tracking-tight">
-                    Page not found
-                  </h1>
-                  <p class="text-muted-foreground max-w-md text-sm leading-relaxed">
-                    Nothing lives at{" "}
-                    <code class="bg-muted text-foreground rounded px-1.5 py-0.5 font-mono text-xs">
-                      {d.currentPath}
-                    </code>
-                    . It may have moved, or the link may be out of date.
-                  </p>
-                  <button
-                    class="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-4 py-2 text-sm font-medium transition-[background-color,transform] duration-200 active:scale-[0.97]"
-                    onClick={navigateHome}
-                  >
-                    Back to the docs
-                  </button>
-                </div>
-              ) : (
-                <>
-                  {/* Page content */}
-                  <article
-                    id="docs-content"
-                    class="prose max-w-none"
-                    onClick={onContentClick}
-                  >
-                    {raw(d.contentHtml)}
-                  </article>
-
-                  {/* Prev / Mvc pager */}
-                  {(d.prevPage || d.nextPage) && (
-                    <div class="not-prose mt-12 grid gap-3 sm:grid-cols-2">
-                      {d.prevPage ? (
-                        <a
-                          class="group border-muted bg-background hover:border-primary/40 flex flex-col gap-1 rounded-xl border p-4 transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-[0_4px_16px_-8px_rgb(0_0_0/0.12)]"
-                          data-href={d.prevPage.link}
-                          onClick={navigateTo}
-                        >
-                          <span class="text-muted-foreground flex items-center gap-1 font-mono text-[10px] font-medium tracking-[0.12em] uppercase">
-                            <span class="size-3 transition-transform duration-200 group-hover:-translate-x-0.5 [&>svg]:size-full">
-                              {raw(defaultIcons.arrowLeft)}
-                            </span>
-                            Previous
-                          </span>
-                          <span class="text-foreground text-sm font-medium">
-                            {d.prevPage.text}
-                          </span>
-                        </a>
-                      ) : (
-                        <span class="hidden sm:block"></span>
-                      )}
-                      {d.nextPage && (
-                        <a
-                          class="group border-muted bg-background hover:border-primary/40 flex flex-col items-end gap-1 rounded-xl border p-4 text-right transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-[0_4px_16px_-8px_rgb(0_0_0/0.12)]"
-                          data-href={d.nextPage.link}
-                          onClick={navigateTo}
-                        >
-                          <span class="text-muted-foreground flex items-center gap-1 font-mono text-[10px] font-medium tracking-[0.12em] uppercase">
-                            Mvc
-                            <span class="size-3 transition-transform duration-200 group-hover:translate-x-0.5 [&>svg]:size-full">
-                              {raw(defaultIcons.arrowRight)}
-                            </span>
-                          </span>
-                          <span class="text-foreground text-sm font-medium">
-                            {d.nextPage.text}
-                          </span>
-                        </a>
-                      )}
-                    </div>
-                  )}
-                </>
-              )}
-
-              {/* Footer */}
-              <footer class="border-muted/70 text-muted-foreground mt-16 flex flex-wrap items-center justify-between gap-2 border-t pt-5 pb-10 text-xs">
-                <span>
-                  © {d.year} {d.siteTitle}
-                </span>
-                <span class="font-mono">
-                  Built with <span class="text-primary">@lark.js/docs</span>
-                </span>
-              </footer>
-            </main>
-
-            {/* TOC (right rail) */}
-            <aside class="hidden xl:block">
-              <div class="sidebar-scroll sticky top-14 max-h-[calc(100vh-3.5rem)] overflow-y-auto py-10">
-                <Toc />
-              </div>
-            </aside>
-          </div>
-        </div>
-
-        {/* Mobile navigation drawer */}
-        <div
-          id="docs-drawer"
-          class={[
-            !d.drawerOpen && "pointer-events-none",
-            "fixed inset-0 z-50 lg:hidden",
-          ]}
-          aria-hidden={d.drawerOpen ? "false" : "true"}
-        >
-          <div
-            class={[
-              d.drawerOpen ? "opacity-100" : "opacity-0",
-              "bg-foreground/25 absolute inset-0 backdrop-blur-[2px] transition-opacity duration-300 dark:bg-black/50",
-            ]}
-            onClick={closeDrawer}
-          ></div>
-          <div
-            id="docs-drawer-panel"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Navigation menu"
-            class={[
-              d.drawerOpen ? "translate-x-0" : "-translate-x-full",
-              "border-muted bg-background absolute inset-y-0 left-0 flex w-72 flex-col border-r shadow-xl transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]",
-            ]}
+    const template = jsxTemplate(() => {
+      // Tracked snapshot — every signal read subscribes this view.
+      const d = {
+        clockIcon,
+        year,
+        loading: loading.value,
+        notFound: notFound.value,
+        drawerOpen: !!State.get("drawerOpen"),
+        contentHtml: contentHtml.value,
+        currentPath: currentPath.value,
+        prevPage: prevPage.value,
+        nextPage: nextPage.value,
+        navItems: navItems.value,
+        siteTitle: siteTitle.value,
+        searchEnabled: searchEnabled.value,
+      };
+      return (
+        <div class="bg-background text-foreground min-h-screen font-sans antialiased">
+          {/* Skip to content */}
+          <a
+            href="#main-content"
+            class="bg-primary text-primary-foreground fixed -top-full left-4 z-100 rounded-md px-[0.9rem] py-2 text-[0.8rem] font-medium transition-[top] duration-200 ease-out focus:top-3"
           >
-            <div class="border-muted/70 flex h-14 shrink-0 items-center justify-between border-b px-4">
-              <a class="flex items-center gap-2" onClick={navigateHomeDrawer}>
-                <span class="text-primary [&>svg]:size-5">
+            Skip to content
+          </a>
+
+          {/* Ambient background layers */}
+          <div
+            aria-hidden="true"
+            class="pointer-events-none fixed inset-0 -z-10"
+          >
+            <div class="absolute inset-0 bg-[radial-gradient(56rem_30rem_at_16%_-10%,color-mix(in_oklab,var(--primary)_10%,transparent),transparent_70%)]"></div>
+            <div class="absolute inset-0 bg-[radial-gradient(44rem_26rem_at_96%_-4%,color-mix(in_oklab,var(--primary)_6%,transparent),transparent_70%)]"></div>
+            <div class="via-primary/40 absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent to-transparent"></div>
+            <div class="docs-grid absolute inset-0 opacity-55 dark:opacity-30"></div>
+          </div>
+
+          {/* Fixed navbar (scroll state toggled via classList in view logic) */}
+          <header
+            id="docs-navbar"
+            class="fixed inset-x-0 top-0 z-40 border-b border-transparent bg-transparent transition-[background-color,border-color,box-shadow,backdrop-filter] duration-300"
+          >
+            <div class="mx-auto flex h-14 max-w-360 items-center gap-2 px-4 lg:px-8">
+              {/* Mobile menu button */}
+              <button
+                class="hover:bg-accent/60 hover:text-foreground text-muted-foreground grid size-8 place-items-center rounded-md transition-colors duration-200 lg:hidden"
+                onClick={openDrawer}
+                aria-label="Open navigation menu"
+              >
+                <span class="size-4.5 [&>svg]:size-full">
+                  {raw(defaultIcons.menu)}
+                </span>
+              </button>
+
+              {/* Logo: hour-aware clock + title */}
+              <a class="group flex items-center gap-2.5" onClick={navigateHome}>
+                <span class="text-primary grid size-7 place-items-center transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] group-hover:rotate-12 [&>svg]:size-5">
                   {raw(d.clockIcon)}
                 </span>
-                <span class="font-display text-sm font-semibold tracking-tight">
+                <span class="font-display text-foreground text-[0.95rem] font-semibold tracking-tight">
                   {d.siteTitle}
                 </span>
               </a>
-              <button
-                class="hover:bg-accent/60 text-muted-foreground hover:text-foreground grid size-8 place-items-center rounded-md transition-colors duration-200"
-                onClick={closeDrawer}
-                aria-label="Close navigation menu"
+
+              {/* Nav items */}
+              <nav
+                class="ml-4 hidden items-center gap-0.5 md:flex"
+                aria-label="Primary"
               >
-                <span class="size-4.5 [&>svg]:size-full">
-                  {raw(defaultIcons.x)}
-                </span>
-              </button>
+                {d.navItems.map((item) =>
+                  item.external ? (
+                    <a
+                      class="after:bg-primary text-muted-foreground hover:bg-accent/60 hover:text-foreground relative flex items-center gap-1 rounded-md px-3 py-1.5 text-sm transition-colors duration-200 after:absolute after:inset-x-3 after:-bottom-3.25 after:h-0.5 after:origin-left after:scale-x-0 after:rounded-full after:transition-transform after:duration-300 after:ease-[cubic-bezier(0.32,0.72,0,1)] hover:after:scale-x-100"
+                      href={item.link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      {item.text}
+                      <span class="size-3 opacity-60 [&>svg]:size-full">
+                        {raw(defaultIcons.arrowUpRight)}
+                      </span>
+                    </a>
+                  ) : (
+                    <a
+                      class={[
+                        NAV_ITEM_BASE,
+                        item.active
+                          ? "text-foreground font-medium after:scale-x-100"
+                          : "text-muted-foreground hover:bg-accent/60 hover:text-foreground hover:after:scale-x-100",
+                      ]}
+                      data-href={item.link}
+                      onClick={navigateTo}
+                    >
+                      {item.text}
+                    </a>
+                  ),
+                )}
+              </nav>
+
+              {/* Right cluster */}
+              <div class="ml-auto flex items-center gap-1.5">
+                {d.searchEnabled && (
+                  <>
+                    {/* Search trigger (desktop) */}
+                    <button
+                      onClick={openSearch}
+                      aria-label="Search documentation"
+                      class="group border-muted/80 bg-muted/40 text-muted-foreground hover:border-primary/40 hover:bg-accent/60 hidden h-8 w-52 items-center gap-2 rounded-md border px-2.5 text-left text-xs transition-[border-color,background-color,width] duration-300 sm:flex lg:w-60"
+                    >
+                      <span class="size-3.5 shrink-0 opacity-70 transition-transform duration-300 group-hover:scale-110 [&>svg]:size-full">
+                        {raw(defaultIcons.search)}
+                      </span>
+                      <span class="flex-1 truncate">Search documentation…</span>
+                      <kbd class="text-muted-foreground border-muted bg-background/80 rounded border px-1.5 py-0.5 font-mono text-[10px] font-medium">
+                        ⌘K
+                      </kbd>
+                    </button>
+                    {/* Search trigger (mobile icon) */}
+                    <button
+                      class="hover:bg-accent/60 hover:text-foreground text-muted-foreground grid size-8 place-items-center rounded-md transition-colors duration-200 sm:hidden"
+                      onClick={openSearch}
+                      aria-label="Search documentation"
+                    >
+                      <span class="size-4.5 [&>svg]:size-full">
+                        {raw(defaultIcons.search)}
+                      </span>
+                    </button>
+                  </>
+                )}
+
+                {/* Theme toggle */}
+                <ThemeToggle />
+              </div>
             </div>
-            <div class="sidebar-scroll min-h-0 flex-1 overflow-y-auto px-3 py-6">
-              <Sidebar />
+          </header>
+
+          {/* Main grid */}
+          <div class="mx-auto max-w-360 px-4 pt-14 lg:px-8">
+            <div class="grid grid-cols-1 gap-10 lg:grid-cols-[236px_minmax(0,1fr)] xl:grid-cols-[236px_minmax(0,1fr)_224px]">
+              {/* Sidebar (desktop) */}
+              <aside class="hidden lg:block">
+                <div class="sidebar-scroll sticky top-14 max-h-[calc(100vh-3.5rem)] overflow-y-auto py-8 pr-3">
+                  <Sidebar />
+                </div>
+              </aside>
+
+              {/* Content */}
+              <main
+                id="main-content"
+                class="min-w-0 scroll-mt-20 py-8 lg:py-10"
+              >
+                {d.loading ? (
+                  <div class="animate-fade-in space-y-4" role="status">
+                    <div class="skeleton h-9 w-2/5 rounded-lg"></div>
+                    <div class="skeleton mt-6 h-4 w-full rounded-md"></div>
+                    <div class="skeleton h-4 w-11/12 rounded-md"></div>
+                    <div class="skeleton h-4 w-4/5 rounded-md"></div>
+                    <div class="skeleton mt-8 h-44 w-full rounded-xl"></div>
+                    <div class="skeleton mt-4 h-4 w-3/5 rounded-md"></div>
+                    <span class="sr-only">Loading page…</span>
+                  </div>
+                ) : d.notFound ? (
+                  <div class="animate-fade-in flex flex-col items-start gap-4 py-16">
+                    <span class="border-muted bg-muted/40 text-muted-foreground grid size-12 place-items-center rounded-xl border [&>svg]:size-6">
+                      {raw(defaultIcons.compass)}
+                    </span>
+                    <h1 class="font-display text-3xl font-semibold tracking-tight">
+                      Page not found
+                    </h1>
+                    <p class="text-muted-foreground max-w-md text-sm leading-relaxed">
+                      Nothing lives at{" "}
+                      <code class="bg-muted text-foreground rounded px-1.5 py-0.5 font-mono text-xs">
+                        {d.currentPath}
+                      </code>
+                      . It may have moved, or the link may be out of date.
+                    </p>
+                    <button
+                      class="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-4 py-2 text-sm font-medium transition-[background-color,transform] duration-200 active:scale-[0.97]"
+                      onClick={navigateHome}
+                    >
+                      Back to the docs
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    {/* Page content */}
+                    <article
+                      id="docs-content"
+                      class="prose max-w-none"
+                      onClick={onContentClick}
+                    >
+                      {raw(d.contentHtml)}
+                    </article>
+
+                    {/* Prev / Mvc pager */}
+                    {(d.prevPage || d.nextPage) && (
+                      <div class="not-prose mt-12 grid gap-3 sm:grid-cols-2">
+                        {d.prevPage ? (
+                          <a
+                            class="group border-muted bg-background hover:border-primary/40 flex flex-col gap-1 rounded-xl border p-4 transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-[0_4px_16px_-8px_rgb(0_0_0/0.12)]"
+                            data-href={d.prevPage.link}
+                            onClick={navigateTo}
+                          >
+                            <span class="text-muted-foreground flex items-center gap-1 font-mono text-[10px] font-medium tracking-[0.12em] uppercase">
+                              <span class="size-3 transition-transform duration-200 group-hover:-translate-x-0.5 [&>svg]:size-full">
+                                {raw(defaultIcons.arrowLeft)}
+                              </span>
+                              Previous
+                            </span>
+                            <span class="text-foreground text-sm font-medium">
+                              {d.prevPage.text}
+                            </span>
+                          </a>
+                        ) : (
+                          <span class="hidden sm:block"></span>
+                        )}
+                        {d.nextPage && (
+                          <a
+                            class="group border-muted bg-background hover:border-primary/40 flex flex-col items-end gap-1 rounded-xl border p-4 text-right transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-[0_4px_16px_-8px_rgb(0_0_0/0.12)]"
+                            data-href={d.nextPage.link}
+                            onClick={navigateTo}
+                          >
+                            <span class="text-muted-foreground flex items-center gap-1 font-mono text-[10px] font-medium tracking-[0.12em] uppercase">
+                              Mvc
+                              <span class="size-3 transition-transform duration-200 group-hover:translate-x-0.5 [&>svg]:size-full">
+                                {raw(defaultIcons.arrowRight)}
+                              </span>
+                            </span>
+                            <span class="text-foreground text-sm font-medium">
+                              {d.nextPage.text}
+                            </span>
+                          </a>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* Footer */}
+                <footer class="border-muted/70 text-muted-foreground mt-16 flex flex-wrap items-center justify-between gap-2 border-t pt-5 pb-10 text-xs">
+                  <span>
+                    © {d.year} {d.siteTitle}
+                  </span>
+                  <span class="font-mono">
+                    Built with <span class="text-primary">@lark.js/docs</span>
+                  </span>
+                </footer>
+              </main>
+
+              {/* TOC (right rail) */}
+              <aside class="hidden xl:block">
+                <div class="sidebar-scroll sticky top-14 max-h-[calc(100vh-3.5rem)] overflow-y-auto py-10">
+                  <Toc />
+                </div>
+              </aside>
             </div>
           </div>
-        </div>
 
-        {/* Search dialog */}
-        {d.searchEnabled && <Search />}
-      </div>
-    ));
+          {/* Mobile navigation drawer */}
+          <div
+            id="docs-drawer"
+            class={[
+              !d.drawerOpen && "pointer-events-none",
+              "fixed inset-0 z-50 lg:hidden",
+            ]}
+            aria-hidden={d.drawerOpen ? "false" : "true"}
+          >
+            <div
+              class={[
+                d.drawerOpen ? "opacity-100" : "opacity-0",
+                "bg-foreground/25 absolute inset-0 backdrop-blur-[2px] transition-opacity duration-300 dark:bg-black/50",
+              ]}
+              onClick={closeDrawer}
+            ></div>
+            <div
+              id="docs-drawer-panel"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Navigation menu"
+              class={[
+                d.drawerOpen ? "translate-x-0" : "-translate-x-full",
+                "border-muted bg-background absolute inset-y-0 left-0 flex w-72 flex-col border-r shadow-xl transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]",
+              ]}
+            >
+              <div class="border-muted/70 flex h-14 shrink-0 items-center justify-between border-b px-4">
+                <a class="flex items-center gap-2" onClick={navigateHomeDrawer}>
+                  <span class="text-primary [&>svg]:size-5">
+                    {raw(d.clockIcon)}
+                  </span>
+                  <span class="font-display text-sm font-semibold tracking-tight">
+                    {d.siteTitle}
+                  </span>
+                </a>
+                <button
+                  class="hover:bg-accent/60 text-muted-foreground hover:text-foreground grid size-8 place-items-center rounded-md transition-colors duration-200"
+                  onClick={closeDrawer}
+                  aria-label="Close navigation menu"
+                >
+                  <span class="size-4.5 [&>svg]:size-full">
+                    {raw(defaultIcons.x)}
+                  </span>
+                </button>
+              </div>
+              <div class="sidebar-scroll min-h-0 flex-1 overflow-y-auto px-3 py-6">
+                <Sidebar />
+              </div>
+            </div>
+          </div>
+
+          {/* Search dialog */}
+          {d.searchEnabled && <Search />}
+        </div>
+      );
+    });
 
     return { template };
   });

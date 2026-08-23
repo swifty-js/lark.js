@@ -25,20 +25,17 @@
  *
  * Features:
  * - boot() with config
- * - Router + State change notification to views
+ * - Route-view mount on navigation (all other reactivity flows through signals)
  * - Module loading (require/use)
  * - Utility methods: toUri, parseUri, assign, keys, nodeInside, ensureNodeId,
- *   generateId, mark/unmark, dispatchEvent, task, delay
+ *   generateId, mark/unmark, dispatchEvent, delay
  * - waitZoneViewsRendered
  * - Factory access: createEmitter, createCache, defineView
  * - Module access: Router, State, Frame
  */
-import { CALL_BREAK_TIME, RouterEvents } from "./common";
+import { RouterEvents } from "./common";
 import {
   assign,
-  hasOwnProperty,
-  funcWithTry,
-  noop,
   setFrameworkErrorSink,
   parseUri,
   toUri,
@@ -52,13 +49,12 @@ import { createEmitter } from "./event-emitter";
 import { Router, markRouterBooted } from "./router";
 import { State } from "./state";
 import { Frame } from "./frame";
-import type { FrameObj } from "./types";
 import { EventDelegator } from "./event-delegator";
 import { defineView } from "./view";
 import { hotSwapByView } from "./hmr";
 import { isLarkView } from "./jsx/vnode";
 import { ensureViewName } from "./view-registry";
-import type { AnyFunc, FrameworkConfig, ViewCtx, ChangeEvent, FrameworkApi } from "./types";
+import type { FrameworkConfig, ChangeEvent, FrameworkApi } from "./types";
 
 // ============================================================
 // Internal state
@@ -71,228 +67,17 @@ import { config, use } from "./module-loader";
 let booted = false;
 
 // ============================================================
-// Task: modern chunked function execution
-//
-// Scheduling priority (best available):
-// 1. scheduler.postTask('background') — Chrome 94+
-// 2. requestIdleCallback — Chrome 47+, Firefox
-// 3. setTimeout(0) — universal fallback
-//
-// Time-slicing strategy:
-// - When requestIdleCallback is available, uses deadline.timeRemaining()
-//   for adaptive chunk sizing (browser decides time budget per frame)
-// - Falls back to fixed 48ms slices (CALL_BREAK_TIME) otherwise
-// - Tasks are queued in a flat array [fn, ctx, args, ...] and
-//   consumed in batches to minimize scheduling overhead
+// Dispatcher: mount the route view on navigation
 // ============================================================
 
-/** Type guard: narrow unknown to AnyFunc */
-function isAnyFunc(v: unknown): v is AnyFunc {
-  return typeof v === "function";
-}
-
-/** Flat task queue: [fn, context, args, fn, context, args, ...] */
-const taskList: unknown[] = [];
-/** Current read position in taskList */
-let taskIndex = 0;
-/** Whether a chunk execution is already scheduled */
-let taskScheduled = false;
-
 /**
- * Execute a chunk of queued tasks, yielding when time budget runs out.
- * When called from requestIdleCallback, uses deadline for adaptive slicing.
- * When called from setTimeout/scheduler.postTask, uses fixed 48ms budget.
- */
-function executeTaskChunk(deadline?: IdleDeadline): void {
-  const hasDeadline = !!deadline;
-  const startTime = Date.now();
-
-  while (true) {
-    const fn = taskList[taskIndex];
-    if (!isAnyFunc(fn)) {
-      // All tasks consumed (or invalid entry) — reset queue
-      taskList.length = 0;
-      taskIndex = 0;
-      taskScheduled = false;
-      return;
-    }
-
-    // Check time budget before executing next task
-    if (hasDeadline && deadline) {
-      // Adaptive: use browser-provided deadline
-      if (deadline.timeRemaining() <= 0) {
-        scheduleTaskChunk();
-        return;
-      }
-    } else if (Date.now() - startTime > CALL_BREAK_TIME && taskList.length > taskIndex + 3) {
-      // Fixed: 48ms budget, and there are more tasks remaining
-      scheduleTaskChunk();
-      return;
-    }
-
-    // Execute one task
-    const context = taskList[taskIndex + 1];
-    const rawArgs = taskList[taskIndex + 2];
-    const args = Array.isArray(rawArgs) ? rawArgs : [];
-    funcWithTry(fn, args, context, noop);
-    taskIndex += 3;
-  }
-}
-
-/**
- * Schedule the next chunk using the best available browser API.
- * Priority: scheduler.postTask > requestIdleCallback > setTimeout
- */
-function scheduleTaskChunk(): void {
-  const scheduler = globalThis.scheduler;
-  if (scheduler && typeof scheduler.postTask === "function") {
-    scheduler.postTask(() => executeTaskChunk(), { priority: "background" });
-  } else if (typeof globalThis.requestIdleCallback === "function") {
-    globalThis.requestIdleCallback(executeTaskChunk);
-  } else {
-    setTimeout(executeTaskChunk, 0);
-  }
-}
-
-/**
- * Queue a function for deferred, chunked execution.
+ * Handle router CHANGED events.
  *
- * @param fn - Function to execute (wrapped in try-catch automatically)
- * @param args - Arguments array to pass to the function
- * @param context - `this` context for the function call
- */
-function task(fn: AnyFunc, args?: unknown[], context?: unknown): void {
-  taskList.push(fn, context, args || []);
-  if (!taskScheduled) {
-    taskScheduled = true;
-    scheduleTaskChunk();
-  }
-}
-
-// ============================================================
-// Dispatcher: notify views of changes
-// ============================================================
-
-/** Update tag */
-let dispatcherUpdateTag = 0;
-
-/** Narrow an unknown value to a then-able. */
-function isThenable(value: unknown): value is PromiseLike<void> {
-  return (
-    !!value &&
-    (typeof value === "object" || typeof value === "function") &&
-    "then" in value &&
-    typeof Reflect.get(value, "then") === "function"
-  );
-}
-
-// ============================================================
-// Location / State observation change detection
-// ============================================================
-
-/**
- * Check if a view's observed location keys have changed.
- */
-function viewIsObserveChanged(view: ViewCtx): boolean {
-  const loc = view.locationObserved;
-  let result = false;
-
-  if (loc.flag) {
-    if (loc.observePath) {
-      const lastChanged = Router.diff();
-      result = !!lastChanged?.path;
-    }
-    if (!result && loc.keys.length) {
-      const lastChanged = Router.diff();
-      const changedParams = lastChanged?.params;
-      if (changedParams) {
-        for (const key of loc.keys) {
-          result = hasOwnProperty(changedParams, key);
-          if (result) break;
-        }
-      }
-    }
-  }
-  return result;
-}
-
-/**
- * Check if a view's observed state keys have changed.
- */
-function stateIsObserveChanged(view: ViewCtx, stateKeys: ReadonlySet<string>): boolean {
-  const observedKeys = view.getObservedStateKeys();
-  if (!observedKeys) return false;
-  for (const key of observedKeys) {
-    if (stateKeys.has(key)) return true;
-  }
-  return false;
-}
-
-/**
- * Walk the Frame tree iteratively, rendering any view whose observed keys
- * have changed. Uses an explicit LIFO stack so deeply nested Frame trees
- * cannot blow the JS call stack (V8 does no tail-call optimization here).
- *
- * Async branch: if `render()` returns a thenable, the subtree under that
- * frame is processed after the promise resolves; sibling subtrees keep
- * draining the stack synchronously meanwhile.
- */
-function dispatcherUpdate(frame: FrameObj, stateKeys?: ReadonlySet<string>): void {
-  const stack: FrameObj[] = [frame];
-
-  const drain = (s: FrameObj[]): void => {
-    while (s.length > 0) {
-      const current = s.pop();
-      if (!current) continue;
-      const view = current.view;
-
-      if (
-        !view ||
-        current.dispatcherUpdateTag === dispatcherUpdateTag ||
-        view.signature.value <= 1
-      ) {
-        continue;
-      }
-      current.dispatcherUpdateTag = dispatcherUpdateTag;
-
-      const isChanged = stateKeys
-        ? stateIsObserveChanged(view, stateKeys)
-        : viewIsObserveChanged(view);
-
-      let renderPromise: PromiseLike<void> | undefined;
-      if (isChanged) {
-        const renderResult = funcWithTry(view.renderMethod ?? view.render, [], view, noop);
-        if (isThenable(renderResult)) {
-          renderPromise = renderResult;
-        }
-      }
-
-      const children = current.children();
-      if (renderPromise) {
-        // Defer this subtree until render settles; keep draining siblings now.
-        renderPromise.then(() => {
-          const subStack: FrameObj[] = [];
-          for (let i = children.length - 1; i >= 0; i--) {
-            const child = Frame.get(children[i]);
-            if (child) subStack.push(child);
-          }
-          drain(subStack);
-        });
-      } else {
-        // Push children in reverse so pop() visits them in original order.
-        for (let i = children.length - 1; i >= 0; i--) {
-          const child = Frame.get(children[i]);
-          if (child) s.push(child);
-        }
-      }
-    }
-  };
-
-  drain(stack);
-}
-
-/**
- * Notify views when router or state changes.
+ * Only the view-mount branch remains: when the matched route VIEW changes,
+ * mount it on the root frame. Param-only and state changes propagate through
+ * signals — views re-render via their own render effects (reads of
+ * `Router.parse()` / `State.get(key)` / store state subscribe them), so no
+ * frame-tree walk is needed.
  */
 function dispatcherNotifyChange(e: ChangeEvent): void {
   // The dispatcher only runs after boot, so the root frame is guaranteed
@@ -311,10 +96,6 @@ function dispatcherNotifyChange(e: ChangeEvent): void {
         ? String(Reflect.get(view, "to") || "")
         : String(view);
     rootFrame.mountView(viewPath);
-  } else {
-    // Parameter/state change, notify views
-    dispatcherUpdateTag++;
-    dispatcherUpdate(rootFrame, e.keys);
   }
 }
 
@@ -464,13 +245,9 @@ export const Framework: FrameworkApi = {
     // Set frame getter in EventDelegator
     EventDelegator.setFrameGetter((id: string) => Frame.get(id));
 
-    // Bind router events
+    // Bind router events — the only remaining dispatch path (route-view
+    // mount). Param/state changes propagate through signals.
     Router.on(RouterEvents.CHANGED, (data?: ChangeEvent) => {
-      if (data) dispatcherNotifyChange(data);
-    });
-
-    // Bind state events
-    State.on(RouterEvents.CHANGED, (data?: ChangeEvent) => {
       if (data) dispatcherNotifyChange(data);
     });
 
@@ -534,9 +311,6 @@ export const Framework: FrameworkApi = {
 
   /** Fire a custom DOM event on a target */
   dispatchEvent,
-
-  /** Execute function in try-catch, ignoring errors */
-  task,
 
   /** Promise-based setTimeout */
   delay(time: number): Promise<void> {

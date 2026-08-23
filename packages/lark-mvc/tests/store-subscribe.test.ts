@@ -21,22 +21,8 @@
  */
 
 import { describe, it, expect, vi } from "vitest";
-import { createStore, bindStore } from "../src/store";
-import { createUpdater } from "../src/updater";
-
-function fakeView(id: string) {
-  const destroyListeners: Array<() => void> = [];
-  return {
-    updater: createUpdater(id),
-    destroyListeners,
-    on(event: string, cb: () => void) {
-      if (event === "destroy") destroyListeners.push(cb);
-    },
-    triggerDestroy() {
-      for (const cb of destroyListeners) cb();
-    },
-  };
-}
+import { createStore } from "../src/store";
+import { effect } from "../src/reactive";
 
 interface CountState {
   count: number;
@@ -130,80 +116,67 @@ describe("createStore - subscribe", () => {
   });
 });
 
-describe("bindStore", () => {
-  it("syncs initial state to view updater", () => {
+describe("getState (tracked proxy)", () => {
+  it("returns a stable proxy identity", () => {
     const store = makeStore(nextName());
-    const view = fakeView("bind-test-1");
-    const setSpy = vi.spyOn(view.updater, "set");
-    const digestSpy = vi.spyOn(view.updater, "digest");
-
-    bindStore(view, store);
-
-    expect(setSpy).toHaveBeenCalledWith(expect.objectContaining({ count: 0, step: 1 }));
-    expect(digestSpy).toHaveBeenCalled();
-
+    expect(store.getState()).toBe(store.getState());
     store.destroy();
   });
 
-  it("updates view on state change", () => {
+  it("spread produces a plain snapshot including actions", () => {
     const store = makeStore(nextName());
-    const view = fakeView("bind-test-2");
-    const digestSpy = vi.spyOn(view.updater, "digest");
-
-    bindStore(view, store);
-    digestSpy.mockClear();
-
-    store.setState({ count: 42 });
-
-    expect(digestSpy).toHaveBeenCalled();
-
+    store.setState({ count: 3 });
+    const snap = { ...store.getState() };
+    expect(snap.count).toBe(3);
+    expect(snap.step).toBe(1);
+    expect(typeof snap.increment).toBe("function");
     store.destroy();
   });
 
-  it("selector limits which state is forwarded", () => {
+  it("key reads inside an effect subscribe to THAT key only", () => {
     const store = makeStore(nextName());
-    const view = fakeView("bind-test-3");
-    const setSpy = vi.spyOn(view.updater, "set");
+    let runs = 0;
+    const dispose = effect(() => {
+      store.getState().count;
+      runs++;
+    });
+    expect(runs).toBe(1);
 
-    bindStore(view, store, (s) => ({ count: s.count }));
+    store.setState({ step: 5 }); // unread key → no re-run
+    expect(runs).toBe(1);
 
-    // Initial set should only contain count
-    const lastCall = setSpy.mock.calls[setSpy.mock.calls.length - 1][0];
-    expect(lastCall).toEqual({ count: 0 });
-    expect(lastCall).not.toHaveProperty("step");
+    store.setState({ count: 1 });
+    expect(runs).toBe(2);
 
+    dispose();
     store.destroy();
   });
 
-  it("auto-unsubscribes on view destroy", () => {
+  it("batches multi-key setState into one effect run", () => {
     const store = makeStore(nextName());
-    const view = fakeView("bind-test-4");
-    const digestSpy = vi.spyOn(view.updater, "digest");
+    let runs = 0;
+    const dispose = effect(() => {
+      store.getState().count;
+      store.getState().step;
+      runs++;
+    });
+    expect(runs).toBe(1);
 
-    bindStore(view, store);
-    digestSpy.mockClear();
+    store.setState({ count: 9, step: 9 });
+    expect(runs).toBe(2);
 
-    view.triggerDestroy();
-    store.setState({ count: 99 });
-
-    expect(digestSpy).not.toHaveBeenCalled();
-
+    dispose();
     store.destroy();
   });
 
-  it("returns unsubscribe function", () => {
-    const store = makeStore(nextName());
-    const view = fakeView("bind-test-5");
-    const digestSpy = vi.spyOn(view.updater, "digest");
-
-    const off = bindStore(view, store);
-    digestSpy.mockClear();
-
-    off();
-    store.setState({ count: 77 });
-
-    expect(digestSpy).not.toHaveBeenCalled();
-
+  it("setState can introduce new keys (zustand semantics)", () => {
+    interface Extra {
+      count: number;
+      [k: string]: unknown;
+    }
+    const store = createStore<Extra>(nextName(), () => ({ count: 0 }));
+    store.setState({ label: "new" });
+    expect(store.getState()["label"]).toBe("new");
     store.destroy();
   });
 });

@@ -20,112 +20,24 @@
  * SOFTWARE.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { useUrlState } from "../src/url-state";
 import { Router } from "../src/router";
-import type {
-  ViewCtx,
-  FrameworkConfig,
-  UpdaterApi,
-  EmitterApi,
-  FrameObj,
-  ViewLocationObserved,
-  ViewResourceEntry,
-  Ref,
-} from "../src/types";
+import { effect } from "../src/reactive";
+import type { FrameworkConfig, Location } from "../src/types";
 
-function createMockView(): ViewCtx {
-  const signature: Ref<number> = { value: 1 };
-  const rendered: Ref<boolean> = { value: false };
-  const locationObserved: ViewLocationObserved = {
-    flag: 0,
-    keys: [],
-    observePath: false,
+function mockLocation(params: Record<string, string>): Location {
+  return {
+    href: "https://example.com/",
+    srcQuery: "/",
+    srcHash: "",
+    query: { path: "/", params },
+    hash: { path: "", params: {} },
+    params,
+    get(key: string, defaultValue?: string) {
+      return params[key] || defaultValue || "";
+    },
   };
-  const resources: Record<string, ViewResourceEntry> = {};
-
-  const updater: UpdaterApi = {
-    get: vi.fn(),
-    set: vi.fn().mockReturnThis(),
-    digest: vi.fn(),
-    snapshot: vi.fn().mockReturnThis(),
-    altered: vi.fn(),
-    refData: {},
-    translate: vi.fn(),
-    forceDigest: vi.fn(),
-    getChangedKeys: vi.fn().mockReturnValue(new Set()),
-  };
-
-  const emitter: EmitterApi = vi.fn() as unknown as EmitterApi;
-
-  const frame: FrameObj = {
-    id: "test-frame",
-    getViewPath: () => undefined,
-    parentId: undefined,
-    view: undefined,
-    invokeList: [],
-    signature: 1,
-    destroyed: 0,
-    hasAltered: 0,
-    holdFireCreated: 0,
-    childrenCreated: 0,
-    childrenAlter: 0,
-    childrenMap: {},
-    childrenCount: 0,
-    readyCount: 0,
-    readyMap: new Set(),
-    emitter,
-    mountView: vi.fn(),
-    unmountView: vi.fn(),
-    mountFrame: vi.fn(),
-    unmountFrame: vi.fn(),
-    mountZone: vi.fn(),
-    unmountZone: vi.fn(),
-    parent: vi.fn(),
-    invoke: vi.fn(),
-    children: vi.fn().mockReturnValue([]),
-    on: vi.fn(),
-    off: vi.fn(),
-    fire: vi.fn(),
-  } as FrameObj;
-
-  const ctx: ViewCtx = {
-    id: "test-view",
-    owner: frame,
-    updater,
-    signature,
-    rendered,
-    getTemplate: vi.fn(),
-    setTemplate: vi.fn(),
-    locationObserved,
-    getObservedStateKeys: vi.fn(),
-    resources,
-    emitter,
-    getEvents: vi.fn(),
-    setEvents: vi.fn(),
-    cleanups: [],
-    setAssign: vi.fn(),
-    render: vi.fn(),
-    init: vi.fn(),
-    endUpdate: vi.fn(),
-    wrapAsync: vi.fn((fn) => fn),
-    observeLocation: vi.fn((params) => {
-      locationObserved.flag = 1;
-      if (typeof params === "string") {
-        locationObserved.keys = params.split(",");
-      } else if (Array.isArray(params)) {
-        locationObserved.keys = params;
-      }
-    }),
-    observeState: vi.fn(),
-    capture: vi.fn(),
-    release: vi.fn(),
-    on: vi.fn().mockReturnThis(),
-    off: vi.fn().mockReturnThis(),
-    fire: vi.fn().mockReturnThis(),
-  } as ViewCtx;
-
-  return ctx;
 }
 
 describe("useUrlState", () => {
@@ -136,72 +48,68 @@ describe("useUrlState", () => {
     } as FrameworkConfig);
   });
 
-  it("returns initial state when URL has no params", () => {
-    const view = createMockView();
-    const [state] = useUrlState(view, { page: "1", size: "20" });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
 
+  it("read() returns initial state when URL has no params", () => {
+    const [read] = useUrlState({ page: "1", size: "20" });
+    const state = read();
     expect(state.page).toBe("1");
     expect(state.size).toBe("20");
   });
 
-  it("reads state from URL params, overriding defaults", () => {
-    const view = createMockView();
-    vi.spyOn(Router, "parse").mockReturnValue({
-      href: "https://example.com/?page=3&size=50",
-      srcQuery: "/?page=3&size=50",
-      srcHash: "",
-      query: { path: "/", params: { page: "3", size: "50" } },
-      hash: { path: "", params: {} },
-      params: { page: "3", size: "50" },
-      get(key: string, defaultValue?: string) {
-        const p: Record<string, string> = { page: "3", size: "50" };
-        return p[key] || defaultValue || "";
-      },
+  it("read() reads URL params fresh on every call, overriding defaults", () => {
+    const spy = vi.spyOn(Router, "parse").mockReturnValue(mockLocation({}));
+    const [read] = useUrlState({ page: "1", size: "20" });
+    expect(read().page).toBe("1");
+
+    spy.mockReturnValue(mockLocation({ page: "3", size: "50" }));
+    expect(read().page).toBe("3");
+    expect(read().size).toBe("50");
+  });
+
+  it("read() is tracked — effects re-run after a real navigation", () => {
+    Router.diff(); // sync lastLocation with the current test URL
+    const [read] = useUrlState({ page: "1" });
+    const seen: string[] = [];
+    const dispose = effect(() => {
+      seen.push(read().page);
     });
+    expect(seen).toEqual(["1"]);
 
-    const [state] = useUrlState(view, { page: "1", size: "20" });
-    expect(state.page).toBe("3");
-    expect(state.size).toBe("50");
+    // Real history-mode navigation. Without Framework.boot there is no
+    // _bind()/notify wiring, so run change detection manually — diff()
+    // bumps the location version signal that read() subscribes to.
+    Router.to({ page: "7" });
+    Router.diff();
+    expect(seen[seen.length - 1]).toBe("7");
 
-    vi.restoreAllMocks();
+    dispose();
+    Router.to({ page: "" }, undefined, true); // restore URL for other tests
+    Router.diff();
   });
 
-  it("auto-observes location keys on the view", () => {
-    const view = createMockView();
-    useUrlState(view, { page: "1", size: "20" });
-
-    expect(view.observeLocation).toHaveBeenCalledWith(["page", "size"]);
-  });
-
-  it("setState calls Router.to with the patch", () => {
-    const view = createMockView();
+  it("write() calls Router.to with the patch", () => {
     const toSpy = vi.spyOn(Router, "to").mockImplementation(() => {});
 
-    const [, setState] = useUrlState(view, { page: "1", size: "20" });
-    setState({ page: "2" });
+    const [, write] = useUrlState({ page: "1", size: "20" });
+    write({ page: "2" });
 
     expect(toSpy).toHaveBeenCalledWith({ page: "2" });
-
-    vi.restoreAllMocks();
   });
 
-  it("setState supports updater function", () => {
-    const view = createMockView();
+  it("write() supports updater function", () => {
     const toSpy = vi.spyOn(Router, "to").mockImplementation(() => {});
 
-    const [, setState] = useUrlState(view, { page: "1", size: "20" });
-    setState((prev) => ({ page: String(Number(prev.page) + 1) }));
+    const [, write] = useUrlState({ page: "1", size: "20" });
+    write((prev) => ({ page: String(Number(prev.page) + 1) }));
 
     expect(toSpy).toHaveBeenCalledWith({ page: "2" });
-
-    vi.restoreAllMocks();
   });
 
   it("works without initial state", () => {
-    const view = createMockView();
-    const [state] = useUrlState(view);
-
-    expect(state).toEqual({});
-    expect(view.observeLocation).not.toHaveBeenCalled();
+    const [read] = useUrlState();
+    expect(read()).toEqual({});
   });
 });

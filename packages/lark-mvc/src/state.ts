@@ -21,52 +21,65 @@
  */
 
 /**
- * Observable in-memory data object for cross-view data sharing.
+ * Observable in-memory data object for cross-view data sharing, backed by
+ * per-key signals.
  *
  * `State` is the recommended choice for **simple** cross-view data:
  * lightweight shared values (counters, toggles, page title, session info, etc.).
  * For **complex** reactive state — handlers, derived data, multi-instance
- * isolation, or store-internal reactions — prefer `createStore` from `./store`.
+ * isolation — prefer `createStore` from `./store`.
  *
- * ## Lifecycle
+ * ## Reactivity (shallow)
  *
- * Write: `State.set(data)` + `State.digest()`
- * Read: `State.get(key)` or `State.get()` (entire object)
- * Subscribe: `ctx.observeState("keys")` or `State.on("changed", fn)`
- * Cleanup: `State.clean("keys")(ctx)` — reference-counted, auto-reclaims keys
- *   when the last observer is destroyed
+ * Every key is backed by its own signal:
+ * - `State.get("key")` inside a tracked region (template / `computed` /
+ *   `useSignalEffect`) subscribes the reader to THAT key.
+ * - `State.get()` (whole object) subscribes the reader to ALL State changes
+ *   (it reads a global version signal) and returns a plain snapshot.
+ * - `State.set(data)` batch-writes the key signals — subscribed views
+ *   re-render automatically. No digest call exists.
  *
- * `digest()` batches changes — multiple `set()` calls accumulate changed keys,
- * and a single `digest()` fires one `changed` event with all of them.
+ * Comparison is by reference (`===`): mutate-in-place does NOT notify —
+ * replace the reference (`State.set({ list: [...list, item] })`).
+ *
+ * ## Cleanup
+ *
+ * `State.clean("keys")(ctx)` is reference-counted per key; when the last
+ * observing view is destroyed the key's data and signal are dropped.
  */
-import { RouterEvents } from "./common";
-import { hasOwnProperty, setData, EMPTY_STRING_SET } from "./utils";
+import { hasOwnProperty } from "./utils";
+import { signal, batch, type Signal } from "./reactive";
 import { createEmitter } from "./event-emitter";
 import type { AnyFunc, ChangeEvent, StateApi } from "./types";
 
-/** Application state data */
+/** Plain snapshot mirror of the state (kept in sync with the key signals). */
 const appData: Record<string, unknown> = {};
+
+/** Per-key signals, created lazily on first get/set of a key. */
+const keySignals = new Map<string, Signal<unknown>>();
+
+/** Bumped on every write — whole-object `State.get()` reads subscribe here. */
+const version = signal(0);
 
 /** Key reference counts: how many views observe each key */
 const keyRefCounts: Record<string, number> = {};
 
-/** Changed keys in current digest cycle */
-let changedKeys = new Set<string>();
-
-/** Stashed changed keys from last digest */
-let stashedChangedKeys: ReadonlySet<string> = EMPTY_STRING_SET;
-
-/** Whether data has changed since last digest */
-let dataIsChanged = false;
-
-/** Event emitter for state events */
+/** Event emitter for user-level pub/sub (`State.on/off/fire`). */
 const emitter = createEmitter();
+
+function ensureKeySignal(key: string): Signal<unknown> {
+  let sig = keySignals.get(key);
+  if (!sig) {
+    sig = signal(appData[key]);
+    keySignals.set(key, sig);
+  }
+  return sig;
+}
 
 /**
  * Increment the reference count for each observed key.
  *
- * Called by `State.clean(keys)(ctx)` during view setup. When a key is first
- * observed (count goes 0→1), it is ready to be set. The reference count
+ * Called by `State.clean(keys)(ctx)` during view setup. The reference count
  * prevents premature cleanup when multiple views observe the same key.
  */
 function setupKeysRef(keys: string): string[] {
@@ -85,8 +98,8 @@ function setupKeysRef(keys: string): string[] {
  * Decrement the reference count for each key, deleting data when it reaches 0.
  *
  * Called on view destroy (registered by `State.clean`). When the last observer
- * of a key is destroyed (count goes 1→0), the key's data is deleted from
- * `appData` to prevent memory leaks.
+ * of a key is destroyed (count goes 1→0), the key's data and signal are
+ * dropped to prevent memory leaks.
  */
 function teardownKeysRef(keyList: string[]): void {
   for (const key of keyList) {
@@ -95,6 +108,7 @@ function teardownKeysRef(keyList: string[]): void {
       if (count <= 0) {
         Reflect.deleteProperty(keyRefCounts, key);
         Reflect.deleteProperty(appData, key);
+        keySignals.delete(key);
       }
     }
   }
@@ -102,48 +116,42 @@ function teardownKeysRef(keyList: string[]): void {
 
 /**
  * Observable in-memory data object.
- * Provides get/set/digest/diff/clean methods for cross-view data sharing.
+ * Provides get/set/clean methods for cross-view data sharing.
  */
 export const State: StateApi = {
   /**
-   * Get data from state.
+   * Get data from state. Reading a key inside a tracked region subscribes
+   * the reader to that key; the whole-object read subscribes to all changes.
    */
   get<T = unknown>(key?: string): T {
-    const result = key ? appData[key] : appData;
-    return result as T;
+    if (key) {
+      return ensureKeySignal(key).value as T;
+    }
+    version.value; // whole-object read → subscribe to every write
+    return appData as T;
   },
 
   /**
-   * Set data to state.
+   * Set data to state. Writes are batched — subscribed readers re-render
+   * once, synchronously, after all keys are written.
    */
   set(data: Record<string, unknown>, excludes?: ReadonlySet<string>): typeof State {
-    dataIsChanged =
-      setData(data, appData, changedKeys, excludes || EMPTY_STRING_SET) || dataIsChanged;
+    batch(() => {
+      let changed = false;
+      for (const key of Object.keys(data)) {
+        if (excludes?.has(key)) continue;
+        const value = data[key];
+        if (appData[key] !== value || !hasOwnProperty(appData, key)) {
+          changed = true;
+        }
+        appData[key] = value;
+        ensureKeySignal(key).value = value;
+      }
+      if (changed) {
+        version.value++;
+      }
+    });
     return State;
-  },
-
-  /**
-   * Detect data changes and fire changed event if any.
-   */
-  digest(data?: Record<string, unknown>, excludes?: ReadonlySet<string>): void {
-    if (data) {
-      State.set(data, excludes);
-    }
-    if (dataIsChanged) {
-      dataIsChanged = false;
-      // Snapshot changed keys and stash for diff()
-      const keys = changedKeys;
-      stashedChangedKeys = keys;
-      changedKeys = new Set();
-      emitter.fire(RouterEvents.CHANGED, { keys });
-    }
-  },
-
-  /**
-   * Get the set of keys changed in the most recent digest.
-   */
-  diff(): ReadonlySet<string> {
-    return stashedChangedKeys;
   },
 
   /**

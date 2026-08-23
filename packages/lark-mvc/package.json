@@ -1,6 +1,6 @@
 {
   "name": "@lark.js/mvc",
-  "version": "0.0.28",
+  "version": "0.0.29",
   "description": "@lark.js/mvc - TypeScript framework",
   "keywords": [
     "framework",
@@ -96,6 +96,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@preact/signals-core": "^1.14.4"
   },
   "devDependencies": {
     "@rspack/core": "^2.1.10",

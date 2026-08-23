@@ -34,7 +34,10 @@ import {
   defineView,
   jsxTemplate,
   raw,
+  signal,
+  batch,
   useEffect,
+  useSignalEffect,
 } from "@lark.js/mvc";
 import type { LarkView, LarkEvent } from "@lark.js/mvc";
 import { z } from "zod";
@@ -75,45 +78,31 @@ interface SearchResultVM {
   highlightedExcerpt: string;
 }
 
-interface SearchData {
-  isOpen: boolean;
-  query: string;
-  results: SearchResultVM[];
-  hasSearched: boolean;
-  activeIndex: number;
-  indexSize: number;
-}
-
 export function createSearchView(): LarkView {
-  return defineView((ctx) => {
+  return defineView(() => {
     let mini: MiniSearch | null = null;
     let seq = 0;
 
-    ctx.updater.set({
-      results: [],
-      hasSearched: false,
-      query: "",
-      activeIndex: 0,
-      isOpen: false,
-      indexSize: 0,
-    });
-    ctx.observeState("searchOpen");
+    const results = signal<SearchResultVM[]>([]);
+    const hasSearched = signal(false);
+    const query = signal("");
+    const activeIndex = signal(0);
+    const indexSize = signal(0);
 
-    const assign = (): boolean | undefined => {
-      ctx.updater.snapshot();
-      const isOpen = !!State.get("searchOpen");
-      ctx.updater.set({ isOpen });
-      return ctx.updater.altered();
+    const resetQueryState = (): void => {
+      batch(() => {
+        results.value = [];
+        hasSearched.value = false;
+        query.value = "";
+        activeIndex.value = 0;
+      });
     };
 
-    assign();
-
-    ctx.renderMethod = () => {
-      const wasOpen = !!ctx.updater.get("isOpen");
-      assign();
-      ctx.updater.digest();
-      const isOpen = !!ctx.updater.get("isOpen");
-
+    // Open/close side effects — State.get("searchOpen") is a tracked read,
+    // so this re-runs on every open/close write from anywhere in the app.
+    let wasOpen = false;
+    useSignalEffect(() => {
+      const isOpen = !!State.get("searchOpen");
       if (isOpen && !wasOpen) {
         requestAnimationFrame(() => {
           document.getElementById("docs-search-input")?.focus();
@@ -121,19 +110,18 @@ export function createSearchView(): LarkView {
       }
       if (!isOpen && wasOpen) {
         // Reset state on close.
-        ctx.updater
-          .set({ results: [], hasSearched: false, query: "", activeIndex: 0 })
-          .digest();
+        resetQueryState();
         const input = document.getElementById("docs-search-input");
         if (input instanceof HTMLInputElement) input.value = "";
       }
-    };
+      wasOpen = isOpen;
+    });
 
     // Escape closes regardless of focus position.
     useEffect(() => {
       const onKey = (e: KeyboardEvent) => {
         if (e.key === "Escape" && State.get("searchOpen")) {
-          State.set({ searchOpen: false }).digest();
+          State.set({ searchOpen: false });
         }
       };
       document.addEventListener("keydown", onKey);
@@ -206,7 +194,7 @@ export function createSearchView(): LarkView {
         },
       });
       mini.addAll(docs);
-      ctx.updater.set({ indexSize: docs.length }).digest();
+      indexSize.value = docs.length;
       return mini;
     }
 
@@ -220,7 +208,7 @@ export function createSearchView(): LarkView {
       const currentPath =
         (Router.parse().path || "/").replace(/\/+$/, "") || "/";
 
-      State.set({ searchOpen: false }).digest();
+      State.set({ searchOpen: false });
 
       if (path === currentPath) {
         if (!slug) {
@@ -245,10 +233,7 @@ export function createSearchView(): LarkView {
     }
 
     function navigateToActive(): void {
-      const results = ctx.updater.get("results") as
-        Array<{ link: string }> | undefined;
-      const idx = (ctx.updater.get("activeIndex") as number) ?? 0;
-      const target = results?.[idx];
+      const target = results.peek()[activeIndex.peek()];
       if (target?.link) {
         navigateToResult(target.link);
       }
@@ -258,8 +243,7 @@ export function createSearchView(): LarkView {
       requestAnimationFrame(() => {
         const dialog = document.getElementById("docs-search-dialog");
         const links = dialog?.querySelectorAll<HTMLElement>("a[data-index]");
-        const idx = (ctx.updater.get("activeIndex") as number) ?? 0;
-        links?.[idx]?.scrollIntoView({ block: "nearest" });
+        links?.[activeIndex.peek()]?.scrollIntoView({ block: "nearest" });
       });
     }
 
@@ -271,24 +255,24 @@ export function createSearchView(): LarkView {
         e.eventTarget instanceof HTMLElement &&
         !e.eventTarget.closest("#docs-search-dialog")
       ) {
-        State.set({ searchOpen: false }).digest();
+        State.set({ searchOpen: false });
       }
     };
 
     const onDialogKey = (event: LarkEvent): void => {
       const e = event as KeyboardEvent;
       if (e.isComposing) return;
-      const len = ((ctx.updater.get("results") as unknown[]) ?? []).length;
+      const len = results.peek().length;
       if (len === 0) return;
-      const idx = (ctx.updater.get("activeIndex") as number) ?? 0;
+      const idx = activeIndex.peek();
 
       if (e.key === "ArrowDown") {
         e.preventDefault();
-        ctx.updater.set({ activeIndex: (idx + 1) % len }).digest();
+        activeIndex.value = (idx + 1) % len;
         scrollActiveIntoView();
       } else if (e.key === "ArrowUp") {
         e.preventDefault();
-        ctx.updater.set({ activeIndex: (idx - 1 + len) % len }).digest();
+        activeIndex.value = (idx - 1 + len) % len;
         scrollActiveIntoView();
       } else if (e.key === "Enter") {
         e.preventDefault();
@@ -301,27 +285,17 @@ export function createSearchView(): LarkView {
       while (el && el.dataset["index"] === undefined) el = el.parentElement;
       const indexStr = el?.dataset["index"];
       if (indexStr !== undefined) {
-        const idx = parseInt(indexStr, 10);
-        if (idx !== ctx.updater.get("activeIndex")) {
-          ctx.updater.set({ activeIndex: idx }).digest();
-        }
+        activeIndex.value = parseInt(indexStr, 10);
       }
     };
 
     const onSearchInput = async (e: LarkEvent): Promise<void> => {
       const input = e.target instanceof HTMLInputElement ? e.target : null;
-      const query = input?.value ?? "";
+      const q = input?.value ?? "";
       const mySeq = ++seq;
 
-      if (!query.trim()) {
-        ctx.updater
-          .set({
-            results: [],
-            hasSearched: false,
-            query: "",
-            activeIndex: 0,
-          })
-          .digest();
+      if (!q.trim()) {
+        resetQueryState();
         return;
       }
 
@@ -331,7 +305,7 @@ export function createSearchView(): LarkView {
       let raw: (SearchResult & Partial<SectionSearchDoc>)[] = [];
       if (m) {
         try {
-          const all = m.search(query) as (SearchResult &
+          const all = m.search(q) as (SearchResult &
             Partial<SectionSearchDoc>)[];
           // Per-page cap, then the global cap.
           raw = capPerPage(
@@ -344,8 +318,8 @@ export function createSearchView(): LarkView {
       }
       if (mySeq !== seq) return;
 
-      const results = raw.map((r) => {
-        const excerpt = makeSnippet(r.text || "", query);
+      const nextResults = raw.map((r) => {
+        const excerpt = makeSnippet(r.text || "", q);
         return {
           title: r.title || "",
           link: r.link || "",
@@ -353,14 +327,17 @@ export function createSearchView(): LarkView {
           // Hierarchical context ("Page › H2"), already deduped
           // against the section's own title.
           pageTitle: r.crumb || "",
-          highlightedTitle: highlightSegments(r.title || "", query),
-          highlightedExcerpt: highlightSegments(excerpt, query),
+          highlightedTitle: highlightSegments(r.title || "", q),
+          highlightedExcerpt: highlightSegments(excerpt, q),
         };
       });
 
-      ctx.updater
-        .set({ results, hasSearched: true, query, activeIndex: 0 })
-        .digest();
+      batch(() => {
+        results.value = nextResults;
+        hasSearched.value = true;
+        query.value = q;
+        activeIndex.value = 0;
+      });
     };
 
     const clearQuery = (): void => {
@@ -370,9 +347,7 @@ export function createSearchView(): LarkView {
         input.value = "";
         input.focus();
       }
-      ctx.updater
-        .set({ results: [], hasSearched: false, query: "", activeIndex: 0 })
-        .digest();
+      resetQueryState();
     };
 
     const goToResult = (e: LarkEvent): void => {
@@ -384,8 +359,11 @@ export function createSearchView(): LarkView {
       }
     };
 
-    const template = jsxTemplate<SearchData>(
-      ({ isOpen, query, results, hasSearched, activeIndex, indexSize }) => (
+    const template = jsxTemplate(() => {
+      const isOpen = !!State.get("searchOpen");
+      const resultList = results.value;
+      const active = activeIndex.value;
+      return (
         <div>
           {isOpen && (
             <div
@@ -417,7 +395,7 @@ export function createSearchView(): LarkView {
                       spellcheck="false"
                       onInput={onSearchInput}
                     />
-                    {query && (
+                    {query.value && (
                       <button
                         class="text-muted-foreground hover:text-foreground grid size-6 place-items-center rounded transition-colors duration-150"
                         onClick={clearQuery}
@@ -434,9 +412,9 @@ export function createSearchView(): LarkView {
                   </div>
 
                   <div class="max-h-[50vh] overflow-y-auto overscroll-contain p-2">
-                    {results.length > 0 ? (
+                    {resultList.length > 0 ? (
                       <ul class="flex flex-col gap-0.5">
-                        {results.map((result, idx) => (
+                        {resultList.map((result, idx) => (
                           <li>
                             <a
                               data-href={result.link}
@@ -445,7 +423,7 @@ export function createSearchView(): LarkView {
                               onMouseover={onResultHover}
                               class={[
                                 "flex flex-col gap-0.5 rounded-lg px-3 py-2.5 transition-colors duration-100",
-                                idx === activeIndex
+                                idx === active
                                   ? "bg-accent/70"
                                   : "hover:bg-accent/40",
                               ]}
@@ -467,7 +445,7 @@ export function createSearchView(): LarkView {
                           </li>
                         ))}
                       </ul>
-                    ) : hasSearched ? (
+                    ) : hasSearched.value ? (
                       <div class="flex flex-col items-center justify-center gap-1.5 py-10 text-center">
                         <span class="text-muted-foreground/50 size-8 [&>svg]:size-full">
                           {raw(icons.search)}
@@ -475,7 +453,7 @@ export function createSearchView(): LarkView {
                         <p class="text-muted-foreground text-xs">
                           No results for “
                           <span class="text-foreground font-medium">
-                            {query}
+                            {query.value}
                           </span>
                           ”
                         </p>
@@ -483,8 +461,8 @@ export function createSearchView(): LarkView {
                     ) : (
                       <div class="flex flex-col items-center justify-center py-10 text-center">
                         <p class="text-muted-foreground/60 text-xs">
-                          {indexSize > 0
-                            ? `Search across ${indexSize} sections`
+                          {indexSize.value > 0
+                            ? `Search across ${indexSize.value} sections`
                             : "Type to search…"}
                         </p>
                       </div>
@@ -520,10 +498,10 @@ export function createSearchView(): LarkView {
             </div>
           )}
         </div>
-      ),
-    );
+      );
+    });
 
-    return { template, assign };
+    return { template };
   });
 }
 

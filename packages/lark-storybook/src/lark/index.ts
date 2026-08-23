@@ -8,4 +8,3 @@ export { bootLarkStorybook, getLarkHostFrame } from "./boot";
 export type { BootLarkOptions } from "./boot";
 export { larkRender } from "./render";
 export type { LarkStoryConfig, LarkStoryContext } from "./render";
-export { LARK_VDOM } from "./config";

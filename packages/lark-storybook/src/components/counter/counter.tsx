@@ -1,15 +1,15 @@
 /**
- * Counter — internal state (`useState`) next to Storybook-controlled props.
+ * Counter — internal signal state next to Storybook-controlled props.
  *
  * Tweaking the `step` control does NOT reset `count`: larkRender pushes args
- * with `updater.set()` + `view.render()` instead of re-mounting, exactly like
- * a parent view pushing component props through `mountZone`.
+ * through the frame's params signals instead of re-mounting, exactly like a
+ * parent view pushing component props through `mountZone`. The template reads
+ * `params.step` / `params.label` (tracked), so control changes re-render.
  *
- * Note the arg is called `initialCount`, not `count` — args share the updater
- * data namespace with `useState` keys, so a `count` arg would overwrite the
- * live state on every control change.
+ * Note the arg is called `initialCount`, not `count` — `count` lives in a
+ * view-local signal and only its initial value comes from the args.
  */
-import { defineView, jsxTemplate, useState } from "@lark.js/mvc";
+import { defineView, jsxTemplate, useSignal } from "@lark.js/mvc";
 import styles from "./counter.module.css";
 
 export interface CounterProps {
@@ -18,37 +18,26 @@ export interface CounterProps {
   initialCount: number;
 }
 
-interface CounterData {
-  label: string;
-  count: number;
-  step: number;
-}
-
 export default defineView<CounterProps>((ctx, params) => {
   const props = (params ?? {}) as Partial<CounterProps>;
   const initial = props.initialCount ?? 0;
 
-  const [getCount, setCount] = useState("count", initial);
+  const count = useSignal("count", initial);
 
-  ctx.updater.set({
-    label: props.label ?? "Counter",
-    step: props.step ?? 1,
-  });
-
-  // Read from updater data, never from the setup closure: `step` changes when
-  // Storybook pushes new args, and setup does not run again.
-  const step = (): number => ctx.updater.get<number>("step") || 1;
+  // Read props lazily (tracked in the template) — Storybook pushes new args
+  // through the params signals and setup does not run again.
+  const step = (): number => props.step ?? 1;
 
   const change = (next: number): void => {
-    setCount(next);
+    count.value = next;
     ctx.owner.fire("change", { count: next });
   };
 
-  const template = jsxTemplate<CounterData>(({ label, count, step: stepValue }) => (
+  const template = jsxTemplate(() => (
     <div class={styles["counter"]}>
-      <div class={styles["counter__label"]}>{label}</div>
+      <div class={styles["counter__label"]}>{props.label ?? "Counter"}</div>
 
-      <div class={styles["counter__value"]}>{count}</div>
+      <div class={styles["counter__value"]}>{count.value}</div>
 
       <wa-button-group class={styles["counter__actions"]} label="Counter actions">
         <wa-button
@@ -56,16 +45,16 @@ export default defineView<CounterProps>((ctx, params) => {
           variant="neutral"
           appearance="outlined"
           size="s"
-          onClick={() => change(getCount() - step())}
+          onClick={() => change(count.value - step())}
         >
-          - {stepValue}
+          - {step()}
         </wa-button>
         <wa-button
           type="button"
           variant="neutral"
           appearance="plain"
           size="s"
-          onClick={() => change(ctx.updater.get<number>("initialCount") ?? initial)}
+          onClick={() => change(props.initialCount ?? initial)}
         >
           Reset
         </wa-button>
@@ -74,9 +63,9 @@ export default defineView<CounterProps>((ctx, params) => {
           variant="brand"
           appearance="filled"
           size="s"
-          onClick={() => change(getCount() + step())}
+          onClick={() => change(count.value + step())}
         >
-          + {stepValue}
+          + {step()}
         </wa-button>
       </wa-button-group>
     </div>

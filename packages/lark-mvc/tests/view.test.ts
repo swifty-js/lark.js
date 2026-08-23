@@ -22,6 +22,7 @@
 
 import { describe, it, expect, vi } from "vitest";
 import { defineView, createCtx, mountCtx, unmountCtx } from "../src/view";
+import { signal } from "../src/reactive";
 import { Frame, createFrame } from "../src/frame";
 import { isLarkView } from "../src/jsx/vnode";
 import type { AnyFunc, FrameObj, ViewCtx, ViewSetup } from "../src/types";
@@ -69,7 +70,9 @@ describe("View (functional)", () => {
       expect(receivedCtx).toBe(ctx);
       expect(ctx.id).toBe("test-frame-1");
       expect(ctx.owner).toBe(frame);
-      expect(ctx.updater).toBeDefined();
+      expect(ctx.refData).toBeDefined();
+      expect(typeof ctx.translate).toBe("function");
+      expect(ctx.signals).toBeInstanceOf(Map);
       expect(typeof ctx.render).toBe("function");
       expect(ctx.getTemplate()).toBe(templateFn);
 
@@ -155,71 +158,80 @@ describe("View (functional)", () => {
     });
   });
 
-  describe("observeLocation", () => {
-    it("string parameter + observePath=true", () => {
-      const frame = createTestFrame("ol-frame-1");
-      const ctx = createCtx(frame);
-      ctx.observeLocation("a,b,c", true);
+  describe("reactive rendering", () => {
+    it("signal writes re-render the template synchronously", () => {
+      const frame = createTestFrame("rr-frame-1");
+      const count = signal(0);
+      const setup = defineView(() => ({
+        template: () => `<span>n=${count.value}</span>`,
+      }));
 
-      expect(ctx.locationObserved.flag).toBe(1);
-      expect(ctx.locationObserved.observePath).toBe(true);
-      expect(ctx.locationObserved.keys).toEqual(["a", "b", "c"]);
+      const ctx = mountCtx(frame, setup);
+      const el = document.getElementById("rr-frame-1")!;
+      expect(el.innerHTML).toContain("n=0");
+
+      count.value = 5;
+      expect(el.innerHTML).toContain("n=5");
+
       unmountCtx(ctx);
       cleanupFrame(frame);
     });
 
-    it("string parameter + observePath=false", () => {
-      const frame = createTestFrame("ol-frame-2");
-      const ctx = createCtx(frame);
-      ctx.observeLocation("d,e,f", false);
+    it("ctx.render() forces a re-render through the effect", () => {
+      const frame = createTestFrame("rr-frame-2");
+      let external = "a";
+      const setup = defineView(() => ({
+        template: () => `<span>${external}</span>`,
+      }));
 
-      expect(ctx.locationObserved.flag).toBe(1);
-      expect(ctx.locationObserved.observePath).toBe(false);
-      expect(ctx.locationObserved.keys).toEqual(["d", "e", "f"]);
+      const ctx = mountCtx(frame, setup);
+      const el = document.getElementById("rr-frame-2")!;
+      expect(el.innerHTML).toContain("a");
+
+      external = "b";
+      ctx.render();
+      expect(el.innerHTML).toContain("b");
+
       unmountCtx(ctx);
       cleanupFrame(frame);
     });
 
-    it("object parameter with path", () => {
-      const frame = createTestFrame("ol-frame-3");
-      const ctx = createCtx(frame);
-      ctx.observeLocation({ params: "g,h,i", path: true });
+    it("unmount disposes the render effect — later writes do not render", () => {
+      const frame = createTestFrame("rr-frame-3");
+      const count = signal(0);
+      let renders = 0;
+      const setup = defineView(() => ({
+        template: () => {
+          renders++;
+          return `<span>${count.value}</span>`;
+        },
+      }));
 
-      expect(ctx.locationObserved.observePath).toBe(true);
-      expect(ctx.locationObserved.keys).toEqual(["g", "h", "i"]);
+      const ctx = mountCtx(frame, setup);
+      expect(renders).toBe(1);
+
       unmountCtx(ctx);
+      count.value = 99;
+      expect(renders).toBe(1);
       cleanupFrame(frame);
     });
 
-    it("object parameter without path", () => {
-      const frame = createTestFrame("ol-frame-4");
-      const ctx = createCtx(frame);
-      ctx.observeLocation({ params: "j,k,l" });
+    it("each render pass bumps signature and fires 'render'", () => {
+      const frame = createTestFrame("rr-frame-4");
+      const count = signal(0);
+      const setup = defineView(() => ({
+        template: () => `<span>${count.value}</span>`,
+      }));
 
-      expect(ctx.locationObserved.observePath).toBe(false);
-      expect(ctx.locationObserved.keys).toEqual(["j", "k", "l"]);
-      unmountCtx(ctx);
-      cleanupFrame(frame);
-    });
-  });
+      const ctx = mountCtx(frame, setup);
+      const sigAfterMount = ctx.signature.value;
+      const onRender = vi.fn();
+      ctx.on("render", onRender);
 
-  describe("observeState", () => {
-    it("string parameter", () => {
-      const frame = createTestFrame("os-frame-1");
-      const ctx = createCtx(frame);
-      ctx.observeState("a,b,c");
+      count.value = 1;
+      expect(ctx.signature.value).toBe(sigAfterMount + 1);
+      expect(onRender).toHaveBeenCalledTimes(1);
 
-      expect(ctx.getObservedStateKeys()).toEqual(["a", "b", "c"]);
-      unmountCtx(ctx);
-      cleanupFrame(frame);
-    });
-
-    it("array parameter", () => {
-      const frame = createTestFrame("os-frame-2");
-      const ctx = createCtx(frame);
-      ctx.observeState(["x", "y"]);
-
-      expect(ctx.getObservedStateKeys()).toEqual(["x", "y"]);
       unmountCtx(ctx);
       cleanupFrame(frame);
     });

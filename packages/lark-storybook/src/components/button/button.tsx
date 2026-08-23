@@ -8,14 +8,6 @@ export interface ButtonProps {
   disabled: boolean;
 }
 
-interface ButtonData {
-  label: string;
-  disabled: boolean;
-  waVariant: string;
-  waAppearance: string;
-  waSize: string;
-}
-
 const variantMap = {
   primary: { waVariant: "brand", waAppearance: "filled" },
   secondary: { waVariant: "neutral", waAppearance: "outlined" },
@@ -31,51 +23,33 @@ const sizeMap = {
 export default defineView<ButtonProps>((ctx, params) => {
   const props = (params ?? {}) as Partial<ButtonProps>;
 
-  ctx.updater.set({
-    label: props.label ?? "Button",
-    variant: props.variant ?? "primary",
-    size: props.size ?? "md",
-    disabled: props.disabled ?? false,
-  });
-
-  const assign = (): boolean | undefined => {
-    ctx.updater.snapshot();
-    const variant =
-      ctx.updater.get<ButtonProps["variant"]>("variant") ?? "primary";
-    const size = ctx.updater.get<ButtonProps["size"]>("size") ?? "md";
-    ctx.updater.set({ ...variantMap[variant], waSize: sizeMap[size] });
-    return ctx.updater.altered();
-  };
-
-  assign();
-  ctx.renderMethod = () => {
-    assign();
-    ctx.updater.digest();
-  };
-
   let clicks = 0;
 
   const press = (): void => {
-    if (ctx.updater.get<boolean>("disabled")) return;
+    if (props.disabled) return;
     clicks += 1;
     ctx.owner.fire("click", { clicks });
   };
 
-  const template = jsxTemplate<ButtonData>(
-    ({ label, disabled, waVariant, waAppearance, waSize }) => (
+  // Derived data is computed inline — the template re-runs whenever the
+  // `variant` / `size` / `label` / `disabled` params signals change.
+  const template = jsxTemplate(() => {
+    const { waVariant, waAppearance } = variantMap[props.variant ?? "primary"];
+    const waSize = sizeMap[props.size ?? "md"];
+    return (
       <wa-button
         class={styles["button"]}
         type="button"
         variant={waVariant}
         appearance={waAppearance}
         size={waSize}
-        disabled={disabled}
+        disabled={props.disabled ?? false}
         onClick={press}
       >
-        {label}
+        {props.label ?? "Button"}
       </wa-button>
-    ),
-  );
+    );
+  });
 
-  return { template, assign };
+  return { template };
 });

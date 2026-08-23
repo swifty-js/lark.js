@@ -22,6 +22,7 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { State } from "../src/state";
+import { effect } from "../src/reactive";
 
 describe("State", () => {
   beforeEach(() => {
@@ -54,51 +55,70 @@ describe("State", () => {
     expect(result).toBe(State);
   });
 
-  it("digest - triggers changed event on data change", () => {
-    const handler = vi.fn();
-    State.on("changed", handler);
+  it("get(key) is a tracked read — effects re-run when the key changes", () => {
+    const seen: unknown[] = [];
+    State.set({ reactiveKey: 1 });
+    const dispose = effect(() => {
+      seen.push(State.get("reactiveKey"));
+    });
 
-    State.set({ digestTest: 1 });
-    State.digest();
+    State.set({ reactiveKey: 2 });
+    expect(seen).toEqual([1, 2]);
 
-    expect(handler).toHaveBeenCalledTimes(1);
-    expect(handler.mock.calls[0][0]).toHaveProperty("keys");
-    expect(handler.mock.calls[0][0]["keys"]).toBeInstanceOf(Set);
-    expect((handler.mock.calls[0][0]["keys"] as Set<string>).has("digestTest")).toBe(true);
+    // Writing an UNRELATED key does not re-run the reader
+    State.set({ otherKey: "x" });
+    expect(seen).toEqual([1, 2]);
 
-    State.off("changed", handler);
+    dispose();
+    State.set({ reactiveKey: 3 });
+    expect(seen).toEqual([1, 2]);
   });
 
-  it("digest - does not trigger changed event when no changes", () => {
-    const handler = vi.fn();
-    State.on("changed", handler);
+  it("set() batches — multi-key writes notify a multi-key reader once", () => {
+    State.set({ batchA: 0, batchB: 0 });
+    let runs = 0;
+    const dispose = effect(() => {
+      State.get("batchA");
+      State.get("batchB");
+      runs++;
+    });
+    expect(runs).toBe(1);
 
-    State.digest();
-
-    expect(handler).not.toHaveBeenCalled();
-
-    State.off("changed", handler);
+    State.set({ batchA: 1, batchB: 2 });
+    expect(runs).toBe(2);
+    dispose();
   });
 
-  it("digest - passing data is equivalent to set then digest", () => {
-    const handler = vi.fn();
-    State.on("changed", handler);
+  it("same-value writes do not notify (shallow reference comparison)", () => {
+    const obj = { n: 1 };
+    State.set({ shallowKey: obj });
+    let runs = 0;
+    const dispose = effect(() => {
+      State.get("shallowKey");
+      runs++;
+    });
+    expect(runs).toBe(1);
 
-    State.digest({ digestDataTest: 42 });
+    obj.n = 2; // in-place mutation is invisible
+    State.set({ shallowKey: obj }); // same reference → no notification
+    expect(runs).toBe(1);
 
-    expect(handler).toHaveBeenCalledTimes(1);
-    expect(State.get("digestDataTest")).toBe(42);
-
-    State.off("changed", handler);
+    State.set({ shallowKey: { n: 3 } }); // new reference → notify
+    expect(runs).toBe(2);
+    dispose();
   });
 
-  it("diff - returns keys changed in last digest", () => {
-    State.set({ diffTest: "hello" });
-    State.digest();
+  it("whole-object get() subscribes to every State change", () => {
+    let runs = 0;
+    const dispose = effect(() => {
+      State.get();
+      runs++;
+    });
+    expect(runs).toBe(1);
 
-    const diff = State.diff();
-    expect(diff).toBeInstanceOf(Set);
-    expect(diff.has("diffTest")).toBe(true);
+    State.set({ anyKeyAtAll: Math.random() + 1 });
+    expect(runs).toBe(2);
+    dispose();
   });
 
   it("on / off / fire - event delegation", () => {
@@ -130,5 +150,20 @@ describe("State", () => {
     cleanup(mockObj);
 
     expect(mockObj.on).toHaveBeenCalledWith("destroy", expect.any(Function));
+  });
+
+  it("clean - last observer destroy drops the key data", () => {
+    State.set({ refCounted: "alive" });
+    let destroyCb: (() => void) | undefined;
+    const ctx = {
+      on: (_event: string, handler: () => void) => {
+        destroyCb = handler;
+      },
+    };
+    State.clean("refCounted")(ctx);
+    expect(State.get("refCounted")).toBe("alive");
+
+    destroyCb!();
+    expect(State.get("refCounted")).toBeUndefined();
   });
 });

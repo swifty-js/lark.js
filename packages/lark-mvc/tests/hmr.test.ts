@@ -24,16 +24,18 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { hotSwapView, hotSwapByView } from "../src/hmr";
 import { injectViewHmrSnippet, isLarkViewSource } from "../src/hmr-inject";
 import { defineView } from "../src/view";
+import { useSignal } from "../src/hooks";
+import type { Signal } from "../src/reactive";
 import { Frame, createFrame, registerViewClass, invalidateViewClass } from "../src/frame";
 import { getViewClassRegistry } from "../src/view-registry";
 import type { FrameObj } from "../src/types";
 
-/** Simple template factory for testing. */
-function makeTemplate(label: string): (data: unknown) => string {
-  return (data: unknown) => {
-    const d = (data || {}) as Record<string, unknown>;
-    return `<div class="${label}">count=${d["count"] ?? 0}</div>`;
-  };
+/** Simple template factory for testing (reads a keyed signal via hooks). */
+function makeCountView(label: string) {
+  return defineView(() => {
+    const count = useSignal("count", 0);
+    return { template: () => `<div class="${label}">count=${count.value}</div>` };
+  });
 }
 
 /** Flush microtasks so deferred renders complete. */
@@ -72,29 +74,44 @@ describe("HMR", () => {
   // hotSwapView
   // ============================================================
   describe("hotSwapView", () => {
-    it("preserves updater.data across hot-swap", async () => {
+    it("preserves keyed useSignal state across hot-swap", async () => {
       const frame = createTestFrame("hot-swap-preserve");
-      const OldView = defineView(() => ({ template: makeTemplate("old") }));
+      const OldView = makeCountView("old");
       registerViewClass("test/preserve", OldView);
       frame.mountView("test/preserve");
       await flushMicrotasks();
 
-      frame.view!.updater.set({ count: 42 }).digest();
-      const NewView = defineView(() => ({ template: makeTemplate("new") }));
+      (frame.view!.signals.get("count") as Signal<number>).value = 42;
+      const NewView = makeCountView("new");
       const viewBefore = frame.view;
 
       hotSwapView(frame, NewView);
 
-      expect(frame.view!.updater.get<number>("count")).toBe(42);
+      // Same ctx, same keyed signal — the new setup reused it via useSignal.
+      expect((frame.view!.signals.get("count") as Signal<number>).value).toBe(42);
       expect(frame.view).toBe(viewBefore);
-      expect(document.getElementById("hot-swap-preserve")!.querySelector(".new")).not.toBeNull();
+      const host = document.getElementById("hot-swap-preserve")!;
+      expect(host.querySelector(".new")).not.toBeNull();
+      expect(host.querySelector(".new")!.textContent).toBe("count=42");
+      cleanupFrame(frame);
+    });
+
+    it("the rebuilt render effect stays reactive after the swap", async () => {
+      const frame = createTestFrame("hot-swap-reactive");
+      registerViewClass("test/reactive", makeCountView("old"));
+      frame.mountView("test/reactive");
+      await flushMicrotasks();
+
+      hotSwapView(frame, makeCountView("new"));
+      (frame.view!.signals.get("count") as Signal<number>).value = 7;
+      expect(document.getElementById("hot-swap-reactive")!.textContent).toBe("count=7");
       cleanupFrame(frame);
     });
 
     it("falls back to mountView when frame has no existing view", () => {
       const frame = createTestFrame("hot-swap-fallback");
       vi.spyOn(frame, "getViewPath").mockReturnValue("test/fallback");
-      const NewView = defineView(() => ({ template: makeTemplate("fb") }));
+      const NewView = makeCountView("fb");
       registerViewClass("test/fallback", NewView);
 
       const spy = vi.spyOn(frame, "mountView");
@@ -111,25 +128,25 @@ describe("HMR", () => {
   // ============================================================
   describe("hotSwapByView", () => {
     it("swaps and updates registry for matching class", async () => {
-      const OldView = defineView(() => ({ template: makeTemplate("old") }));
+      const OldView = makeCountView("old");
       registerViewClass("test/swap", OldView);
       const frame = createTestFrame("swap");
       frame.mountView("test/swap");
       await flushMicrotasks();
-      frame.view!.updater.set({ count: 33 }).digest();
+      (frame.view!.signals.get("count") as Signal<number>).value = 33;
 
-      const NewView = defineView(() => ({ template: makeTemplate("new") }));
+      const NewView = makeCountView("new");
       hotSwapByView(OldView, NewView);
 
-      expect(frame.view!.updater.get<number>("count")).toBe(33);
+      expect((frame.view!.signals.get("count") as Signal<number>).value).toBe(33);
       expect(getViewClassRegistry()["test/swap"]).toBe(NewView.setup);
       cleanupFrame(frame);
     });
 
     it("does nothing when oldClass === newClass", async () => {
-      const V = defineView((ctx) => {
-        ctx.updater.set({ count: 1 });
-        return { template: makeTemplate("same") };
+      const V = defineView(() => {
+        const count = useSignal("count", 1);
+        return { template: () => `<div class="same">count=${count.value}</div>` };
       });
       registerViewClass("test/same-class", V);
       const frame = createTestFrame("same-class");
@@ -137,7 +154,7 @@ describe("HMR", () => {
       await flushMicrotasks();
 
       hotSwapByView(V, V);
-      expect(frame.view!.updater.get<number>("count")).toBe(1);
+      expect((frame.view!.signals.get("count") as Signal<number>).value).toBe(1);
       cleanupFrame(frame);
     });
   });

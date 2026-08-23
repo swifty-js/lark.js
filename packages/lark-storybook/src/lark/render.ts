@@ -8,19 +8,19 @@
  *
  * ## Args
  *
- * - First render: args are passed as `viewInitParams`, i.e. they arrive as the
- *   `params` argument of the view's setup function.
- * - Later renders: args are merged with `view.updater.set(args)` — the same
- *   push `frame.mountZone` performs for component props — followed by
- *   `view.render()`, so a view that installs a `ctx.renderMethod`
- *   gets to re-derive its data. Nothing is re-mounted, so `useState` / store
- *   subscriptions survive control tweaks. Opt out per story with
- *   `remountOnArgsChange: true`.
+ * - First render: args are passed as `viewInitParams`, i.e. they arrive in the
+ *   reactive `params` proxy of the view's setup function.
+ * - Later renders: args are pushed into the frame's per-key params signals —
+ *   the same channel `frame.mountZone` uses for component props — so a view
+ *   that reads `params.key` in its template re-renders automatically. Nothing
+ *   is re-mounted, so `useSignal` state / store subscriptions survive control
+ *   tweaks. Opt out per story with `remountOnArgsChange: true`.
  * - Function-valued args (the handlers Storybook injects for `argTypes` with
- *   `{ action: "..." }`) and `undefined` args are stripped before they reach the
- *   updater; functions are instead wired to the frame events listed in `events`.
+ *   `{ action: "..." }`) and `undefined` args are stripped before they reach
+ *   the params; functions are instead wired to the frame events listed in
+ *   `events`.
  */
-import { Frame, State, registerViewClass, ensureViewName } from "@lark.js/mvc";
+import { Frame, State, registerViewClass, ensureViewName, signal, batch } from "@lark.js/mvc";
 import type { AnyLarkView, FrameObj, ViewSetup } from "@lark.js/mvc";
 import { getChannel } from "storybook/preview-api";
 import { bootLarkStorybook, getLarkHostFrame } from "./boot";
@@ -50,8 +50,9 @@ export interface LarkStoryConfig<TArgs extends object = StoryArgs> {
    */
   events?: readonly string[];
   /**
-   * Derive `State` keys from args. Applied (with `State.digest()`) before each
-   * render, so stories can drive views that use `ctx.observeState` / `useStore`.
+   * Derive `State` keys from args. Applied before each render — `State.set`
+   * notifies tracked readers, so stories can drive views whose templates
+   * read `State.get(key)`.
    */
   state?: (args: TArgs) => Record<string, unknown>;
   /**
@@ -96,6 +97,26 @@ function dataArgs(args: StoryArgs): Record<string, unknown> {
     if (typeof value !== "function" && value !== undefined) out[key] = value;
   }
   return out;
+}
+
+/**
+ * Push new args through the frame's per-key params signals — the reactive
+ * channel `mountZone` uses for component props. Views reading `params.key`
+ * in a tracked region re-render once (batched); same-value writes are no-ops.
+ */
+function pushArgs(frame: FrameObj, data: Record<string, unknown>): void {
+  const store = frame.paramsStore;
+  if (!store) return;
+  batch(() => {
+    for (const key of Object.keys(data)) {
+      const sig = store.signals.get(key);
+      if (sig) {
+        sig.value = data[key];
+      } else {
+        store.signals.set(key, signal(data[key]));
+      }
+    }
+  });
 }
 
 /**
@@ -222,8 +243,7 @@ export function larkRender<TArgs extends object = StoryArgs>(
 
   const applyState = (args: TArgs): void => {
     if (!config.state) return;
-    State.set(config.state(args));
-    State.digest();
+    State.set(config.state(args)); // per-key signals notify tracked readers
   };
 
   return (args: TArgs, context: LarkStoryContext): HTMLElement => {
@@ -243,14 +263,11 @@ export function larkRender<TArgs extends object = StoryArgs>(
     if (existing && !remount && existing.el.isConnected) {
       existing.args = storyArgs;
       applyState(args);
-      const view = Frame.get(existing.frameId)?.view;
+      const frame = Frame.get(existing.frameId);
+      const view = frame?.view;
       // Not yet mounted → the pending mount will pick up `entry.args` itself.
-      if (view && view.signature.value > 0) {
-        view.updater.set(dataArgs(storyArgs));
-        // render() runs `ctx.renderMethod` when the view defines one and falls
-        // back to `updater.digest()`; either way an unchanged data set is a
-        // no-op.
-        view.render();
+      if (frame && view && view.signature.value > 0) {
+        pushArgs(frame, dataArgs(storyArgs));
       }
       return existing.el;
     }

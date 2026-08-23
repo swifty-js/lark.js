@@ -22,12 +22,13 @@
 
 /**
  * Integration tests for JSX views: mounting, inline-event delegation,
- * re-render, keyed diff, imported component tags (child views), and
- * bind/unbind balance on unmount.
+ * signal-driven re-render, keyed diff, imported component tags (child
+ * views), and bind/unbind balance on unmount.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { defineView } from "../src/view";
+import { signal } from "../src/reactive";
 import { Frame, createFrame, registerViewClass, invalidateViewClass } from "../src/frame";
 import { getViewClassRegistry } from "../src/view-registry";
 import { EventDelegator } from "../src/event-delegator";
@@ -70,13 +71,12 @@ describe("JSX views (integration)", () => {
   afterEach(() => cleanupFrames());
 
   it("mounts a JSX view and renders escaped data", async () => {
-    type Data = { title: string };
     registerViewClass(
       "jsx/basic",
-      defineView((ctx) => {
-        ctx.updater.digest({ title: "a<b & c" });
+      defineView(() => {
+        const title = "a<b & c";
         return {
-          template: jsxTemplate<Data>(({ title }) => (
+          template: jsxTemplate(() => (
             <div class="wrap">
               <h1 data-role="title">{title}</h1>
             </div>
@@ -100,21 +100,18 @@ describe("JSX views (integration)", () => {
 
     registerViewClass(
       "jsx/events",
-      defineView((ctx) => {
-        ctx.updater.digest({});
-        return {
-          template: jsxTemplate(() => (
-            <div>
-              <button data-role="first" onClick={first}>
-                first
-              </button>
-              <button data-role="second" onClick={second}>
-                second
-              </button>
-            </div>
-          )),
-        };
-      }),
+      defineView(() => ({
+        template: jsxTemplate(() => (
+          <div>
+            <button data-role="first" onClick={first}>
+              first
+            </button>
+            <button data-role="second" onClick={second}>
+              second
+            </button>
+          </div>
+        )),
+      })),
     );
 
     const frame = makeFrame("jsx-events");
@@ -134,24 +131,25 @@ describe("JSX views (integration)", () => {
     expect(keys).toEqual(["__jsx1", "__jsx2"]);
   });
 
-  it("re-renders on digest and swaps inline closures to the new generation", async () => {
+  it("re-renders on signal write and swaps inline closures to the new generation", async () => {
     const seen: number[] = [];
+    const count = signal(1);
 
     registerViewClass(
       "jsx/rerender",
-      defineView((ctx) => {
-        ctx.updater.digest({ count: 1 });
-        return {
-          template: jsxTemplate<{ count: number }>(({ count }) => (
+      defineView(() => ({
+        template: jsxTemplate(() => {
+          const current = count.value;
+          return (
             <div>
-              <p data-role="count">{count}</p>
-              <button data-role="btn" onClick={() => seen.push(count)}>
+              <p data-role="count">{current}</p>
+              <button data-role="btn" onClick={() => seen.push(current)}>
                 push
               </button>
             </div>
-          )),
-        };
-      }),
+          );
+        }),
+      })),
     );
 
     const frame = makeFrame("jsx-rerender");
@@ -161,7 +159,7 @@ describe("JSX views (integration)", () => {
     click(document.querySelector("#jsx-rerender [data-role='btn']")!);
     expect(seen).toEqual([1]);
 
-    frame.view!.updater.set({ count: 42 }).digest();
+    count.value = 42; // reactive re-render, no digest call anywhere
     await flush();
 
     expect(document.querySelector("#jsx-rerender [data-role='count']")!.textContent).toBe("42");
@@ -169,27 +167,61 @@ describe("JSX views (integration)", () => {
     expect(seen).toEqual([1, 42]); // new closure captured the new value
   });
 
+  it("batches multiple signal writes in one DOM event handler into one render", async () => {
+    const a = signal(0);
+    const b = signal(0);
+    let renders = 0;
+
+    registerViewClass(
+      "jsx/batch",
+      defineView(() => ({
+        template: jsxTemplate(() => {
+          renders++;
+          return (
+            <button
+              data-role="both"
+              onClick={() => {
+                a.value++;
+                b.value++;
+              }}
+            >
+              {a.value + b.value}
+            </button>
+          );
+        }),
+      })),
+    );
+
+    const frame = makeFrame("jsx-batch");
+    frame.mountView("jsx/batch");
+    await flush();
+    expect(renders).toBe(1);
+
+    click(document.querySelector("#jsx-batch [data-role='both']")!);
+    // Delegator wraps handlers in batch(): two writes → ONE render pass.
+    expect(renders).toBe(2);
+    expect(document.querySelector("#jsx-batch [data-role='both']")!.textContent).toBe("2");
+    void frame;
+  });
+
   it("filters modifier keys inside the handler (e.ctrlKey)", async () => {
     const ctrlOnly = vi.fn();
 
     registerViewClass(
       "jsx/modifier",
-      defineView((ctx) => {
-        ctx.updater.digest({});
-        return {
-          template: jsxTemplate(() => (
-            <button
-              data-role="c"
-              onClick={(e) => {
-                if (!(e as MouseEvent).ctrlKey) return;
-                ctrlOnly();
-              }}
-            >
-              c
-            </button>
-          )),
-        };
-      }),
+      defineView(() => ({
+        template: jsxTemplate(() => (
+          <button
+            data-role="c"
+            onClick={(e) => {
+              if (!(e as MouseEvent).ctrlKey) return;
+              ctrlOnly();
+            }}
+          >
+            c
+          </button>
+        )),
+      })),
     );
 
     const frame = makeFrame("jsx-modifier");
@@ -201,24 +233,22 @@ describe("JSX views (integration)", () => {
     expect(ctrlOnly).not.toHaveBeenCalled();
     c.dispatchEvent(new MouseEvent("click", { bubbles: true, ctrlKey: true }));
     expect(ctrlOnly).toHaveBeenCalledTimes(1);
+    void frame;
   });
 
   it("reuses keyed DOM nodes across list reorders", async () => {
-    type Data = { items: string[] };
+    const items = signal(["a", "b", "c"]);
     registerViewClass(
       "jsx/list",
-      defineView((ctx) => {
-        ctx.updater.digest({ items: ["a", "b", "c"] });
-        return {
-          template: jsxTemplate<Data>(({ items }) => (
-            <ul>
-              {items.map((item) => (
-                <li key={`item-${item}`}>{item}</li>
-              ))}
-            </ul>
-          )),
-        };
-      }),
+      defineView(() => ({
+        template: jsxTemplate(() => (
+          <ul>
+            {items.value.map((item) => (
+              <li key={`item-${item}`}>{item}</li>
+            ))}
+          </ul>
+        )),
+      })),
     );
 
     const frame = makeFrame("jsx-list");
@@ -228,13 +258,16 @@ describe("JSX views (integration)", () => {
     const nodeB = document.getElementById("item-b") as HTMLElement & { __marker?: number };
     nodeB.__marker = 7;
 
-    frame.view!.updater.set({ items: ["c", "b", "a"] }).digest();
+    items.value = ["c", "b", "a"];
     await flush();
 
-    const items = Array.from(document.querySelectorAll("#jsx-list li")).map((li) => li.textContent);
-    expect(items).toEqual(["c", "b", "a"]);
+    const listItems = Array.from(document.querySelectorAll("#jsx-list li")).map(
+      (li) => li.textContent,
+    );
+    expect(listItems).toEqual(["c", "b", "a"]);
     const nodeBAfter = document.getElementById("item-b") as HTMLElement & { __marker?: number };
     expect(nodeBAfter.__marker).toBe(7); // same node instance, moved not rebuilt
+    void frame;
   });
 
   it("mounts component tags with typed props and wires child events", async () => {
@@ -249,35 +282,32 @@ describe("JSX views (integration)", () => {
       onHistoryCleared: () => void;
     }
 
-    const Child = defineView<ChildProps>((ctx, params) => {
+    const Child = defineView<ChildProps>((_ctx, params) => {
       receivedRows = params?.rows;
-      ctx.updater.digest({ label: String(params?.label ?? "") });
       return {
-        template: jsxTemplate<{ label: string }>(({ label }) => (
-          <span data-role="child-label">{label}</span>
+        template: jsxTemplate(() => (
+          <span data-role="child-label">{String(params?.label ?? "")}</span>
         )),
       };
     });
 
     const rows = [{ id: 1 }, { id: 2 }];
+    const label = signal("first");
     registerViewClass(
       "jsx/parent",
-      defineView((ctx) => {
-        ctx.updater.digest({ rows, label: "first" });
-        return {
-          template: jsxTemplate<{ rows: object; label: string }>((d) => (
-            <section>
-              <Child
-                id="jsx-child-host"
-                rows={d.rows}
-                label={d.label}
-                onNotify={onNotify}
-                onHistoryCleared={onCleared}
-              />
-            </section>
-          )),
-        };
-      }),
+      defineView(() => ({
+        template: jsxTemplate(() => (
+          <section>
+            <Child
+              id="jsx-child-host"
+              rows={rows}
+              label={label.value}
+              onNotify={onNotify}
+              onHistoryCleared={onCleared}
+            />
+          </section>
+        )),
+      })),
     );
 
     const frame = makeFrame("jsx-parent");
@@ -288,11 +318,11 @@ describe("JSX views (integration)", () => {
     expect(receivedRows).toBe(rows);
     expect(document.querySelector("[data-role='child-label']")!.textContent).toBe("first");
 
-    // Parent re-render pushes updated props into the child (full render)
-    frame.view!.updater.set({ label: "second" }).digest();
+    // Parent re-render pushes updated props — the child re-renders reactively
+    // because its template reads `params.label`.
+    label.value = "second";
     await flush();
     const child = Frame.get("jsx-child-host");
-    expect(child?.view?.updater.get<string>("label")).toBe("second");
     expect(document.querySelector("[data-role='child-label']")!.textContent).toBe("second");
 
     // Child custom event reaches the parent's inline handler (trampoline)
@@ -311,70 +341,76 @@ describe("JSX views (integration)", () => {
   });
 
   it("preserves child frames and state across keyed component-list reorders", async () => {
-    const Item = defineView<{ tag: string }>((ctx, params) => {
-      ctx.updater.digest({ tag: String(params?.tag ?? "") });
+    let setupRuns = 0;
+    const Item = defineView<{ tag: string }>((_ctx, params) => {
+      setupRuns++;
+      const local = signal(`local-${String(params?.tag)}`);
       return {
-        template: jsxTemplate<{ tag: string }>(({ tag }) => <b data-tag={tag}>{tag}</b>),
+        template: jsxTemplate(() => (
+          <b data-tag={String(params?.tag)} data-local={local.value}>
+            {String(params?.tag)}
+          </b>
+        )),
       };
     });
 
+    const order = signal(["a", "b", "c"]);
     registerViewClass(
       "jsx/klist",
-      defineView((ctx) => {
-        ctx.updater.digest({ order: ["a", "b", "c"] });
-        return {
-          template: jsxTemplate<{ order: string[] }>(({ order }) => (
-            <div>
-              {order.map((t) => (
-                <Item key={`it-${t}`} tag={t} />
-              ))}
-            </div>
-          )),
-        };
-      }),
+      defineView(() => ({
+        template: jsxTemplate(() => (
+          <div>
+            {order.value.map((t) => (
+              <Item key={`it-${t}`} tag={t} />
+            ))}
+          </div>
+        )),
+      })),
     );
 
     const frame = makeFrame("jsx-klist");
     frame.mountView("jsx/klist");
     await flush();
+    expect(setupRuns).toBe(3);
 
-    // Stamp private state on the middle child
     const childB = Frame.get("it-b");
     expect(childB?.view).toBeTruthy();
-    childB!.view!.updater.set({ stamp: 7 });
 
-    frame.view!.updater.set({ order: ["c", "b", "a"] }).digest();
+    order.value = ["c", "b", "a"];
     await flush();
 
     const tags = Array.from(document.querySelectorAll("#jsx-klist [data-tag]")).map((el) =>
       el.getAttribute("data-tag"),
     );
     expect(tags).toEqual(["c", "b", "a"]);
-    // Same frame instance — private state survived the reorder
+    // Same frame instances — setups did NOT re-run, closure state survived
     expect(Frame.get("it-b")).toBe(childB);
-    expect(childB!.view!.updater.get<number>("stamp")).toBe(7);
+    expect(setupRuns).toBe(3);
+    expect(document.querySelector("#jsx-klist [data-tag='b']")!.getAttribute("data-local")).toBe(
+      "local-b",
+    );
+    void frame;
   });
 
   it("balances EventDelegator bind/unbind across the view lifecycle", async () => {
     const bindSpy = vi.spyOn(EventDelegator, "bind");
     const unbindSpy = vi.spyOn(EventDelegator, "unbind");
 
+    const n = signal(0);
     registerViewClass(
       "jsx/balance",
-      defineView((ctx) => {
-        ctx.updater.digest({ n: 0 });
-        return {
-          template: jsxTemplate<{ n: number }>(({ n }) => (
-            <div>
-              <button data-role="b1" onClick={() => n}>
-                one
-              </button>
-              <input data-role="b2" onInput={() => n} />
-              <button onClick={() => n + 1}>two</button>
-            </div>
-          )),
-        };
-      }),
+      defineView(() => ({
+        template: jsxTemplate(() => (
+          <div>
+            <button data-role="b1" onClick={() => n.peek()}>
+              one
+            </button>
+            <input data-role="b2" onInput={() => n.peek()} />
+            <button onClick={() => n.peek() + 1}>two</button>
+            <i>{n.value}</i>
+          </div>
+        )),
+      })),
     );
 
     const frame = makeFrame("jsx-balance");
@@ -382,8 +418,8 @@ describe("JSX views (integration)", () => {
     await flush();
 
     // Several re-renders must not re-bind already-bound types
-    frame.view!.updater.set({ n: 1 }).digest();
-    frame.view!.updater.set({ n: 2 }).digest();
+    n.value = 1;
+    n.value = 2;
     await flush();
 
     const view = frame.view!;
@@ -409,17 +445,14 @@ describe("JSX views (integration)", () => {
   it("supports Fragment roots (multi-root templates)", async () => {
     registerViewClass(
       "jsx/fragment",
-      defineView((ctx) => {
-        ctx.updater.digest({});
-        return {
-          template: jsxTemplate(() => (
-            <>
-              <header data-role="h">H</header>
-              <footer data-role="f">F</footer>
-            </>
-          )),
-        };
-      }),
+      defineView(() => ({
+        template: jsxTemplate(() => (
+          <>
+            <header data-role="h">H</header>
+            <footer data-role="f">F</footer>
+          </>
+        )),
+      })),
     );
 
     const frame = makeFrame("jsx-fragment");
@@ -428,23 +461,54 @@ describe("JSX views (integration)", () => {
 
     expect(document.querySelector("#jsx-fragment [data-role='h']")).toBeTruthy();
     expect(document.querySelector("#jsx-fragment [data-role='f']")).toBeTruthy();
+    void frame;
+  });
+
+  it("unwraps Signal children and attribute values in the template", async () => {
+    const label = signal("hello");
+    registerViewClass(
+      "jsx/signal-unwrap",
+      defineView(() => ({
+        template: jsxTemplate(() => (
+          <p data-role="p" title={label}>
+            {label}
+          </p>
+        )),
+      })),
+    );
+
+    const frame = makeFrame("jsx-signal-unwrap");
+    frame.mountView("jsx/signal-unwrap");
+    await flush();
+
+    const p = document.querySelector("#jsx-signal-unwrap [data-role='p']")!;
+    expect(p.textContent).toBe("hello");
+    expect(p.getAttribute("title")).toBe("hello");
+
+    label.value = "world"; // unwrap read subscribed the view
+    expect(p.textContent).toBe("world");
+    expect(p.getAttribute("title")).toBe("world");
+    void frame;
   });
 
   it("a bare template call outside any frame does not throw", () => {
-    const template = jsxTemplate<{ x: number }>(({ x }) => <div onClick={() => x}>{x}</div>);
+    const x = 1;
+    const template = jsxTemplate(() => <div onClick={() => x}>{x}</div>);
     const refData: Record<string, unknown> = {};
     refData[SPLITTER] = 1;
-    const html = template({ x: 1, vId: "nope" }, "nope", refData);
+    const html = template("nope", refData);
     expect(html).toContain("<div");
     expect(html).toContain("__jsx1");
   });
 
   it("sweeps stale refData tokens across renders (fresh identities do not leak)", () => {
-    const template = jsxTemplate<{ n: number }>(({ n }) => <div data-x={{ n }}>{n}</div>);
+    let n = 0;
+    const template = jsxTemplate(() => <div data-x={{ n }}>{n}</div>);
     const refData: Record<string, unknown> = {};
     refData[SPLITTER] = 1;
     for (let i = 0; i < 5; i++) {
-      template({ n: i, vId: "x" }, "x", refData);
+      n = i;
+      template("x", refData);
     }
     const tokenCount = Object.keys(refData).filter((k) => k !== SPLITTER).length;
     expect(tokenCount).toBe(1); // only the latest render's token survives

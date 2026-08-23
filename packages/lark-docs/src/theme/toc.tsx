@@ -20,7 +20,16 @@
  * SOFTWARE.
  */
 
-import { State, defineView, jsxTemplate, raw, useResource } from "@lark.js/mvc";
+import {
+  State,
+  defineView,
+  jsxTemplate,
+  raw,
+  signal,
+  batch,
+  useResource,
+  useSignalEffect,
+} from "@lark.js/mvc";
 import type { LarkView, LarkEvent } from "@lark.js/mvc";
 import { z } from "zod";
 import { icons } from "./icons";
@@ -32,18 +41,6 @@ const TocHeadingSchema = z.looseObject({
 });
 const TocHeadingsSchema = z.array(TocHeadingSchema);
 type TocHeading = z.infer<typeof TocHeadingSchema>;
-
-interface TocHeadingVM extends TocHeading {
-  isActive: boolean;
-}
-
-interface TocData {
-  inline: boolean;
-  headings: TocHeadingVM[];
-  markerTop: number;
-  markerHeight: number;
-  markerShow: boolean;
-}
 
 function decodedLocationHash(): string {
   try {
@@ -61,21 +58,19 @@ function decodedLocationHash(): string {
  * the `theme/toc-inline` registered variant created with
  * `createTocView({ inline: true })` (raw registered-path HTML carries no
  * props, so the flag is baked into the factory).
+ *
+ * Reactivity: the template reads `State.get("currentPageHeadings")` (tracked
+ * — the layout's navigation writes it) plus the local `activeSlug` / marker
+ * signals written by the rAF scroll-spy.
  */
 export function createTocView(options?: { inline?: boolean }): LarkView {
   const inline = options?.inline === true;
   return defineView((ctx) => {
-    ctx.updater.set({
-      inline,
-      headings: [],
-      markerTop: 0,
-      markerHeight: 0,
-      markerShow: false,
-    });
+    const activeSlug = signal("");
+    const markerTop = signal(0);
+    const markerHeight = signal(0);
+    const markerShow = signal(false);
 
-    ctx.observeState("currentPageHeadings");
-
-    let activeSlug = "";
     let raf = 0;
     let ro: ResizeObserver | null = null;
 
@@ -84,42 +79,23 @@ export function createTocView(options?: { inline?: boolean }): LarkView {
       return r.success ? r.data : [];
     };
 
-    const buildHeadings = () =>
-      readHeadings().map((h) => ({
-        level: h.level,
-        slug: h.slug,
-        text: h.text,
-        isActive: h.slug === activeSlug,
-      }));
-
-    const assign = (): boolean | undefined => {
-      ctx.updater.snapshot();
-      ctx.updater.set({ headings: buildHeadings() });
-      return ctx.updater.altered();
-    };
-
-    assign();
-
     /** Position the animated marker beside the active link. */
     const syncMarker = (): void => {
       const root = document.getElementById(ctx.owner.id);
-      const link = activeSlug
-        ? root?.querySelector<HTMLElement>(
-            `a[data-slug="${CSS.escape(activeSlug)}"]`,
-          )
+      const slug = activeSlug.peek();
+      const link = slug
+        ? root?.querySelector<HTMLElement>(`a[data-slug="${CSS.escape(slug)}"]`)
         : null;
       const li = link?.parentElement;
-      if (li) {
-        ctx.updater
-          .set({
-            markerTop: li.offsetTop,
-            markerHeight: li.offsetHeight,
-            markerShow: true,
-          })
-          .digest();
-      } else {
-        ctx.updater.set({ markerShow: false }).digest();
-      }
+      batch(() => {
+        if (li) {
+          markerTop.value = li.offsetTop;
+          markerHeight.value = li.offsetHeight;
+          markerShow.value = true;
+        } else {
+          markerShow.value = false;
+        }
+      });
     };
 
     /**
@@ -157,10 +133,8 @@ export function createTocView(options?: { inline?: boolean }): LarkView {
           }
         }
       }
-      if (current === activeSlug) return;
-      activeSlug = current;
-      ctx.updater.set({ headings: buildHeadings() });
-      ctx.updater.digest();
+      if (current === activeSlug.peek()) return;
+      activeSlug.value = current; // template re-renders reactively
       setTimeout(syncMarker, 0);
     };
 
@@ -188,12 +162,12 @@ export function createTocView(options?: { inline?: boolean }): LarkView {
       },
     });
 
-    ctx.renderMethod = () => {
-      assign();
-      ctx.updater.digest();
+    // Page navigation replaces the headings — re-run the spy and marker.
+    useSignalEffect(() => {
+      State.get("currentPageHeadings"); // subscribe to page changes
       schedule();
       setTimeout(syncMarker, 0);
-    };
+    });
 
     const scrollToHeading = (e: LarkEvent): void => {
       e.preventDefault();
@@ -209,13 +183,20 @@ export function createTocView(options?: { inline?: boolean }): LarkView {
       target.scrollIntoView({ behavior: "smooth", block: "start" });
     };
 
-    const template = jsxTemplate<TocData>(
-      ({ inline: isInline, headings, markerTop, markerHeight, markerShow }) => (
+    const template = jsxTemplate(() => {
+      const active = activeSlug.value;
+      const headings = readHeadings().map((h) => ({
+        level: h.level,
+        slug: h.slug,
+        text: h.text,
+        isActive: h.slug === active,
+      }));
+      return (
         <div>
           {headings.length > 0 && (
             <div
               class={
-                isInline
+                inline
                   ? "not-prose border-muted/80 bg-muted/30 my-6 rounded-xl border p-4"
                   : ""
               }
@@ -235,9 +216,9 @@ export function createTocView(options?: { inline?: boolean }): LarkView {
                   aria-hidden="true"
                   class={[
                     "bg-primary absolute left-0 w-px rounded-full transition-[top,height,opacity] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]",
-                    !markerShow && "opacity-0",
+                    !markerShow.value && "opacity-0",
                   ]}
-                  style={`top: ${markerTop}px; height: ${markerHeight}px`}
+                  style={`top: ${markerTop.value}px; height: ${markerHeight.value}px`}
                 ></span>
                 <ul class="space-y-px pl-3">
                   {headings.map((heading) => (
@@ -263,9 +244,9 @@ export function createTocView(options?: { inline?: boolean }): LarkView {
             </div>
           )}
         </div>
-      ),
-    );
+      );
+    });
 
-    return { template, assign };
+    return { template };
   });
 }

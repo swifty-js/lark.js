@@ -29,7 +29,7 @@
  * - Router event name constants
  * - Regex patterns for URL parsing and tag-name extraction
  * - Encoding helpers (`strSafe`, `encodeHTML`, `refFn`) shared by `dom.ts`,
- *   `updater.ts`, and the JSX serializer (`jsx/serialize.ts`)
+ *   `view.ts`, and the JSX serializer (`jsx/serialize.ts`)
  *
  * Keeping the canonical implementations here ensures all consumers share a
  * single copy rather than duplicating them per module.
@@ -98,16 +98,13 @@ export const MATH_NS = "http://www.w3.org/1998/Math/MathML";
 /** Tag name regexp for I_GetNode */
 export const TAG_NAME_REGEXP = /<([a-z][^/\0>\x20\t\r\n\f]+)/i;
 
-/** Async task break time (ms) */
-export const CALL_BREAK_TIME = 48;
-
 /** Increment global counter and return new value */
 export function nextCounter(): number {
   return ++globalCounter;
 }
 
 // ============================================================
-// Encoding helpers (shared by dom.ts, runtime.ts, updater.ts)
+// Encoding helpers (shared by dom.ts, view.ts, and the JSX serializer)
 // ============================================================
 
 const HTML_ENT_MAP: Record<string, string> = {
@@ -160,7 +157,7 @@ export function refFn(ref: Record<string, unknown>, value: unknown, key: string)
 
 /**
  * Check if a string is a refData reference token: SPLITTER followed by
- * one or more ASCII decimal digits. Used by updater.ts translate and the
+ * one or more ASCII decimal digits. Used by ctx.translate and the
  * JSX template layer's refData sweep.
  */
 export function isRefToken(s: string): boolean {

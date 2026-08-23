@@ -23,20 +23,18 @@
 /**
  * Hooks runtime for the functional view system.
  *
- * Hooks (`useState`, `useEffect`, `useStore`, etc.) work via a module-level
- * `currentCtx` that is set during setup function execution. The setup function
- * runs once on mount (inside `mountCtx`), and hooks register state, effects,
- * and subscriptions on the ctx.
+ * Hooks (`useSignal`, `useEffect`, `useSignalEffect`, etc.) work via a
+ * module-level `currentCtx` that is set during setup function execution. The
+ * setup function runs once on mount (inside `mountCtx`), and hooks register
+ * signals, effects, and subscriptions on the ctx.
  *
  * Key difference from React hooks: Lark's setup runs ONCE (not on every
- * render). `useState` returns a `[getter, setter]` pair where the getter
- * always reads from `ctx.updater.data` — avoiding stale closures. The
- * template (a `jsxTemplate()` render function) reads from `updater.data`
- * independently of the setup function's closures.
+ * render). View-local state lives in signals closed over by the template —
+ * the template runs inside the view's render effect, so signal reads
+ * subscribe the view and writes re-render it automatically.
  */
 import type { ViewCtx, AnyFunc } from "./types";
-import { bindStore } from "./store";
-import type { StoreApi } from "./store";
+import { signal, effect, type Signal } from "./reactive";
 
 // ============================================================
 // Current context — set during setup function execution
@@ -63,39 +61,61 @@ function getCtx(): ViewCtx {
 }
 
 // ============================================================
-// useState — view-local state backed by updater.data
+// useSignal — keyed view-local signal (HMR-stable)
 // ============================================================
 
 /**
- * Declare view-local state backed by `ctx.updater.data`.
+ * Declare a keyed view-local signal.
  *
- * Returns a `[getter, setter]` pair. The getter always reads the latest
- * value from `ctx.updater.data[key]`, avoiding stale closures in event
- * handlers. The setter writes to `ctx.updater.data` and triggers a digest.
+ * Identical to `signal(initial)` except the signal is stored on the ctx by
+ * key and REUSED when the setup re-runs on the same ctx (HMR hot-swap) — so
+ * state survives hot updates. Use plain `signal()` when HMR persistence
+ * doesn't matter.
  *
- * @param key - The data key in `updater.data`
- * @param initial - Initial value (set once on first call)
+ * @param key - Stable key identifying this piece of state
+ * @param initial - Initial value (used only when the signal is first created)
  *
  * @example
- * const [getCount, setCount] = useState('count', 0);
- * // In event handler:
- * "incr<click>": (e) => setCount(getCount() + 1)
+ * const count = useSignal("count", 0);
+ * // template: <button onClick={() => count.value++}>{count.value}</button>
  */
-export function useState<T>(key: string, initial: T): [() => T, (v: T) => void] {
+export function useSignal<T>(key: string, initial: T): Signal<T> {
   const ctx = getCtx();
-
-  // Set initial value if not already present
-  const existing = ctx.updater.get<unknown>(key);
-  if (existing === undefined) {
-    ctx.updater.set({ [key]: initial });
+  let sig = ctx.signals.get(key);
+  if (!sig) {
+    sig = signal(initial) as Signal<unknown>;
+    ctx.signals.set(key, sig);
   }
+  return sig as Signal<T>;
+}
 
-  const getter = (): T => ctx.updater.get<T>(key);
-  const setter = (v: T): void => {
-    ctx.updater.set({ [key]: v }).digest();
-  };
+// ============================================================
+// useSignalEffect — reactive side effect bound to the view lifecycle
+// ============================================================
 
-  return [getter, setter];
+/**
+ * Run a reactive side effect tied to the view lifecycle.
+ *
+ * The callback runs immediately and re-runs whenever any signal it read
+ * changes (`State.get(key)`, `Router.parse()`, store reads, local signals).
+ * A returned function is used as the between-runs / final cleanup, matching
+ * `@preact/signals-core` `effect` semantics. The effect is disposed on view
+ * destroy (and before HMR re-setup).
+ *
+ * Do not WRITE signals the callback also reads — that is a cycle. For async
+ * work, read the signals first, then continue inside `untracked()` /
+ * `ctx.wrapAsync`.
+ *
+ * @example
+ * useSignalEffect(() => {
+ *   const path = Router.parse().path; // subscribe to navigation
+ *   void loadContent(path);
+ * });
+ */
+export function useSignalEffect(fn: () => void | (() => void)): void {
+  const ctx = getCtx();
+  const dispose = effect(fn);
+  ctx.cleanups.push(dispose);
 }
 
 // ============================================================
@@ -110,7 +130,7 @@ export function useState<T>(key: string, initial: T): [() => T, (v: T) => void] 
  *
  * Unlike React's `useEffect`, this runs synchronously during setup (not
  * deferred to a later tick) and does not re-run on dependency changes
- * (since setup only runs once).
+ * (since setup only runs once). For reactive re-runs use `useSignalEffect`.
  *
  * @example
  * useEffect(() => {
@@ -127,58 +147,6 @@ export function useEffect(fn: () => (() => void) | void, _deps?: unknown[]): voi
 }
 
 // ============================================================
-// useStore — bind a zustand-aligned store to the view
-// ============================================================
-
-/**
- * Bind a store to the view's updater. The store's state is synced to
- * `ctx.updater.data` automatically. Auto-unsubscribes on view destroy.
- *
- * @param store - The store created by `create()`
- * @param selector - Optional selector to pick which keys to sync
- * @returns A getter that reads the selected state from updater.data
- *
- * @example
- * const getCount = useStore(useCountStore, (s) => ({ count: s.count }));
- * // In event handler:
- * "incr<click>": (e) => useCountStore.getState().increment()
- */
-export function useStore<T extends object>(
-  store: StoreApi<T>,
-  selector?: (s: T) => Partial<T>,
-): () => Partial<T> {
-  const ctx = getCtx();
-  bindStore(ctx, store, selector);
-
-  // Return a getter that reads from updater.data
-  // Without selector, all non-function keys are synced
-  // With selector, only the selected keys are synced
-  if (selector) {
-    return (): Partial<T> => {
-      const state = store.getState();
-      return selector(state);
-    };
-  }
-  return (): Partial<T> => {
-    // Return all non-function state keys from updater
-    const data = ctx.updater.get<Record<string, unknown>>();
-    const result: Record<string, unknown> = {};
-    for (const key of Object.keys(data)) {
-      if (key !== "vId" && typeof data[key] !== "function") {
-        result[key] = data[key];
-      }
-    }
-    // Dynamic construction from updater data — cast to Partial<T> is
-    // unavoidable since we can't verify the shape matches T at runtime.
-    return result as Partial<T>;
-  };
-}
-
-// ============================================================
-// useUrlState — defined in url-state.ts (already accepts ViewCtx)
-// ============================================================
-
-// ============================================================
 // useInterval — setInterval with automatic cleanup
 // ============================================================
 
@@ -189,8 +157,9 @@ export function useStore<T extends object>(
  * @param delay - Interval delay in milliseconds
  *
  * @example
+ * const time = useSignal("time", Date.now());
  * useInterval(() => {
- *   ctx.updater.set({ time: Date.now() }).digest();
+ *   time.value = Date.now();
  * }, 1000);
  */
 export function useInterval(fn: () => void, delay: number): void {
@@ -225,7 +194,7 @@ export function useTimeout(fn: () => void, delay: number): void {
  *
  * @param key - Unique key for the resource
  * @param resource - The resource object (must have a `destroy()` method)
- * @param destroyOnRender - If true, destroyed on next render call
+ * @param destroyOnRender - If true, destroyed on next render
  *
  * @example
  * const service = createService(syncFn);

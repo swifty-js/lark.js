@@ -10,24 +10,18 @@
  *
  * So the root Frame is pointed at a hidden `<div>` that lives outside the
  * canvas, and every story is mounted as a CHILD frame of it (see `render.ts`).
- * Two framework details drive this design:
  *
- * 1. `dispatcherUpdate` (framework.ts) walks the frame tree from the root and
- *    `continue`s — without visiting children — on any frame whose view is
- *    missing or whose `signature <= 1`. A bare root frame would therefore
- *    swallow every `State.digest()` and no story could use `ctx.observeState`.
- *    Fix: mount a template-less host view on the root and render it once, which
- *    lifts its signature to 2 and turns it into a transparent pass-through.
+ * State/store/params reactivity needs no dispatcher plumbing — views
+ * subscribe through tracked signal reads in their templates. The one router
+ * detail that still matters: on a route change whose `view` actually differs,
+ * the framework calls `rootFrame.mountView(...)`, which unmounts the root's
+ * whole zone — i.e. it would destroy every mounted story. Fix: boot with
+ * `defaultView` = the host view and NO `routes`, so `attachViewAndPath()`
+ * resolves every path to that same view. The `view` diff is then always empty
+ * and navigation never wipes the canvas.
  *
- * 2. On a route change whose `view` actually differs, the dispatcher calls
- *    `rootFrame.mountView(...)`, which unmounts the root's whole zone — i.e. it
- *    would destroy every mounted story. Fix: boot with `defaultView` = the host
- *    view and NO `routes`, so `attachViewAndPath()` resolves every path to that
- *    same view. The `view` diff is then always empty and only the harmless
- *    "params changed" branch of the dispatcher ever runs.
- *
- * The net effect: `State`, `Router`, `useUrlState` and `observeLocation` all
- * work inside stories, and nothing the router does can wipe the canvas.
+ * The net effect: `State`, `Router` and `useUrlState` all work inside
+ * stories, and nothing the router does can wipe the canvas.
  */
 import { Framework, Frame, defineView, registerViewClass } from "@lark.js/mvc";
 import type { FrameObj, FrameworkConfig } from "@lark.js/mvc";
@@ -86,11 +80,6 @@ export function bootLarkStorybook(options: BootLarkOptions = {}): void {
     rootId: HOST_ELEMENT_ID,
     defaultView: HOST_VIEW_PATH,
   });
-
-  // The host view has no template, so its signature is still 1 and the
-  // State/Router dispatcher would skip it *and its children*. One render()
-  // bumps it to 2; the digest itself is a no-op (no template, no dirty data).
-  Frame.getRoot()?.view?.render();
 }
 
 /**

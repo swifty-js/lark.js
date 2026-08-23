@@ -6,16 +6,8 @@ export interface TagListProps {
   onSelect?: (data?: Record<string, unknown>) => void;
 }
 
-interface TagListData {
-  tags: string[];
-}
-
 export default defineView<TagListProps>((ctx, params) => {
   const props = (params ?? {}) as Partial<TagListProps>;
-
-  ctx.updater.set({
-    tags: Array.isArray(props.tags) ? props.tags : [],
-  });
 
   const pick = (e: Event): void => {
     const target = e.target as HTMLElement | null;
@@ -23,41 +15,44 @@ export default defineView<TagListProps>((ctx, params) => {
     if (tag) ctx.owner.fire("select", { tag });
   };
 
-  const template = jsxTemplate<TagListData>(({ tags }) => (
-    <div class={styles["tag-list"]}>
-      {tags.length > 0 ? (
-        tags.map((tag) => (
-          <wa-tag
-            class={styles["tag-list__tag"]}
-            variant="brand"
+  const template = jsxTemplate(() => {
+    const tags = Array.isArray(props.tags) ? props.tags : [];
+    return (
+      <div class={styles["tag-list"]}>
+        {tags.length > 0 ? (
+          tags.map((tag) => (
+            <wa-tag
+              class={styles["tag-list__tag"]}
+              variant="brand"
+              appearance="outlined"
+              size="s"
+              pill
+              role="button"
+              tabindex="0"
+              data-tag={tag}
+              onClick={pick}
+              onKeydown={(e) => {
+                const key = (e as KeyboardEvent).key;
+                if (key !== "Enter" && key !== " ") return;
+                e.preventDefault();
+                pick(e);
+              }}
+            >
+              {tag}
+            </wa-tag>
+          ))
+        ) : (
+          <wa-badge
+            class={styles["tag-list__empty"]}
+            variant="neutral"
             appearance="outlined"
-            size="s"
-            pill
-            role="button"
-            tabindex="0"
-            data-tag={tag}
-            onClick={pick}
-            onKeydown={(e) => {
-              const key = (e as KeyboardEvent).key;
-              if (key !== "Enter" && key !== " ") return;
-              e.preventDefault();
-              pick(e);
-            }}
           >
-            {tag}
-          </wa-tag>
-        ))
-      ) : (
-        <wa-badge
-          class={styles["tag-list__empty"]}
-          variant="neutral"
-          appearance="outlined"
-        >
-          No tags
-        </wa-badge>
-      )}
-    </div>
-  ));
+            No tags
+          </wa-badge>
+        )}
+      </div>
+    );
+  });
 
   return { template };
 });

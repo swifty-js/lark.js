@@ -50,6 +50,7 @@
  */
 import { SPLITTER, URL_TRIM_HASH_REGEXP, URL_TRIM_QUERY_REGEXP, RouterEvents } from "./common";
 import { hasOwnProperty, assign, parseUri, toUri, asRecord } from "./utils";
+import { signal } from "./reactive";
 import { createCache } from "./cache";
 import { createEmitter } from "./event-emitter";
 import type {
@@ -68,6 +69,10 @@ import type {
 
 /** Event emitter for router events */
 const emitter = createEmitter();
+
+/** Bumped on every non-silent route change — `parse()` reads it, so tracked
+ *  callers (templates / computed / useSignalEffect) subscribe to navigation. */
+const locationVersion = signal(0);
 
 /** Href → Location cache */
 const hrefCache = createCache<Location>();
@@ -330,8 +335,13 @@ export const Router: RouterApi = {
   /**
    * Parse href into Location object.
    * Defaults to globalThis.location.href.
+   *
+   * Reactive: reading `parse()` inside a tracked region (template /
+   * `computed` / `useSignalEffect`) subscribes the reader to navigation —
+   * it re-runs after every non-silent route change.
    */
   parse(href?: string): Location {
+    locationVersion.value; // subscribe tracked callers to route changes
     href = href || globalThis.location.href;
 
     const cached = hrefCache.get(href);
@@ -399,6 +409,9 @@ export const Router: RouterApi = {
       if (lastChanged["path"]) {
         document.title = defaultTitle || document.title;
       }
+      // Notify reactive readers (views re-render via their render effects),
+      // then fire CHANGED for the route-view mount path.
+      locationVersion.value++;
       emitter.fire(RouterEvents.CHANGED, asRecord(lastChanged));
     }
 

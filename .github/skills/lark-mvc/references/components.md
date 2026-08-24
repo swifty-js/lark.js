@@ -58,8 +58,8 @@ unmount(container);              // dispose all instances + effects, clear DOM
 5. Unmount (tag disappears / `unmount(container)`): dispose the render
    effect FIRST (no re-entry) → destroy child instances bottom-up (child
    cleanups run before parent cleanups, React order) → dispose hook slots
-   in reverse (effect cleanups, `useSignalEffect` disposes, query disposes)
-   → run `onCleanup` callbacks in reverse → element refs get `null` → the
+   in reverse (`useSignalEffect` disposes, `useEffect` cleanups, `onCleanup`
+   callbacks — all slots) → element refs get `null` → the
    DOM range (incl. anchor) is removed.
 
 ## Hooks (call-order slots — React rules of hooks)
@@ -96,7 +96,9 @@ useEffect(fn: () => (() => void) | void): void
 // data-driven re-runs use useSignalEffect (signals ARE the deps).
 
 onCleanup(fn: () => void): void
-// Register an unmount cleanup exactly once per slot.
+// Register a teardown callback exactly once per slot — runs when the slot
+// is disposed: on unmount, and on an HMR swap (the next render registers
+// the new version's callback).
 
 useBlocker(blocker)          // navigation blocker for the component lifetime
 useUrlState(defaults)        // [value, stable setValue] — see state-routing.md
@@ -139,9 +141,13 @@ and `e.currentTarget` (the node carrying the handler). Closures capture loop
 variables directly:
 
 ```tsx
-{items.value.map((item) => (
-  <button key={`del-${item.id}`} onClick={() => del(item.id)}>×</button>
-))}
+{
+  items.value.map((item) => (
+    <button key={`del-${item.id}`} onClick={() => del(item.id)}>
+      ×
+    </button>
+  ));
+}
 ```
 
 Multi-event = same fn on several props; modifiers = ordinary checks
@@ -183,12 +189,12 @@ function Child(props: {
 }
 ```
 
-| Prop            | Behavior                                                                   |
-| --------------- | --------------------------------------------------------------------------- |
-| `key`           | Vnode-level compare key — preserves the INSTANCE across reorders            |
-| `children`      | Delivered as `props.children` (JSXNode) — render `{props.children}`         |
-| callbacks       | Plain function props — child calls `props.onX?.(data)` directly             |
-| everything else | The reactive `props` proxy — objects/functions by live reference            |
+| Prop            | Behavior                                                            |
+| --------------- | ------------------------------------------------------------------- |
+| `key`           | Vnode-level compare key — preserves the INSTANCE across reorders    |
+| `children`      | Delivered as `props.children` (JSXNode) — render `{props.children}` |
+| callbacks       | Plain function props — child calls `props.onX?.(data)` directly     |
+| everything else | The reactive `props` proxy — objects/functions by live reference    |
 
 **Props flow (fine-grained):** per-key signals behind one stable proxy.
 Reading `props.key` in the BODY subscribes to that key; parent re-renders

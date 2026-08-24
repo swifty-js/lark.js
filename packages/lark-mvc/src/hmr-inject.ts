@@ -21,7 +21,7 @@
  */
 
 /**
- * HMR injection code generator — shared across Vite, Webpack, and Rspack.
+ * HMR injection code generator — shared across Vite and Webpack.
  *
  * ## Why this file exists
  *
@@ -45,12 +45,11 @@
  * |----------------|--------------------------|---------------------------------------------------|
  * | Vite           | `import.meta.hot`        | cb IS the update-success callback (gets newModule)|
  * | Webpack (ESM)  | `import.meta.webpackHot` | cb is an ERROR handler (never runs on success)     |
- * | Rspack         | `import.meta.webpackHot` | cb is an ERROR handler (never runs on success)     |
  *
- * This asymmetry is the root cause of historic webpack/rspack HMR bugs:
+ * This asymmetry is the root cause of historic webpack HMR bugs:
  * swap logic placed inside `accept(cb)` never executed on successful
  * updates. The fix: Vite uses `accept(cb)` with swap inside cb;
- * webpack/rspack use the self-accept pattern — `accept()` (no args) +
+ * webpack uses the self-accept pattern — `accept()` (no args) +
  * `dispose()` + a top-level `import.meta.webpackHot.data` check that runs
  * when the module re-executes after an update.
  *
@@ -68,7 +67,7 @@
 // ============================================================
 
 /** Supported bundler identifiers. */
-export type Bundler = "vite" | "webpack" | "rspack";
+export type Bundler = "vite" | "webpack";
 
 // ============================================================
 // Component HMR injection
@@ -107,7 +106,7 @@ if (import.meta.hot) {
 `;
   }
 
-  // Webpack / Rspack — self-accept pattern: `accept()` (no args) marks the
+  // Webpack — self-accept pattern: `accept()` (no args) marks the
   // module self-accepted; on update the runtime disposes the old module and
   // RE-EXECUTES the module in place, with `import.meta.webpackHot.data`
   // already populated by the dispose callback. The top-level data check

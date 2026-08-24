@@ -46,7 +46,7 @@ export default defineConfig([
     tsconfig: "./tsconfig.build.json",
   },
   {
-    // Rspack / Webpack / Vite plugin entries — each needs __filename shim to
+    // Webpack / Vite plugin entries — each needs __filename shim to
     // resolve to its own file (not a shared chunk) for the LarkMvcPlugin to
     // locate the loader at runtime. splitting: false ensures each ESM entry
     // is a single self-contained file with no shared chunk extraction.

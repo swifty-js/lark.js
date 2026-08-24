@@ -27,7 +27,6 @@
  *   warning, shrink slot disposal
  * - hmr-inject: named default declarations keep their module-scope binding
  * - bundler integrations: production builds skip HMR injection
- * - rsbuild plugin entry
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, unmount } from "../src/jsx/reconcile";
@@ -38,8 +37,6 @@ import { hotSwapByComponent } from "../src/hmr";
 import { injectComponentHmrSnippet } from "../src/hmr-inject";
 import { larkMvcPlugin as vitePlugin } from "../src/vite";
 import { larkMvcLoader as webpackLoader, LarkMvcPlugin as WebpackPlugin } from "../src/webpack";
-import { larkMvcLoader as rspackLoader } from "../src/rspack";
-import { larkMvcPlugin as rsbuildPlugin, type RsbuildPluginApi } from "../src/rsbuild";
 
 let host: HTMLElement;
 
@@ -214,85 +211,14 @@ describe("bundler integrations — production gating", () => {
     expect(build.transform(src, "/app/view.tsx")).toBeUndefined();
   });
 
-  it("webpack/rspack loaders pass production sources through", () => {
+  it("webpack loader passes production sources through", () => {
     expect(webpackLoader.call({ mode: "production" }, src)).toBe(src);
     expect(webpackLoader.call({ mode: "development" }, src)).toContain("__lark_component__");
-    expect(rspackLoader.call({ mode: "production" }, src)).toBe(src);
-    expect(rspackLoader.call({ mode: "development" }, src)).toContain("__lark_component__");
   });
 
   it("webpack plugin skips the rule in production mode", () => {
     const compiler = { options: { mode: "production", module: { rules: [] as unknown[] } } };
     new WebpackPlugin().apply(compiler);
     expect(compiler.options.module.rules.length).toBe(0);
-  });
-});
-
-// ============================================================
-// Rsbuild plugin
-// ============================================================
-
-describe("rsbuild plugin", () => {
-  function setupPlugin() {
-    let transformTest: RegExp | undefined;
-    let transformHandler: ((context: { code: string; resource: string }) => string) | undefined;
-    let mergeArgs: Record<string, unknown>[] = [];
-    const api: RsbuildPluginApi = {
-      transform(descriptor, handler) {
-        transformTest = descriptor.test;
-        transformHandler = handler;
-      },
-      modifyRsbuildConfig(handler) {
-        const userConfig = { source: { entry: { index: "./src/main.tsx" } } };
-        handler(userConfig, {
-          mergeRsbuildConfig: (...configs) => {
-            mergeArgs = configs;
-            return configs[configs.length - 1];
-          },
-        });
-      },
-    };
-    rsbuildPlugin().setup(api);
-    return {
-      transformTest,
-      transformHandler,
-      mergeArgs,
-    };
-  }
-
-  it("registers a JSX-module transform that injects HMR in dev", () => {
-    const { transformTest, transformHandler } = setupPlugin();
-    expect(transformTest?.test("/app/view.tsx")).toBe(true);
-    expect(transformTest?.test("/app/util.ts")).toBe(false);
-    const src = "export default function V() { return null; }";
-    // vitest runs with NODE_ENV !== "production" — injection is active.
-    expect(transformHandler?.({ code: src, resource: "/app/view.tsx" })).toContain(
-      "__lark_component__",
-    );
-    expect(transformHandler?.({ code: src, resource: "/x/node_modules/dep/v.tsx" })).toBe(src);
-  });
-
-  it("skips injection when NODE_ENV is production", () => {
-    const { transformHandler } = setupPlugin();
-    const src = "export default function V() { return null; }";
-    const prev = process.env["NODE_ENV"];
-    process.env["NODE_ENV"] = "production";
-    try {
-      expect(transformHandler?.({ code: src, resource: "/app/view.tsx" })).toBe(src);
-    } finally {
-      process.env["NODE_ENV"] = prev;
-    }
-  });
-
-  it("defaults the swc JSX transform with user config winning", () => {
-    const { mergeArgs } = setupPlugin();
-    expect(mergeArgs.length).toBe(2);
-    const defaults = mergeArgs[0] as {
-      tools: { swc: { jsc: { transform: { react: { importSource: string; runtime: string } } } } };
-    };
-    expect(defaults.tools.swc.jsc.transform.react.importSource).toBe("@lark.js/mvc");
-    expect(defaults.tools.swc.jsc.transform.react.runtime).toBe("automatic");
-    // User config passed LAST — its values win in the merge.
-    expect(mergeArgs[1]).toHaveProperty("source");
   });
 });

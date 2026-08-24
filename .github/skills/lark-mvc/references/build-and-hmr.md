@@ -1,8 +1,7 @@
 # Build Integration, Config, HMR
 
-Source of truth: `src/vite.ts`, `src/webpack.ts`, `src/rspack.ts`,
-`src/hmr-inject.ts`, `src/hmr.ts`, `src/framework.ts`,
-`src/component-registry.ts`.
+Source of truth: `src/vite.ts`, `src/webpack.ts`, `src/hmr-inject.ts`,
+`src/hmr.ts`, `src/component-registry.ts`.
 
 ## TypeScript setup (required)
 
@@ -44,10 +43,10 @@ export default defineConfig({
 > lockfile, not dep contents — after rebuilding lark-mvc run `vite --force`
 > (or delete `node_modules/.vite`).
 
-### Webpack / Rspack — plugin form (recommended, zero config)
+### Webpack — plugin form (recommended, zero config)
 
 ```ts
-import { LarkMvcPlugin } from "@lark.js/mvc/webpack"; // or /rspack
+import { LarkMvcPlugin } from "@lark.js/mvc/webpack";
 export default {
   plugins: [new LarkMvcPlugin()],
 };
@@ -58,6 +57,10 @@ The plugin registers one `enforce: "pre"` rule that injects component HMR
 before SWC/ts-loader/babel. The JSX transform itself comes from your
 existing TS/SWC/Babel loader reading the tsconfig above. Manual loader form:
 `{ test: /\.[jt]sx$/, exclude: /node_modules/, enforce: "pre", loader: "@lark.js/mvc/webpack" }`.
+
+Both plugins skip HMR injection in production builds (Vite: `command ===
+"build"`; Webpack: `mode === "production"` — plugin skips the rule, loader
+passes sources through).
 
 ## App boot (no Framework object)
 
@@ -116,9 +119,12 @@ always direct imports.
 
 ## HMR (auto-injected — never hand-write it)
 
-On module update, the module's default export (rewritten to
-`const __lark_component__ = ...`) self-accepts →
-`globalThis.__lark_hmr__.hotSwapByComponent(old, new)`:
+On module update, the module's default export self-accepts →
+`globalThis.__lark_hmr__.hotSwapByComponent(old, new)`. The injected
+rewrite aliases the default export as `__lark_component__`: named
+function/class declarations KEEP their declaration (module-scope references
+like `component: App` stay valid; the alias + export are appended at EOF);
+any other default expression is const-wrapped in place. Then:
 
 1. `aliasComponent(old, new)` — parents (or route tables) holding the stale
    import keep matching live instances (the reconciler compares CANONICAL
@@ -138,7 +144,7 @@ file default-exporting a config object self-accepts harmlessly.
 Bundler differences (`src/hmr-inject.ts` — important when debugging HMR):
 
 - Vite: `import.meta.hot.accept(cb)` — cb gets the new module.
-- Webpack/Rspack: `import.meta.webpackHot.accept(cb)`'s cb is an **error**
+- Webpack: `import.meta.webpackHot.accept(cb)`'s cb is an **error**
   handler, so the snippet uses self-accept + a top-level
   `import.meta.webpackHot.data.oldComponent` check on re-execution.
 - Swap functions are reached via `globalThis.__lark_hmr__` — registered

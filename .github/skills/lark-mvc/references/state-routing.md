@@ -9,12 +9,15 @@ Source of truth: `src/reactive.ts`, `src/store.ts`, `src/router.ts`,
 import { signal, computed, effect, batch, untracked } from "@lark.js/mvc";
 import type { Signal, ReadonlySignal } from "@lark.js/mvc";
 
-const count = signal(1);                        // count.value read/write
+const count = signal(1); // count.value read/write
 const doubled = computed(() => count.value * 2); // derived, auto-tracked, lazy
-const dispose = effect(() => log(count.value));  // runs now + on change
-batch(() => { count.value = 2; count.value = 3; }); // one notification
-untracked(() => count.value);                    // read without subscribing
-count.peek();                                    // same, signal-method form
+const dispose = effect(() => log(count.value)); // runs now + on change
+batch(() => {
+  count.value = 2;
+  count.value = 3;
+}); // one notification
+untracked(() => count.value); // read without subscribing
+count.peek(); // same, signal-method form
 ```
 
 Tracked regions (reads subscribe): **the component body**, **computed /
@@ -37,7 +40,9 @@ small stores or plain module-level `signal()`s).
 import { createStore, computed } from "@lark.js/mvc";
 
 interface CountStore {
-  count: number; step: number; doubled: number;
+  count: number;
+  step: number;
+  doubled: number;
   increment: () => void;
 }
 
@@ -45,19 +50,25 @@ const useCountStore = createStore<CountStore>((set, get) => ({
   count: 0,
   step: 1,
   doubled: computed(() => get().count * 2), // deps AUTO-tracked — no deps array
-  increment() { set({ count: get().count + get().step }); },
+  increment() {
+    set({ count: get().count + get().step });
+  },
 }));
 
-useCountStore.getState();              // STABLE tracked proxy (see below)
-useCountStore.setState({ count: 5 });  // batched; Object.is-equal values skipped
+useCountStore.getState(); // STABLE tracked proxy (see below)
+useCountStore.setState({ count: 5 }); // batched; Object.is-equal values skipped
 useCountStore.setState((prev) => ({ count: prev.count + 1 }));
 useCountStore.setState({ count: 0 }, true); // replace: missing plain keys → undefined
-const off = useCountStore.subscribe((state, prevState) => { /* every change */ });
+const off = useCountStore.subscribe((state, prevState) => {
+  /* every change */
+});
 const offSel = useCountStore.subscribe(
-  (s) => s.count,                      // selector — fires only when slice changes
-  (count, prevCount) => { /* ... */ },
+  (s) => s.count, // selector — fires only when slice changes
+  (count, prevCount) => {
+    /* ... */
+  },
 );
-useCountStore.destroy();               // clears listeners; setState becomes no-op
+useCountStore.destroy(); // clears listeners; setState becomes no-op
 ```
 
 Semantics (from `src/store.ts`):
@@ -72,13 +83,20 @@ Semantics (from `src/store.ts`):
   (`{ ...getState() }`) yields a plain snapshot including actions.
 - Writes to computed/action keys via `setState` are silently ignored;
   unknown keys create new state slots (zustand semantics).
+- The `getState()` proxy is READ-ONLY — direct writes/deletes throw; go
+  through `setState`. The `setState(prev => ...)` updater runs UNTRACKED:
+  its reads never subscribe the caller (safe inside effects/bodies).
 
 In components: **no hook needed** — read `getState()` in the body:
 
 ```tsx
 export default function CounterButton() {
   const { count, doubled, increment } = useCountStore.getState();
-  return <button onClick={increment}>{count} ×2={doubled}</button>;
+  return (
+    <button onClick={increment}>
+      {count} ×2={doubled}
+    </button>
+  );
 }
 ```
 
@@ -101,16 +119,16 @@ const router = createRouter([
 ]);
 
 // FOUR signals — all tracked reads:
-router.location.value;     // { pathname, search, hash, state, key } (basename-stripped)
-router.match.value;        // RouteMatch | null — { route, params, pathname }
-router.params.value;       // { id: "42" } from "/users/:id" ("*" for splats)
+router.location.value; // { pathname, search, hash, state, key } (basename-stripped)
+router.match.value; // RouteMatch | null — { route, params, pathname }
+router.params.value; // { id: "42" } from "/users/:id" ("*" for splats)
 router.searchParams.value; // URLSearchParams
 
 // Navigation (react-router `navigate` semantics) — Promise<boolean>:
 await router.navigate("/users/42?tab=posts#bio");
 await router.navigate({ pathname: "/users/42", search: "?tab=posts" });
 await router.navigate("/login", { replace: true, state: { from: "/admin" } });
-await router.navigate(-1);   // history traversal
+await router.navigate(-1); // history traversal
 
 // Blockers:
 const unblock = router.block(async (next, current) => {
@@ -165,8 +183,8 @@ matched component as a vnode — route dispatch IS the component diff:
 ### useRouter / useBlocker
 
 ```tsx
-const router = useRouter();       // ACTIVE router (throws if none created)
-useBlocker(() => !dirty.value);   // registered on mount, unregistered on unmount
+const router = useRouter(); // ACTIVE router (throws if none created)
+useBlocker(() => !dirty.value); // registered on mount, unregistered on unmount
 ```
 
 `useRouter` is a plain resolver (no hook slot — callable anywhere);
@@ -186,7 +204,9 @@ export default function Pager() {
   //   router — other search params, pathname, and hash preserved;
   //   undefined/null values delete the key.
   return (
-    <button onClick={() => setParams((p) => ({ page: String(Number(p.page) + 1) }))}>
+    <button
+      onClick={() => setParams((p) => ({ page: String(Number(p.page) + 1) }))}
+    >
       Page {params.page}
     </button>
   );

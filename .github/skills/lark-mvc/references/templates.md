@@ -48,15 +48,15 @@ fn(props) → VNode tree (plain jsx() calls — pure data)
 
 ## Children semantics
 
-| JSX                      | Behavior                                                              |
-| ------------------------ | --------------------------------------------------------------------- |
-| `{expr}` (string/number) | Text node (`0` renders; `boolean/null/undefined/""` render nothing)  |
-| `{sig}` (Signal)         | Auto-unwrapped to `sig.value` — a tracked read                        |
-| `{raw(html)}`            | Trusted raw HTML block — parsed once, swapped wholesale when the string changes; never pass untrusted input |
-| `{cond && <div/>}`       | Conditional rendering (falsy values dropped)                          |
-| `{list.map(...)}`        | List rendering (arrays flattened)                                     |
-| `<>...</>` (Fragment)    | Multiple roots without a wrapper element                              |
-| `<Comp prop={x}>...</Comp>` | Function component — mounts a hostless INSTANCE; children arrive as `props.children` |
+| JSX                         | Behavior                                                                                                    |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `{expr}` (string/number)    | Text node (`0` renders; `boolean/null/undefined/""` render nothing)                                         |
+| `{sig}` (Signal)            | Auto-unwrapped to `sig.value` — a tracked read                                                              |
+| `{raw(html)}`               | Trusted raw HTML block — parsed once, swapped wholesale when the string changes; never pass untrusted input |
+| `{cond && <div/>}`          | Conditional rendering (falsy values dropped)                                                                |
+| `{list.map(...)}`           | List rendering (arrays flattened)                                                                           |
+| `<>...</>` (Fragment)       | Multiple roots without a wrapper element                                                                    |
+| `<Comp prop={x}>...</Comp>` | Function component — mounts a hostless INSTANCE; children arrive as `props.children`                        |
 
 Strings are ALWAYS text — dangerous characters stay text data, nothing is
 parsed as markup. `raw()` is the single explicit trusted-HTML path
@@ -68,18 +68,18 @@ is CALLED as a function instead: `{renderRow(item)}`.
 
 ## Attribute semantics
 
-| Attribute             | Behavior                                                                    |
-| --------------------- | ---------------------------------------------------------------------------- |
-| `class` / `className` | String, array (falsy entries dropped), or `{ name: boolean }` map — merged   |
-| `style`               | String, or camelCase object (kebab-cased; `--x` custom props pass through)   |
-| `key`                 | Vnode-level sibling compare key (React semantics) — NOT written to the DOM   |
-| `id`                  | Ordinary attribute (no framework meaning)                                    |
-| `ref`                 | `(el \| null) => void` callback or `{ current }` cell — called post-commit   |
-| `disabled={true}`     | Boolean attribute → `disabled=""`; `false`/nullish remove the attribute      |
-| `title={sig}`         | Signal attribute values auto-unwrap (tracked read; updates diff correctly)   |
+| Attribute                        | Behavior                                                                                                 |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `class` / `className`            | String, array (falsy entries dropped), or `{ name: boolean }` map — merged                               |
+| `style`                          | String, or camelCase object (kebab-cased; `--x` custom props pass through)                               |
+| `key`                            | Vnode-level sibling compare key (React semantics) — NOT written to the DOM                               |
+| `id`                             | Ordinary attribute (no framework meaning)                                                                |
+| `ref`                            | `(el \| null) => void` callback or `{ current }` cell — called post-commit                               |
+| `disabled={true}`                | Boolean attribute → `disabled=""`; `false`/nullish remove the attribute                                  |
+| `title={sig}`                    | Signal attribute values auto-unwrap (tracked read; updates diff correctly)                               |
 | `value` / `checked` / `selected` | Synced as DOM **properties** on form elements; the template value re-asserts over user edits each render |
-| `data-x={object}`     | NOT supported — objects/functions are skipped with a dev warning             |
-| `onClick={fn}`        | Per-node listener (see components.md) — inline functions only                |
+| `data-x={object}`                | NOT supported — objects/functions are skipped with a dev warning                                         |
+| `onClick={fn}`                   | Per-node listener (see components.md) — inline functions only                                            |
 
 Component props are the exception to Signal unwrapping: a Signal passed as a
 component prop stays wrapped so the child can subscribe directly. On

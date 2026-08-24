@@ -148,13 +148,11 @@ describe("HMR", () => {
       expect(injectComponentHmrSnippet(src, "vite")).toBe(src);
     });
 
-    it("uses import.meta.webpackHot for webpack and rspack", () => {
+    it("uses import.meta.webpackHot for webpack", () => {
       const src = "export default function V() { return null; }";
       const webpack = injectComponentHmrSnippet(src, "webpack");
       expect(webpack).toContain("import.meta.webpackHot");
       expect(webpack).not.toContain("import.meta.hot.accept");
-      const rspack = injectComponentHmrSnippet(src, "rspack");
-      expect(rspack).toContain("import.meta.webpackHot");
     });
 
     it("keeps `as`-cast default exports syntactically intact", () => {

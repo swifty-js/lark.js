@@ -19,12 +19,12 @@ description: >-
   matching, navigate(to, {replace, state}), async block()/useBlocker,
   <RouterView/> outlet with per-route lazy() dedup, useRouter() active
   instance), anonymous zustand-aligned createStore(creator) with
-  auto-tracked computed and selector subscribe, and Vite/Webpack/Rspack
+  auto-tracked computed and selector subscribe, and Vite/Webpack
   plugins with auto-injected state-preserving component HMR
   (hotSwapByComponent, registered once at the index entry). Use this skill
   whenever the user reads, writes, debugs, reviews, or extends code that
   imports from "@lark.js/mvc" (or any sub-path like /vite, /webpack,
-  /rspack, /jsx-runtime, /client), works under packages/lark-mvc or
+  /jsx-runtime, /client), works under packages/lark-mvc or
   packages/lark-storybook, or mentions any of these symbols and concepts —
   render, unmount, FC, useSignal, useComputed, useSignalEffect, useEffect,
   onCleanup, createRouter, RouterView, useRouter, useBlocker, useUrlState,
@@ -72,15 +72,14 @@ code still using them predates the rewrite and must be migrated.
 
 ## Package entry points
 
-| Import                         | Provides                                                                                                                                                                                                                                                                     |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Import                         | Provides                                                                                                                                                                                                                                                                                                                                                                                              |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `@lark.js/mvc`                 | Runtime: `render`, `unmount`, `signal`, `computed`, `effect`, `batch`, `untracked`, `Signal`, hooks (`useSignal`, `useRef`, `useComputed`, `useSignalEffect`, `useEffect` mount-only, `onCleanup`), `createRouter`/`RouterView`/`useRouter`/`useBlocker`/`matchPath`/`matchRoutes`, `createStore`, `useUrlState`, `hotSwapByComponent`, all types (`FC`, `Location`, `RouteObject`, `RouterApi`, ...) |
-| `@lark.js/mvc/jsx-runtime`     | JSX automatic runtime (`jsx`/`jsxs`, `Fragment`, `raw`, JSX types) — referenced by `jsxImportSource`, not imported by hand                                                                                                                                                    |
-| `@lark.js/mvc/jsx-dev-runtime` | `jsxDEV` dev runtime                                                                                                                                                                                                                                                          |
-| `@lark.js/mvc/vite`            | `larkMvcPlugin()` — oxc JSX defaults + auto component HMR                                                                                                                                                                                                                     |
-| `@lark.js/mvc/webpack`         | `LarkMvcPlugin` (recommended), `larkMvcLoader`                                                                                                                                                                                                                                |
-| `@lark.js/mvc/rspack`          | `LarkMvcPlugin`, `larkMvcLoader`                                                                                                                                                                                                                                              |
-| `@lark.js/mvc/client`          | Ambient types: `*.css` module declarations, HMR globals                                                                                                                                                                                                                       |
+| `@lark.js/mvc/jsx-runtime`     | JSX automatic runtime (`jsx`/`jsxs`, `Fragment`, `raw`, JSX types) — referenced by `jsxImportSource`, not imported by hand                                                                                                                                                                                                                                                                            |
+| `@lark.js/mvc/jsx-dev-runtime` | `jsxDEV` dev runtime                                                                                                                                                                                                                                                                                                                                                                                  |
+| `@lark.js/mvc/vite`            | `larkMvcPlugin()` — oxc JSX defaults + auto component HMR                                                                                                                                                                                                                                                                                                                                             |
+| `@lark.js/mvc/webpack`         | `LarkMvcPlugin` (recommended), `larkMvcLoader`                                                                                                                                                                                                                                                                                                                                                        |
+| `@lark.js/mvc/client`          | Ambient types: `*.css` module declarations, HMR globals                                                                                                                                                                                                                                                                                                                                               |
 
 tsconfig: `"jsx": "react-jsx"`, `"jsxImportSource": "@lark.js/mvc"`.
 
@@ -129,7 +128,9 @@ export default function UserDetail() {
         user {id}, clicks {clicks.value}
       </p>
       <button onClick={() => clicks.value++}>+1</button>
-      <button onClick={() => router.navigate("/", { state: { from: id } })}>Home</button>
+      <button onClick={() => router.navigate("/", { state: { from: id } })}>
+        Home
+      </button>
     </div>
   );
 }
@@ -211,10 +212,10 @@ by hand.
 
 ## Reference files — read on demand
 
-| File                                                                    | Read when working on                                                                                                                                        |
-| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| [references/components.md](references/components.md)                   | Function components: props/callbacks/children/key/ref, all hooks in depth, instance lifecycle, `render`/`unmount`, DOM events, composition patterns          |
-| [references/templates.md](references/templates.md)                     | JSX semantics: children/attribute tables, Signal unwrapping, `raw()`, key semantics, namespaces, security guards                                             |
+| File                                                                   | Read when working on                                                                                                                                                                            |
+| ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [references/components.md](references/components.md)                   | Function components: props/callbacks/children/key/ref, all hooks in depth, instance lifecycle, `render`/`unmount`, DOM events, composition patterns                                             |
+| [references/templates.md](references/templates.md)                     | JSX semantics: children/attribute tables, Signal unwrapping, `raw()`, key semantics, namespaces, security guards                                                                                |
 | [references/state-routing.md](references/state-routing.md)             | Signals API, anonymous `createStore`/auto-tracked `computed`/selector subscribe, `createRouter` (location/match/params/searchParams, navigate, block), `RouterView`, `useRouter`, `useUrlState` |
-| [references/build-and-hmr.md](references/build-and-hmr.md)             | Vite/Webpack/Rspack integration, `createRouter`/`RouteObject`, lazy loading & Module Federation, HMR internals, scaffolding conventions                       |
-| [references/rendering-internals.md](references/rendering-internals.md) | Instance render effects, anchor-slice reconciliation, keyed diff, attribute snapshots, batching/timing — read when debugging renders/perf                    |
+| [references/build-and-hmr.md](references/build-and-hmr.md)             | Vite/Webpack integration, `createRouter`/`RouteObject`, lazy loading & Module Federation, HMR internals, scaffolding conventions                                                                |
+| [references/rendering-internals.md](references/rendering-internals.md) | Instance render effects, anchor-slice reconciliation, keyed diff, attribute snapshots, batching/timing — read when debugging renders/perf                                                       |

@@ -21,148 +21,68 @@
  */
 
 /**
- * Hot Module Replacement (HMR) for Lark Mvc views.
+ * Hot Module Replacement (HMR) for function components.
  *
- * HMR hot-swaps view code without a full page reload, preserving view-local
- * state (counter values, form input, scroll-derived data) across updates.
+ * `hotSwapByComponent(oldFn, newFn)` hot-swaps component code without a full
+ * page reload, preserving instance state across updates:
  *
- * A view module (`.tsx` / `.ts` with a `defineView` default export) contains
- * both the setup function and its `jsxTemplate` closure, so a single swap
- * layer suffices: `hotSwapByView(old, new)` updates the view-registry and
- * runs `hotSwapView` on every matching frame.
+ * 1. `aliasComponent(old, new)` — parents holding the STALE import keep
+ *    matching live instances (the reconciler compares canonical identities),
+ *    and string routes keep resolving.
+ * 2. Registry entries pointing at the old function are swapped.
+ * 3. Every live instance of the old function is swapped in place
+ *    (`swapInstanceFn`): plain state slots (`useSignal` / `useRef`) survive;
+ *    closure-bound slots (effects, computeds, memos, queries) are disposed
+ *    and recreated by the next render so no stale closures linger. The
+ *    instance then re-renders via its `invalidate` signal.
  *
- * ## State preservation strategy
- *
- * `hotSwapView` preserves the entire `ViewCtx` — `signals` (keyed
- * `useSignal` state), `refData`, `resources`, `emitter`, `signature`, `id`,
- * and `owner` all stay the same. It:
- * 1. Runs old `useEffect` cleanups — this disposes the old render effect
- *    and the JSX event wiring cleanup (unbinds delegated event types and
- *    strips `__jsx*` handlers)
- * 2. Destroys `destroyOnRender` resources
- * 3. Re-runs `newSetup(ctx)` — the same ctx instance, inside `untracked()`;
- *    `useSignal(key, ...)` calls find and reuse the preserved signals
- * 4. Updates the template from the new descriptor
- * 5. Creates a fresh render effect — its first run re-renders with the new
- *    template and re-wires inline handlers from scratch
+ * The swap function is exposed on `globalThis.__lark_hmr__` so auto-injected
+ * HMR snippets (see ./hmr-inject.ts) can call it WITHOUT importing
+ * "@lark.js/mvc" — under Module Federation any import of the shared singleton
+ * inside an HMR callback registers the module as a shared consumer, which
+ * makes webpack expect a main-chunk hot-update it never emits
+ * (ChunkLoadError). The global sidesteps module resolution entirely.
  */
-import { parseUri } from "./utils";
-import { untracked } from "./reactive";
-import { getViewClassRegistry, resolveSetup, aliasViewName } from "./view-registry";
-import { destroyAllResources, createRenderEffect } from "./view";
-import { setCurrentCtx } from "./hooks";
-import type { ViewSetup, ViewSetupResult, FrameObj, LarkView } from "./types";
-import { Frame } from "./frame";
+import { batch } from "./reactive";
+import { aliasComponent, getComponentRegistry } from "./component-registry";
+import { getInstances, swapInstanceFn } from "./component";
+import type { Component } from "./jsx/vnode";
 
 /**
- * Hot-swap a single frame's view setup in place, preserving the `ViewCtx`.
+ * Component HMR: alias + registry swap + in-place instance swap.
  *
- * This is the building block for state-preserving HMR. The existing ctx is
- * reused — only the setup function and template are replaced. See the
- * module-level docs for the full step-by-step sequence.
+ * Runtime-guarded: non-function arguments and functions with no live
+ * instances/registry entries no-op safely, so the broad injection gate
+ * (any `.tsx`/`.jsx` default export) cannot break non-component modules.
  *
- * @param frame - The frame whose view should be hot-swapped
- * @param newSetup - The new view setup (or branded component) from the updated module
+ * @returns whether any live instance was swapped
  */
-export function hotSwapView(frame: FrameObj, newSetup: ViewSetup | LarkView<never>): void {
-  const setupFn = resolveSetup(newSetup);
-  const oldView = frame.view;
-  if (!oldView) {
-    const vp = frame.getViewPath();
-    if (vp) frame.mountView(vp);
-    return;
+export function hotSwapByComponent(oldFn: unknown, newFn: unknown): boolean {
+  if (typeof oldFn !== "function" || typeof newFn !== "function" || oldFn === newFn) {
+    return false;
   }
-  // Cleanups include the old render-effect dispose and the JSX event wiring
-  // teardown — after this, no stale effect can re-run the old template.
-  for (let i = oldView.cleanups.length - 1; i >= 0; i--) {
-    oldView.cleanups[i]();
+  const oldC = oldFn as Component;
+  const newC = newFn as Component;
+  aliasComponent(oldC, newC);
+  const registry = getComponentRegistry();
+  for (const path in registry) {
+    if (registry[path] === oldC) registry[path] = newC;
   }
-  oldView.cleanups.length = 0;
-  destroyAllResources(oldView, false);
-  // Set currentCtx so hooks inside the new setup can access the ctx.
-  // untracked(): setup-body signal reads must not subscribe anything.
-  setCurrentCtx(oldView);
-  let descriptor: ViewSetupResult;
-  try {
-    descriptor = untracked(() => setupFn(oldView, undefined));
-  } finally {
-    setCurrentCtx(null);
-  }
-  oldView.setTemplate(descriptor.template);
-  if (oldView.signature.value > 0) {
-    if (oldView.getTemplate()) {
-      // Fresh render effect — first run renders the new template.
-      createRenderEffect(oldView);
-    } else {
-      oldView.endUpdate();
+  const instances = Array.from(getInstances(oldC));
+  batch(() => {
+    for (const inst of instances) {
+      swapInstanceFn(inst, newC);
+      inst.invalidate.value++; // re-render with the new function
     }
-  }
-}
-
-/**
- * View setup HMR: update the view-registry and hot-swap every frame using
- * `oldSetup` with `newSetup`.
- *
- * 1. Alias the new component to the old component's auto-registered name,
- *    so parents still holding the stale import keep resolving to the same
- *    internal view path across re-renders
- * 2. Walk the registry, replacing any entry equal to `oldSetup` with `newSetup`
- * 3. Walk all frames, hot-swapping any whose registry entry now points to
- *    `newSetup`
- *
- * @param oldSetup - The previous setup/component reference
- * @param newSetup - The new setup/component reference
- */
-export function hotSwapByView(
-  oldSetup: ViewSetup | LarkView<never>,
-  newSetup: ViewSetup | LarkView<never>,
-): boolean {
-  if (!oldSetup || !newSetup || oldSetup === newSetup) return false;
-  aliasViewName(oldSetup, newSetup);
-  const oldFn = resolveSetup(oldSetup);
-  const newFn = resolveSetup(newSetup);
-  if (oldFn === newFn) return false;
-  const reg = getViewClassRegistry();
-  for (const path in reg) {
-    if (reg[path] === oldFn) reg[path] = newFn;
-  }
-  let swapped = false;
-  for (const [, frame] of Frame.getAll()) {
-    const view = frame.view;
-    const vp = frame.getViewPath();
-    if (view && vp) {
-      const parsed = parseUri(vp);
-      if (reg[parsed.path] === newFn) {
-        hotSwapView(frame, newFn);
-        swapped = true;
-      }
-    }
-  }
-  return swapped;
+  });
+  return instances.length > 0;
 }
 
 // ─── Global HMR handle ────────────────────────────────────────────────
-// Expose hotSwapByView on globalThis so that the auto-injected HMR snippets
-// (see ./hmr-inject.ts) can call it WITHOUT importing "@lark.js/mvc".
-//
-// Why a global instead of import/require("@lark.js/mvc"):
-// Under Module Federation (@lark.js/mvc shared singleton), ANY reference
-// to @lark.js/mvc inside an HMR accept callback registers the calling
-// view module as a shared consumer. Webpack then marks the main chunk —
-// which initializes the MF shared scope — as needing a hot-update. But
-// since main's code didn't actually change, no main.<hash>.hot-update.js
-// is emitted, so the HMR runtime request 404s:
-//   ChunkLoadError: Loading hot update chunk main failed.
-//   (missing: http://localhost:<port>/main.<hash>.hot-update.js)
-// The accept callback never runs → UI never updates.
-//
-// globalThis.__lark_hmr__ sidesteps module resolution entirely: no import,
-// no require, no chunk-graph side effect. Set once when this module loads
-// (which happens before any HMR callback can fire, since the framework
-// boots before views mount). Functions are hoisted (function declarations),
-// so they are already defined when this top-level code runs.
+// Set once when this module loads. Framework.boot() also registers it to
+// guard against tree-shaken module side effects.
 if (typeof globalThis !== "undefined" && !globalThis.__lark_hmr__) {
   globalThis.__lark_hmr__ = {
-    hotSwapByView,
+    hotSwapByComponent,
   };
 }

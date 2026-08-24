@@ -1,39 +1,36 @@
 /**
  * Counter — internal signal state next to Storybook-controlled props.
  *
- * Tweaking the `step` control does NOT reset `count`: larkRender pushes args
- * through the frame's params signals instead of re-mounting, exactly like a
- * parent view pushing component props through `mountZone`. The template reads
- * `params.step` / `params.label` (tracked), so control changes re-render.
+ * Tweaking the `step` control does NOT reset `count`: larkRender re-renders
+ * the same component instance (the reconciler pushes changed props through
+ * per-key signals), exactly like a parent component re-rendering. The body
+ * reads `props.step` / `props.label` (tracked), so control changes re-render.
  *
  * Note the arg is called `initialCount`, not `count` — `count` lives in a
- * view-local signal and only its initial value comes from the args.
+ * `useSignal` slot and only its initial value comes from the args.
  */
-import { defineView, jsxTemplate, useSignal } from "@lark.js/mvc";
+import { useSignal } from "@lark.js/mvc";
 import styles from "./counter.module.css";
 
 export interface CounterProps {
-  label: string;
-  step: number;
-  initialCount: number;
+  label?: string;
+  step?: number;
+  initialCount?: number;
+  /** Child → parent callback (wired to the Actions panel by larkRender). */
+  onChange?: (data: { count: number }) => void;
 }
 
-export default defineView<CounterProps>((ctx, params) => {
-  const props = (params ?? {}) as Partial<CounterProps>;
-  const initial = props.initialCount ?? 0;
+export default function Counter(props: CounterProps) {
+  const count = useSignal(props.initialCount ?? 0);
 
-  const count = useSignal("count", initial);
-
-  // Read props lazily (tracked in the template) — Storybook pushes new args
-  // through the params signals and setup does not run again.
-  const step = (): number => props.step ?? 1;
+  const step = props.step ?? 1;
 
   const change = (next: number): void => {
     count.value = next;
-    ctx.owner.fire("change", { count: next });
+    props.onChange?.({ count: next });
   };
 
-  const template = jsxTemplate(() => (
+  return (
     <div class={styles["counter"]}>
       <div class={styles["counter__label"]}>{props.label ?? "Counter"}</div>
 
@@ -45,16 +42,16 @@ export default defineView<CounterProps>((ctx, params) => {
           variant="neutral"
           appearance="outlined"
           size="s"
-          onClick={() => change(count.value - step())}
+          onClick={() => change(count.value - step)}
         >
-          - {step()}
+          - {step}
         </wa-button>
         <wa-button
           type="button"
           variant="neutral"
           appearance="plain"
           size="s"
-          onClick={() => change(props.initialCount ?? initial)}
+          onClick={() => change(props.initialCount ?? 0)}
         >
           Reset
         </wa-button>
@@ -63,13 +60,11 @@ export default defineView<CounterProps>((ctx, params) => {
           variant="brand"
           appearance="filled"
           size="s"
-          onClick={() => change(count.value + step())}
+          onClick={() => change(count.value + step)}
         >
-          + {step()}
+          + {step}
         </wa-button>
       </wa-button-group>
     </div>
-  ));
-
-  return { template };
-});
+  );
+}

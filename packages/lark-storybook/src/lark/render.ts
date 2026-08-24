@@ -1,29 +1,27 @@
 /**
- * Bridge between Storybook's `@storybook/html` renderer and Lark views.
+ * Bridge between Storybook's `@storybook/html` renderer and Lark function
+ * components.
  *
- * A story returns a plain `<div id="lark-story-N">`. Storybook appends it to
- * the canvas; on the next microtask (once the element is really in the
- * document, which `frame.mountView` requires) the div is turned into a Lark
- * child frame of the hidden host frame and the view is mounted into it.
+ * A story returns a plain `<div>`; the component is rendered into it with
+ * `render(jsx(component, props), el)` — hostless, no frames, no registration.
  *
  * ## Args
  *
- * - First render: args are passed as `viewInitParams`, i.e. they arrive in the
- *   reactive `params` proxy of the view's setup function.
- * - Later renders: args are pushed into the frame's per-key params signals —
- *   the same channel `frame.mountZone` uses for component props — so a view
- *   that reads `params.key` in its template re-renders automatically. Nothing
- *   is re-mounted, so `useSignal` state / store subscriptions survive control
+ * - Every render call passes the current args as props. The reconciler
+ *   matches the existing component instance (same function, same position)
+ *   and pushes CHANGED props through its per-key signals — nothing is
+ *   re-mounted, so `useSignal` state / store subscriptions survive control
  *   tweaks. Opt out per story with `remountOnArgsChange: true`.
  * - Function-valued args (the handlers Storybook injects for `argTypes` with
- *   `{ action: "..." }`) and `undefined` args are stripped before they reach
- *   the params; functions are instead wired to the frame events listed in
- *   `events`.
+ *   `{ action: "..." }`) and `undefined` args are stripped from the data
+ *   props; the names listed in `events` are instead exposed to the component
+ *   as `on{Name}` callback props (`"select"` → `onSelect`) that forward to
+ *   the live arg — so child → parent callbacks land in the Actions panel.
  */
-import { Frame, State, registerViewClass, ensureViewName, signal, batch } from "@lark.js/mvc";
-import type { AnyLarkView, FrameObj, ViewSetup } from "@lark.js/mvc";
+import { render, unmount, State } from "@lark.js/mvc";
+import type { Component } from "@lark.js/mvc";
+import { jsx } from "@lark.js/mvc/jsx-runtime";
 import { getChannel } from "storybook/preview-api";
-import { bootLarkStorybook, getLarkHostFrame } from "./boot";
 
 /** Args object shape Storybook hands to a story function. */
 type StoryArgs = Record<string, unknown>;
@@ -34,47 +32,36 @@ export interface LarkStoryContext {
 }
 
 export interface LarkStoryConfig<TArgs extends object = StoryArgs> {
-  /** The component returned by `defineView` (or a plain setup function). */
-  view: ViewSetup | AnyLarkView;
+  /** The function component to render. */
+  component: Component;
   /**
-   * Optional explicit view path for registration and mounting. Defaults to
-   * the component's auto-registered internal name. Embedded child components
-   * need no registration — they auto-register when the template serializes.
-   */
-  path?: string;
-  /**
-   * Frame event names (as fired by `ctx.owner.fire(name, data)`) to forward to
-   * the like-named function arg. Combine with
-   * `argTypes: { increment: { action: "increment" } }` to get child → parent
-   * events in Storybook's Actions panel.
+   * Event names to expose to the component as `on{Name}` callback props
+   * (`"select"` → `onSelect`). Each callback forwards to the like-named
+   * function arg. Combine with `argTypes: { select: { action: "select" } }`
+   * to get child → parent callbacks in Storybook's Actions panel.
    */
   events?: readonly string[];
   /**
    * Derive `State` keys from args. Applied before each render — `State.set`
-   * notifies tracked readers, so stories can drive views whose templates
+   * notifies tracked readers, so stories can drive components whose bodies
    * read `State.get(key)`.
    */
   state?: (args: TArgs) => Record<string, unknown>;
   /**
-   * Re-mount the view from scratch on every args change instead of pushing
-   * props into the existing view. Default `false`.
+   * Re-mount the component from scratch on every args change instead of
+   * pushing props into the existing instance. Default `false`.
    */
   remountOnArgsChange?: boolean;
 }
 
 interface MountedStory {
-  /** Frame id === DOM id of the container element. */
-  frameId: string;
   /** Storybook story id. */
   storyId: string;
   el: HTMLElement;
-  /** Latest args — read live by the forwarded event handlers. */
+  /** Latest args — read live by the forwarded callback props. */
   args: StoryArgs;
-  /** Lark view path. */
-  path: string;
-  /** Frame events forwarded to function args. */
-  events: readonly string[];
-  mounted: boolean;
+  /** Stable `on{Name}` callback props (identity survives arg pushes). */
+  handlers: Record<string, (data?: unknown) => void>;
 }
 
 /** storyId → mounted story. */
@@ -83,12 +70,12 @@ const stories = new Map<string, MountedStory>();
 /** Story ids the manager asked to hard-remount (see `bindChannel`). */
 const pendingRemount = new Set<string>();
 
-let frameSeq = 0;
+let storySeq = 0;
 let channelBound = false;
 
 /**
- * Keep only real template data: functions are event handlers and `undefined`
- * would overwrite the defaults a view applies in its setup.
+ * Keep only real data props: functions are event handlers and `undefined`
+ * would overwrite the defaults a component applies in its body.
  */
 function dataArgs(args: StoryArgs): Record<string, unknown> {
   const out: Record<string, unknown> = {};
@@ -99,33 +86,38 @@ function dataArgs(args: StoryArgs): Record<string, unknown> {
   return out;
 }
 
-/**
- * Push new args through the frame's per-key params signals — the reactive
- * channel `mountZone` uses for component props. Views reading `params.key`
- * in a tracked region re-render once (batched); same-value writes are no-ops.
- */
-function pushArgs(frame: FrameObj, data: Record<string, unknown>): void {
-  const store = frame.paramsStore;
-  if (!store) return;
-  batch(() => {
-    for (const key of Object.keys(data)) {
-      const sig = store.signals.get(key);
-      if (sig) {
-        sig.value = data[key];
-      } else {
-        store.signals.set(key, signal(data[key]));
-      }
-    }
-  });
+/** `"select"` → `"onSelect"`. */
+function propNameFor(event: string): string {
+  return "on" + event.charAt(0).toUpperCase() + event.slice(1);
+}
+
+/** Build stable callback props that forward to the LIVE args. */
+function makeHandlers(
+  entry: MountedStory,
+  events: readonly string[],
+): Record<string, (data?: unknown) => void> {
+  const handlers: Record<string, (data?: unknown) => void> = {};
+  for (const name of events) {
+    handlers[propNameFor(name)] = (data?: unknown) => {
+      const handler = entry.args[name];
+      if (typeof handler === "function") (handler as (d?: unknown) => void)(data);
+    };
+  }
+  return handlers;
+}
+
+/** The props object for a render pass: current data args + callback props. */
+function buildProps(entry: MountedStory): Record<string, unknown> {
+  return { ...dataArgs(entry.args), ...entry.handlers };
 }
 
 /**
  * Listen for the manager's "remount" request.
  *
  * The story id is only *recorded* here and consumed by the next `render` call,
- * so this never destroys a frame that Storybook is about to re-use — the
- * relative ordering of this listener and Storybook's own (async) re-render does
- * not matter.
+ * so this never unmounts a tree that Storybook is about to re-use — the
+ * relative ordering of this listener and Storybook's own (async) re-render
+ * does not matter.
  */
 function bindChannel(): void {
   if (channelBound) return;
@@ -146,19 +138,9 @@ function bindChannel(): void {
   }
 }
 
-/** Tear down a story's frame and clear its container. */
+/** Tear down a story's component tree. */
 function destroy(entry: MountedStory): void {
-  const host = getLarkHostFrame();
-  if (host && host.childrenMap[entry.frameId]) {
-    // Unmounts the view, then removes the frame from the registry and from the
-    // host frame's children map.
-    host.unmountFrame(entry.frameId);
-  } else {
-    Frame.get(entry.frameId)?.unmountView();
-    Frame.getAll().delete(entry.frameId);
-  }
-  entry.el.innerHTML = "";
-  entry.mounted = false;
+  unmount(entry.el);
   stories.delete(entry.storyId);
 }
 
@@ -169,63 +151,15 @@ function sweep(): void {
   }
 }
 
-/** Forward frame events to the matching function arg. */
-function bindEvents(frame: FrameObj, entry: MountedStory): void {
-  for (const name of entry.events) {
-    frame.on(name, (data?: Record<string, unknown>) => {
-      const handler = entry.args[name];
-      if (typeof handler === "function")
-        (handler as (d?: unknown) => void)(data);
-    });
-  }
-}
-
 /**
- * Run `cb` once `el` is in the document. Storybook appends the story element
- * synchronously right after the story function returns, so the microtask is
- * normally enough; the rAF loop is a bounded safety net.
- */
-function whenConnected(el: HTMLElement, cb: () => void): void {
-  let tries = 0;
-  const check = (): void => {
-    if (el.isConnected) {
-      cb();
-      return;
-    }
-    if (++tries > 60) return;
-    requestAnimationFrame(check);
-  };
-  queueMicrotask(check);
-}
-
-/** Create the child frame and mount the view into it. */
-function mount(entry: MountedStory): void {
-  const host = getLarkHostFrame();
-  if (!host) {
-    console.error(
-      "[lark-storybook] no host frame — did bootLarkStorybook() run?",
-    );
-    return;
-  }
-  const frame = host.mountFrame(
-    entry.frameId,
-    entry.path,
-    dataArgs(entry.args),
-  );
-  entry.mounted = true;
-  bindEvents(frame, entry);
-}
-
-/**
- * Build a Storybook `render` function that mounts a Lark view.
+ * Build a Storybook `render` function that renders a Lark function component.
  *
  * @example
  * const meta: Meta<Args> = {
  *   title: "Components/Button",
  *   render: larkRender<Args>({
- *     path: "components/button",
- *     view: Button,
- *     events: ["click"],
+ *     component: Button,
+ *     events: ["click"], // → onClick prop → the `click` arg → Actions panel
  *   }),
  *   argTypes: { click: { action: "click" } },
  * };
@@ -233,21 +167,12 @@ function mount(entry: MountedStory): void {
 export function larkRender<TArgs extends object = StoryArgs>(
   config: LarkStoryConfig<TArgs>,
 ): (args: TArgs, context: LarkStoryContext) => HTMLElement {
-  let mountPath: string;
-  if (config.path) {
-    mountPath = config.path;
-    registerViewClass(mountPath, config.view);
-  } else {
-    mountPath = ensureViewName(config.view);
-  }
-
   const applyState = (args: TArgs): void => {
     if (!config.state) return;
     State.set(config.state(args)); // per-key signals notify tracked readers
   };
 
   return (args: TArgs, context: LarkStoryContext): HTMLElement => {
-    bootLarkStorybook();
     bindChannel();
     sweep();
 
@@ -256,45 +181,35 @@ export function larkRender<TArgs extends object = StoryArgs>(
       pendingRemount.delete(context.id) || config.remountOnArgsChange === true;
     const existing = stories.get(context.id);
 
-    // Re-use the live frame and push the new args as props. Returning the very
-    // same element also makes @storybook/html's renderToCanvas bail out early
-    // (`canvasElement.firstChild === element && !forceRemount`), so the DOM is
-    // never thrown away behind the framework's back.
+    // Re-use the live tree: render() with fresh props diffs in place — the
+    // instance is matched by function identity, changed props are pushed
+    // through per-key signals, and useSignal state survives. Returning the
+    // very same element also makes @storybook/html's renderToCanvas bail out
+    // early, so the DOM is never thrown away behind the framework's back.
     if (existing && !remount && existing.el.isConnected) {
       existing.args = storyArgs;
       applyState(args);
-      const frame = Frame.get(existing.frameId);
-      const view = frame?.view;
-      // Not yet mounted → the pending mount will pick up `entry.args` itself.
-      if (frame && view && view.signature.value > 0) {
-        pushArgs(frame, dataArgs(storyArgs));
-      }
+      render(jsx(config.component, buildProps(existing)), existing.el);
       return existing.el;
     }
 
     if (existing) destroy(existing);
 
-    const frameId = `lark-story-${++frameSeq}`;
     const el = document.createElement("div");
-    el.id = frameId;
-    el.dataset["larkView"] = mountPath;
+    el.id = `lark-story-${++storySeq}`;
 
     const entry: MountedStory = {
-      frameId,
       storyId: context.id,
       el,
       args: storyArgs,
-      path: mountPath,
-      events: config.events ?? [],
-      mounted: false,
+      handlers: {},
     };
+    entry.handlers = makeHandlers(entry, config.events ?? []);
     stories.set(context.id, entry);
 
     applyState(args);
-    whenConnected(el, () => {
-      // A newer render may have replaced this entry while we waited.
-      if (stories.get(context.id) === entry) mount(entry);
-    });
+    // Hostless render works on a detached element — no connection dance.
+    render(jsx(config.component, buildProps(entry)), el);
 
     return el;
   };

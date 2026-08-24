@@ -1,111 +1,164 @@
-# Rendering Internals: Render Effects, Batching & the Real-DOM Diff
+# Rendering Internals: Instance Effects, Anchor Slices & Batching
 
-Source of truth: `src/view.ts` (`createRenderEffect`/`renderCore`),
-`src/dom.ts`, `src/frame.ts` (`mountZone`), `src/jsx/serialize.ts`.
+Source of truth: `src/jsx/reconcile.ts` (reconciler + `render`/`unmount`),
+`src/component.ts` (instances, hook slots, props store).
 Read this when debugging "why didn't it re-render", double renders, flicker,
-lost focus, child views unexpectedly remounting, or performance.
+lost focus, child instances unexpectedly remounting, or performance.
 
-## The render effect (one per view)
+## The render effect (one per instance)
 
-Every templated view gets exactly one `@preact/signals-core` `effect()`,
-created by `mountCtx` → `createRenderEffect(ctx)`. Its dispose lives in
-`ctx.cleanups` (run on unmount and before HMR re-setup).
+Every component instance gets exactly one `@preact/signals-core` `effect()`,
+created in the post-commit flush of the pass that mounted it
+(`mountComponent`). Its dispose lives on `instance.renderDispose` (run first
+during teardown so nothing re-enters).
 
-Each pass (`renderCore`):
+Each pass (`renderComponent`):
 
 ```
-read invalidation signal (ctx.render() bumps it — manual/HMR trigger)
-signature.value++            // wrapAsync guards die on EVERY pass
-fire("render")
-destroy destroyOnRender resources
-html = template(viewId, refData)   // TRACKED — dependency set re-collected
-                                    // from scratch every pass (branch switches
-                                    // update subscriptions automatically)
-domGetNode → domSetChildNodes keyed diff → applyIdUpdates → applyDomOps
-untracked( endUpdate → mountZone )  // child mounting must not subscribe parent
+read instance.invalidate      // manual/HMR re-render channel
+beginRender(instance)         // set currentInstance, hook cursor = 0
+out = fn(props)               // TRACKED — dependency set re-collected from
+                              // scratch every pass (branch switches update
+                              // subscriptions automatically)
+endRender(instance)           // hook-count stability check (dev warning)
+patchChildren(host, prev, out, ns, END_ANCHOR)   // slice diff
+untracked:
+  flushOps                    // child instance mounts, batched prop pushes, refs
+  flushInstanceEffects        // pending useEffect callbacks (cleanup-first)
 ```
 
 Errors thrown during a pass route through `funcWithTry` to the global error
 sink (`config.error`) instead of propagating to the signal write site.
 
-There is **no dirty-checking, no digest queue, no dispatcher walk, no task
-scheduler** — the effect IS the dirty check. `Framework.task` is gone; use
-`batch()` for write coalescing.
+The root (`render(vnode, container)`) works the same way: a root record
+holds a vnode signal + its own render effect, so repeat `render()` calls and
+Signal children at the root both go through the normal diff.
+
+There is **no dirty-checking, no digest queue, no dispatcher walk** — the
+effect IS the dirty check.
+
+## Hostless slices & the end anchor
+
+An instance owns a contiguous DOM RANGE in its parent element:
+`collectDoms(nodes) ++ [end]`, where `end` is a persistent comment node
+(`<!---->`). Invariants:
+
+- The slice's order pass is a REVERSE insertion walk anchored at `end`
+  (the instance does not own the host, so there is no `firstChild` cursor).
+  Element children use the same walk with a `null` anchor (append).
+- Parents treat a component range as an opaque atomic unit when moving or
+  removing keyed siblings — nested instance ranges are collected
+  recursively.
+- Empty output leaves just the anchor; the range grows/shrinks in place
+  between stable siblings.
+- Namespace is captured from the mount position (a component under
+  `<foreignObject>` renders HTML, not SVG).
+
+Anchors are comment nodes: invisible to layout and `querySelector`, but they
+DO appear in `innerHTML` and affect `:empty` — strip `<!---->` in test
+assertions.
 
 ## When do effects run?
 
 - A plain signal write outside `batch()` re-runs subscribed effects
   **synchronously** at the write site.
 - Writes inside `batch(fn)` coalesce — subscribers run once at batch end.
-  Auto-batched call sites: DOM event dispatch (`EventDelegator`),
-  child→parent trampolines (`mountZone`), `State.set`, `store.setState`,
-  props pushes (`writeParams`), `seedParams`.
+  Auto-batched call sites: per-node DOM event listeners, `State.set`,
+  `store.setState`, prop pushes (`writeInstanceProps`), HMR swaps.
 - Same-value writes (`===`) are no-ops.
 - `computed` is lazy — it recomputes on read, only if a dependency changed.
 - Cycle guard: an effect writing a signal it also reads throws
   `Cycle detected` (after 100 batch iterations).
 
-## refData tokens (object values through HTML)
+**Re-entrancy protection** (why children never render mid-parent-pass):
+new-instance mounts and prop pushes are DEFERRED ops flushed after the
+slice's DOM commit inside `untracked()`; prop writes are batched, so a child
+invalidated during a parent pass renders after the parent completes, exactly
+once. Nested render passes save/restore the hook context (stack discipline).
 
-The serializer cannot put live objects in an HTML string, so object/function
-attribute values and the whole component-props object are stored in the
-view's `ctx.refData` under `\x1e<N>` tokens (`refFn`); the attribute carries
-the token. `ctx.translate(token)` resolves it back. Tokens not re-emitted by
-the latest render are swept (`pruneRefData`) — fresh identities every render
-do not leak.
+## The keyed diff
 
-## Real-DOM diff (`src/dom.ts`)
+Node kinds: **text**, **element**, **raw** (trusted HTML block),
+**component** (instance + slice).
 
-1. Template returns an HTML string.
-2. `domGetNode` parses it in a detached `createHTMLDocument` (with wrapper
-   handling for `<tr>/<td>/<option>/<svg>/<math>` etc.).
-3. `domSetChildNodes` keyed diff: compare key = element `id` (unless
-   auto-generated) or `v-lark` path. Matched nodes are moved/patched in
-   place; form state (`input.value/checked`, `textarea.value`,
-   `option.selected`) is synced as DOM properties.
-4. `id` attribute changes are deferred (`applyIdUpdates`) so frame lookups
-   stay valid mid-diff; mutations batched via `applyDomOps`
-   (append/remove/replace/insertBefore tuples).
-5. An element carrying `v-lark` with an unchanged view path keeps its
-   subtree — the child view is NOT remounted; only its props signals update.
+1. **Normalize** — flatten arrays/Fragments, unwrap Signal children (tracked
+   read), drop `null/boolean/""`; function tags become component items
+   (never invoked inline).
+2. **Match** — explicit `key` → keyed map (first wins); unkeyed → positional
+   pool, first compatible (same kind + tag / canonical component fn)
+   unclaimed node. Incompatible matches are replaced, not patched.
+3. **Patch / create** — text: `nodeValue`; element: attribute snapshot diff +
+   recurse into children; raw: keep nodes when the html string is identical,
+   otherwise swap the whole block; component: queue a props push (create =
+   new instance + anchor, mounted post-commit).
+4. **Remove** — unmatched old nodes are destroyed depth-first: render effect
+   disposed first, child instances bottom-up, hook slots + `onCleanup`
+   reverse, element refs get `null`, then the DOM range is removed.
+5. **Order pass** — reverse walk anchored at the slice end (or `null` for
+   element children), `insertBefore` any node not already in place.
+6. **Post-commit flush (untracked)** — instance mounts, batched per-key prop
+   pushes, ref calls. Child bodies never subscribe the parent's effect; each
+   child owns its own render effect.
 
-Runtime-injected DOM (e.g. buttons appended after render) diverges from the
-template output, so ANY re-render's diff strips it — replay such
-enhancements after each render (`ctx.on("render", ...)` + `setTimeout 0`, or
-a `useSignalEffect` keyed to the same data).
+### Attribute snapshot diffing
 
-## mountZone (child frames, untracked)
+Attributes are compared via a **resolved snapshot** per element: Signals
+unwrapped, `class`+`className` merged into one string, `style` normalized to
+a string. (Comparing raw props would miss Signal-valued attributes — the
+instance is stable while `.value` changes.) Form-state props
+(`value`/`checked`/`selected`) are synced as DOM **properties** and
+re-asserted every render, so the template value wins over user edits.
 
-After the diff, `endUpdate` → `mountZone` scans `[v-lark]` hosts inside the
-zone:
+### Events
 
-- **New host**: mount a child frame (`mountFrame`), seed its reactive params
-  store from the `p-lark` token + URI params, wire `on[A-Z]` handler props to
-  stable trampolines.
-- **Existing host**: re-sync trampoline `.current` targets and batch-write
-  the fresh props into the per-key params signals (`writeParams`) — keys
-  absent this round are removed (child reads `undefined`). The child
-  re-renders only if its tracked regions read a changed key.
+One native listener per (node, type), attached once, with a stable proxy
+holding `.current`. Renders swap `.current`; a removed handler prop parks
+the binding (no removeEventListener churn). The proxy wraps handler calls in
+`batch()`.
 
-The whole phase runs inside `untracked()` so child setups/renders never
-register dependencies on the parent's effect; each child owns its own render
-effect.
+### Props store (`src/component.ts`)
+
+Per-instance per-key signals behind one stable proxy (`props`). Parent
+pushes batch-write changed values; previously-pushed keys absent this round
+are deleted (child reads `undefined`). `key` never lands in props. Props are
+**real in-memory objects end to end** — no wire attributes, no tokens, no
+serialization.
+
+## Runtime-injected DOM
+
+DOM injected outside the component's output (e.g. a button appended by a
+third-party lib) is invisible to the reconciler's bookkeeping: it is not
+removed by diffs of SIBLING nodes, but content injected INSIDE a managed
+element can be displaced when that element's children change, and the first
+`render()` on a container clears any pre-existing static content. Own such
+nodes via `ref` + `useEffect`, or replay the enhancement in a
+`useSignalEffect` keyed to the same data.
 
 ## Debugging checklist
 
-- Nothing re-rendered? The read was probably not in a tracked region (setup
-  body / event handler / async callback are snapshots) — move the read into
-  the template, `computed`, or `useSignalEffect`.
+- Nothing re-rendered? The read was probably not in a tracked region (event
+  handler / async callback are snapshots) — move the read into the component
+  body, `useComputed`, or `useSignalEffect`.
 - Write "didn't work"? Shallow comparison — in-place mutation is invisible;
   replace the reference (`sig.value = [...sig.value, x]`).
-- `Cycle detected`? A template/computed/effect writes a signal it also reads
-  — derive with `computed` or move the write to a handler.
+- `Cycle detected`? A body/computed/effect writes a signal it also reads —
+  derive with `useComputed` or move the write to a handler.
+- State resets every render? A bare `signal()`/object created in the body is
+  recreated per pass — use `useSignal`/`useRef`/`useMemo`.
+- "Hooks can only be called inside a component function"? A hook ran in a
+  handler/async callback, or a component was CALLED instead of used as a tag.
+- Hook-count warning? A hook is inside a condition/loop — hoist it.
 - Too many renders? Wrap multi-writes in `batch()` (handlers already are).
-- List not reordering / inputs losing state? Add stable `key`/`id` compare
-  keys to loop items.
-- Child view remounting on every parent render? Its host `id`/`key` or
-  `v-lark` path changes between renders; keep both stable.
-- Async callback silently skipped? `ctx.wrapAsync` guards die on EVERY
-  reactive render pass (signature bump) — use a sequence counter for flows
-  that must survive re-renders.
-- Injected DOM disappearing? See "Runtime-injected DOM" above.
+  A child re-rendering with every parent render usually reads a fresh-
+  identity prop (inline object/children/callback) in its body.
+- List not reordering / inputs losing state? Add stable `key`s to loop items
+  (sibling-scoped; they are not DOM ids).
+- Child instance remounting on every parent render? Its `key` or component
+  function identity changes between renders; keep both stable (don't define
+  components inside other components).
+- HTML showing up as literal text? Strings are text by design — wrap trusted
+  markup in `raw(html)`.
+- Element ref is `null`? Refs fill post-commit — read them in
+  `useEffect`, not during the render body.
+- `<!---->` in innerHTML assertions? Those are instance/root end anchors —
+  strip them when comparing markup.

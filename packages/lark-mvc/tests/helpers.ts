@@ -20,33 +20,12 @@
  * SOFTWARE.
  */
 
+/** Shared test helpers. */
+
 /**
- * Ambient type declarations for Lark Mvc's global and module augmentations.
- *
- * Declares the `globalThis.__lark_hmr__` handle used by auto-injected HMR
- * snippets, the `import.meta.hot` HMR context, and module types for `*.css`
- * imports so bundlers resolve them correctly.
+ * Strip the reconciler's component/root end-anchor comments (`<!---->`) from
+ * an innerHTML snapshot so assertions compare visible markup only.
  */
-declare global {
-  var __lark_hmr__: {
-    hotSwapByComponent: (oldFn: unknown, newFn: unknown) => boolean;
-  };
-
-  interface ImportMeta {
-    /** HMR context provided by Vite / webpack dev server. Undefined in production. */
-    hot?: {
-      accept(cb?: (mod: { default?: unknown } | undefined) => void): void;
-      dispose(cb: (data: Record<string, unknown>) => void): void;
-      invalidate(): void;
-      data?: Record<string, unknown>;
-    };
-  }
+export function stripAnchors(html: string): string {
+  return html.replace(/<!---->/g, "");
 }
-
-// CSS module type declarations
-declare module "*.css" {
-  const content: string;
-  export default content;
-}
-
-export {};

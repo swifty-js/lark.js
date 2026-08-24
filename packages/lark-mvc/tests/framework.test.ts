@@ -22,15 +22,15 @@
 
 import { describe, it, expect } from "vitest";
 import { Framework } from "../src/framework";
-import { defineView } from "../src/view";
 import { State } from "../src/state";
-import { Frame, createFrame, registerViewClass } from "../src/frame";
-import { getViewClass } from "../src/view-registry";
+import { getComponent } from "../src/component-registry";
+import { render, unmount } from "../src/jsx/reconcile";
+import { createVNode, type Component } from "../src/jsx/vnode";
 import type { ChangeEvent } from "../src/types";
 
 describe("Framework", () => {
   // ============================================================
-  // A. getConfig / setConfig / isBooted (original tests)
+  // A. getConfig / setConfig / isBooted
   // ============================================================
 
   describe("getConfig / setConfig (C7)", () => {
@@ -218,18 +218,18 @@ describe("Framework", () => {
   });
 
   // ============================================================
-  // D. Base (EventEmitter)
+  // D. createEmitter
   // ============================================================
 
-  describe("Base (EventEmitter)", () => {
-    it("Base is an EventEmitter constructor", () => {
+  describe("createEmitter", () => {
+    it("returns an emitter with on/off/fire", () => {
       const emitter = Framework.createEmitter();
       expect(typeof emitter.on).toBe("function");
       expect(typeof emitter.off).toBe("function");
       expect(typeof emitter.fire).toBe("function");
     });
 
-    it("Base instances can bind and fire events", () => {
+    it("emitter instances can bind and fire events", () => {
       const emitter = Framework.createEmitter();
       let received: ChangeEvent | undefined;
       emitter.on("test", (e?: ChangeEvent) => {
@@ -241,7 +241,7 @@ describe("Framework", () => {
       expect(Reflect.get(received ?? {}, "value")).toBe(42);
     });
 
-    it("Base instances support off to unbind", () => {
+    it("emitter instances support off to unbind", () => {
       const emitter = Framework.createEmitter();
       let callCount = 0;
       const handler = () => {
@@ -278,34 +278,14 @@ describe("Framework", () => {
     it("State has set method", () => {
       expect(typeof Framework.State.set).toBe("function");
     });
-
-    it("exposes View", () => {
-      expect(Framework.defineView).toBeDefined();
-      expect(typeof Framework.defineView).toBe("function");
-    });
-
-    it("exposes Frame", () => {
-      expect(Framework.Frame).toBeDefined();
-      expect(typeof Framework.Frame.get).toBe("function");
-    });
-
-    it("Frame has static createRoot", () => {
-      expect(typeof Framework.Frame.createRoot).toBe("function");
-    });
-
-    it("Frame has static getAll", () => {
-      expect(typeof Framework.Frame.getAll).toBe("function");
-      const all = Framework.Frame.getAll();
-      expect(all).toBeInstanceOf(Map);
-    });
   });
 
   // ============================================================
-  // F. Cache class
+  // F. Cache factory
   // ============================================================
 
-  describe("Cache class", () => {
-    it("Cache is a constructable class", () => {
+  describe("createCache", () => {
+    it("returns a cache api", () => {
       const cache = Framework.createCache({ maxSize: 10 });
       expect(cache).toBeDefined();
       expect(typeof cache.set).toBe("function");
@@ -370,74 +350,47 @@ describe("Framework", () => {
   // ============================================================
   // G. Boot lifecycle
   //
-  // NOTE: boot() sets module-level `booted = true` with no way to
-  // reset it. Tests in this section assume boot has not been called
-  // yet. If tests run in a different order or another suite calls
-  // boot() first, some assertions about initial state may fail --
-  // that would expose a real limitation: no un-boot mechanism.
+  // NOTE: boot() sets module-level `booted = true` and mutates the shared
+  // config with no way to reset. Tests here therefore only assert
+  // order-independent facts.
   // ============================================================
 
   describe("boot lifecycle", () => {
-    it("isBooted returns false before boot", () => {
-      // This may fail if another test already called boot().
-      // That is itself a finding: there is no way to un-boot.
-      expect(typeof Framework.isBooted()).toBe("boolean");
-    });
-
-    it("boot sets isBooted to true", () => {
+    it("boot sets isBooted, merges config, and renders the default view", () => {
       const el = document.createElement("div");
       el.id = "boot-test-root";
       document.body.appendChild(el);
-      try {
-        Framework.boot({ rootId: "boot-test-root" });
-        expect(Framework.isBooted()).toBe(true);
-      } finally {
-        el.remove();
+      function BootHome() {
+        return createVNode("p", { children: "booted-home" });
       }
-    });
-
-    it("boot creates root frame", () => {
-      // createRoot() is a one-shot: the root frame is cached at module level.
-      // If boot() was already called by a prior test, the existing root is
-      // reused and the new rootId is silently ignored. This is a real
-      // limitation -- there is no way to re-root the framework.
-      const el = document.createElement("div");
-      el.id = "boot-frame-test";
-      document.body.appendChild(el);
-      try {
-        Framework.boot({ rootId: "boot-frame-test" });
-        const root = Framework.Frame.getRoot();
-        expect(root).toBeDefined();
-        // The root frame's ID may be "boot-test-root" (from the prior test)
-        // or "boot-frame-test" (if this is the first boot). Either way,
-        // a root frame must exist.
-        expect(root!.id).toBeTruthy();
-      } finally {
-        el.remove();
-      }
-    });
-
-    it("boot merges config into the shared config object", () => {
-      const el = document.createElement("div");
-      el.id = "boot-config-merge-test";
-      document.body.appendChild(el);
       try {
         Framework.boot({
-          rootId: "boot-config-merge-test",
+          rootId: "boot-test-root",
           defaultPath: "/booted",
+          defaultView: BootHome,
         });
+        expect(Framework.isBooted()).toBe(true);
         expect(Framework.getConfig("defaultPath")).toBe("/booted");
+        // The route dispatch rendered the component into the root container
+        // (hostless — the <p> is a direct child).
+        expect(el.querySelector("p")?.textContent).toBe("booted-home");
+        expect(el.querySelector("p")?.parentElement).toBe(el);
       } finally {
+        unmount(el);
         el.remove();
       }
     });
 
-    it("boot normalizes LarkView config entries to registry-name strings", () => {
+    it("boot normalizes function-component config entries to registry names", () => {
       const el = document.createElement("div");
       el.id = "boot-norm-test";
       document.body.appendChild(el);
-      const Home = defineView(() => ({ template: () => "<div>home</div>" }));
-      const Missing = defineView(() => ({ template: () => "<div>404</div>" }));
+      function Home() {
+        return createVNode("div", { children: "home" });
+      }
+      function Missing() {
+        return createVNode("div", { children: "404" });
+      }
       try {
         Framework.boot({
           rootId: "boot-norm-test",
@@ -449,44 +402,21 @@ describe("Framework", () => {
         const uv = Framework.getConfig("unmatchedView") as string;
         const routes = Framework.getConfig("routes") as Record<string, string | { view: string }>;
         expect(typeof dv).toBe("string");
-        expect(getViewClass(dv)).toBe(Home.setup);
+        expect(getComponent(dv)).toBe(Home);
         expect(typeof uv).toBe("string");
-        expect(getViewClass(uv)).toBe(Missing.setup);
+        expect(getComponent(uv)).toBe(Missing);
         expect(routes["/home"]).toBe(dv);
         expect((routes["/deep"] as { view: string }).view).toBe(uv);
       } finally {
+        unmount(el);
         el.remove();
       }
     });
   });
 
   // ============================================================
-  // H. WAIT_OK / WAIT_TIMEOUT_OR_NOT_FOUND constants
+  // H. dispatch / State reactivity / use
   // ============================================================
-
-  describe("constants", () => {
-    it("exports WAIT_OK = 1", () => {
-      expect(Framework.WAIT_OK).toBe(1);
-    });
-
-    it("exports WAIT_TIMEOUT_OR_NOT_FOUND = 0", () => {
-      expect(Framework.WAIT_TIMEOUT_OR_NOT_FOUND).toBe(0);
-    });
-  });
-
-  // ============================================================
-  // I. Additional coverage: mark/unmark, dispatch, guard
-  // ============================================================
-
-  describe("mark and unmark", () => {
-    it("mark is a function", () => {
-      expect(typeof Framework.mark).toBe("function");
-    });
-
-    it("unmark is a function", () => {
-      expect(typeof Framework.unmark).toBe("function");
-    });
-  });
 
   describe("dispatch", () => {
     it("fires a custom DOM event on the target element", () => {
@@ -526,41 +456,26 @@ describe("Framework", () => {
   });
 
   describe("State reactivity (dispatcher-less)", () => {
-    it("State.set re-renders only views whose templates read the key", async () => {
+    it("State.set re-renders only components whose bodies read the key", () => {
       const readerEl = document.createElement("div");
-      readerEl.id = "fw-reader";
       document.body.appendChild(readerEl);
       const bystanderEl = document.createElement("div");
-      bystanderEl.id = "fw-bystander";
       document.body.appendChild(bystanderEl);
 
       let readerRenders = 0;
       let bystanderRenders = 0;
 
-      registerViewClass(
-        "fw/reader",
-        defineView(() => ({
-          template: () => {
-            readerRenders++;
-            return `<i>${String(State.get("fwTitle") ?? "")}</i>`;
-          },
-        })),
-      );
-      registerViewClass(
-        "fw/bystander",
-        defineView(() => ({
-          template: () => {
-            bystanderRenders++;
-            return "<i>static</i>";
-          },
-        })),
-      );
+      const Reader: Component = () => {
+        readerRenders++;
+        return `title:${String(State.get("fwTitle") ?? "")}`;
+      };
+      const Bystander: Component = () => {
+        bystanderRenders++;
+        return "static";
+      };
 
-      const readerFrame = createFrame("fw-reader");
-      readerFrame.mountView("fw/reader");
-      const bystanderFrame = createFrame("fw-bystander");
-      bystanderFrame.mountView("fw/bystander");
-      await new Promise((r) => setTimeout(r, 0));
+      render(createVNode(Reader, {}), readerEl);
+      render(createVNode(Bystander, {}), bystanderEl);
 
       expect(readerRenders).toBe(1);
       expect(bystanderRenders).toBe(1);
@@ -568,31 +483,18 @@ describe("Framework", () => {
       State.set({ fwTitle: "hello" }); // no digest call — reads subscribed
       expect(readerRenders).toBe(2);
       expect(bystanderRenders).toBe(1);
-      expect(readerEl.innerHTML).toContain("hello");
+      expect(readerEl.textContent).toBe("title:hello");
 
-      readerFrame.unmountView();
-      bystanderFrame.unmountView();
+      unmount(readerEl);
+      unmount(bystanderEl);
       readerEl.remove();
       bystanderEl.remove();
-      Frame.getAll().delete("fw-reader");
-      Frame.getAll().delete("fw-bystander");
     });
   });
 
   describe("use (module loader)", () => {
     it("is a function", () => {
       expect(typeof Framework.use).toBe("function");
-    });
-  });
-
-  describe("waitZoneViewsRendered", () => {
-    it("is a function", () => {
-      expect(typeof Framework.waitZoneViewsRendered).toBe("function");
-    });
-
-    it("resolves with WAIT_TIMEOUT_OR_NOT_FOUND for unknown viewId", async () => {
-      const result = await Framework.waitZoneViewsRendered("non-existent-view-id", 100);
-      expect(result).toBe(Framework.WAIT_TIMEOUT_OR_NOT_FOUND);
     });
   });
 });

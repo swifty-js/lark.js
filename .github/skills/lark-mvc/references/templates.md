@@ -1,23 +1,24 @@
-# JSX Template System
+# JSX Semantics
 
-Source of truth: `src/jsx/template.ts`, `src/jsx/serialize.ts`,
-`src/jsx/vnode.ts`, `src/jsx-runtime.ts`.
+Source of truth: `src/jsx/reconcile.ts`, `src/jsx/vnode.ts`,
+`src/jsx-runtime.ts`.
 
-There is **no template compiler and no `.html` files** — templates are
-JSX/TSX compiled by the standard automatic runtime
-(`jsxImportSource: "@lark.js/mvc"`). `jsxTemplate(renderFn)` adapts a
-`() => JSXNode` function into the framework's `ViewTemplate`
-(`(viewId, refData) => string`).
+There is **no template compiler, no `.html` files, and no HTML-string
+serialization** — JSX/TSX compiles through the standard automatic runtime
+(`jsxImportSource: "@lark.js/mvc"`) into pure-data VNodes, reconciled
+**directly into the live DOM** every render. The component body IS the
+template: it re-runs per render inside the instance's render effect, so
+every signal read subscribes the instance.
 
 ```tsx
-import { defineView, jsxTemplate, raw, signal, computed } from "@lark.js/mvc";
+import { useSignal, useComputed, raw } from "@lark.js/mvc";
 
-export default defineView(() => {
-  const user = signal({ isAdmin: false });
-  const items = signal<{ id: number; name: string }[]>([]);
-  const total = computed(() => items.value.length);
+export default function Dashboard() {
+  const user = useSignal({ isAdmin: false });
+  const items = useSignal<{ id: number; name: string }[]>([]);
+  const total = useComputed(() => items.value.length);
 
-  const template = jsxTemplate(() => (
+  return (
     <>
       {user.value.isAdmin ? <div class="admin">Admin</div> : <div>Guest</div>}
       <ul>
@@ -27,85 +28,79 @@ export default defineView(() => {
       </ul>
       <p>{total.value} items</p>
     </>
-  ));
-  return { template };
-});
-```
-
-The render function takes **no arguments** — it reads reactive data via
-closures (local signals, `params`, `State.get(key)`, `store.getState()`,
-`Router.parse()`). It runs inside the view's render effect, so every signal
-read subscribes the view. Templates without handlers/ctx can live at module
-level; templates capturing setup closures live inside setup.
-
-## Render pipeline (per pass)
-
-```
-renderFn() → VNode tree (plain jsx() calls)
-  → serialize(vnode, { viewId, refData })
-      escape text/attrs, unwrap Signals, encode @event attributes,
-      tokenize object/function values via refFn into refData
-  → stale refData tokens swept; inline handlers wired (__jsxN keys)
-  → HTML string → real-DOM keyed diff
-```
-
-## Output semantics
-
-| JSX                      | Behavior                                                            |
-| ------------------------ | ------------------------------------------------------------------- |
-| `{expr}` (string/number) | HTML-escaped text (`0` renders; `boolean/null/undefined` render "") |
-| `{sig}` (Signal)         | Auto-unwrapped to `sig.value` — a tracked read                      |
-| `{raw(html)}`            | Trusted raw HTML, no escaping — never pass untrusted input          |
-| `{cond && <div/>}`       | Conditional rendering (falsy values dropped)                        |
-| `{list.map(...)}`        | List rendering (arrays flattened)                                   |
-| `<>...</>` (Fragment)    | Multiple roots without a wrapper element                            |
-| `<Row item={x} />`       | Functional component — pure template partial, invoked at render     |
-| `<MyView prop={x} />`    | View component (`defineView` result) — mounted as a child frame     |
-
-## Attribute semantics
-
-| Attribute             | Behavior                                                                 |
-| --------------------- | ------------------------------------------------------------------------ |
-| `class` / `className` | String, array (falsy entries dropped), or `{ name: boolean }` map        |
-| `style`               | String, or camelCase object (kebab-cased; no implicit `px`)              |
-| `id` / `key`          | Keyed-diff compare key; `key` emits as `id` when no explicit `id` is set |
-| `disabled={true}`     | Boolean attribute → `disabled=""`; `false`/nullish omit the attribute    |
-| `title={sig}`         | Signal attribute values auto-unwrap (tracked read)                       |
-| `data-x={object}`     | Object/array/function values become live refData tokens                  |
-| `onClick={fn}`        | Delegated event (see views.md) — inline functions only                   |
-
-Component props are the exception to Signal unwrapping: a Signal passed as a
-component prop stays wrapped so the child can subscribe directly.
-
-Give loop items a stable `key` (or `id`) for keyed reordering instead of
-in-place rewrites — ids are document-global, keep them unique.
-
-## Functional components (template partials)
-
-Props in, JSX out — invoked during serialization, no lifecycle, no frame.
-Use `defineView` components for stateful composition.
-
-```tsx
-import type { JSXNode } from "@lark.js/mvc";
-
-function Badge(props: { label: string; children?: JSXNode }) {
-  return (
-    <span class="badge">
-      {props.label}: {props.children}
-    </span>
   );
 }
 ```
 
-`key` on a functional component forwards to its (keyless) single root.
+## Render pipeline (per pass)
+
+```
+fn(props) → VNode tree (plain jsx() calls — pure data)
+  → normalize (flatten arrays/Fragments, unwrap Signal children, drop
+      null/boolean/""; function tags become COMPONENT items — never invoked
+      inline)
+  → keyed slice diff vs the previous rendered nodes (anchor-bounded)
+  → patch attributes via a RESOLVED snapshot; swap per-node listeners
+  → post-commit flush (untracked): mount child instances, batch-push
+      changed props, call refs
+  → flushInstanceEffects: pending useEffect callbacks run
+```
+
+## Children semantics
+
+| JSX                      | Behavior                                                              |
+| ------------------------ | --------------------------------------------------------------------- |
+| `{expr}` (string/number) | Text node (`0` renders; `boolean/null/undefined/""` render nothing)  |
+| `{sig}` (Signal)         | Auto-unwrapped to `sig.value` — a tracked read                        |
+| `{raw(html)}`            | Trusted raw HTML block — parsed once, swapped wholesale when the string changes; never pass untrusted input |
+| `{cond && <div/>}`       | Conditional rendering (falsy values dropped)                          |
+| `{list.map(...)}`        | List rendering (arrays flattened)                                     |
+| `<>...</>` (Fragment)    | Multiple roots without a wrapper element                              |
+| `<Comp prop={x}>...</Comp>` | Function component — mounts a hostless INSTANCE; children arrive as `props.children` |
+
+Strings are ALWAYS text — dangerous characters stay text data, nothing is
+parsed as markup. `raw()` is the single explicit trusted-HTML path
+(dangerouslySetInnerHTML equivalent).
+
+**Every function tag is an instance** — there is no separate "stateless
+partial" tag kind. A helper that should stay inline in the caller's render
+is CALLED as a function instead: `{renderRow(item)}`.
+
+## Attribute semantics
+
+| Attribute             | Behavior                                                                    |
+| --------------------- | ---------------------------------------------------------------------------- |
+| `class` / `className` | String, array (falsy entries dropped), or `{ name: boolean }` map — merged   |
+| `style`               | String, or camelCase object (kebab-cased; `--x` custom props pass through)   |
+| `key`                 | Vnode-level sibling compare key (React semantics) — NOT written to the DOM   |
+| `id`                  | Ordinary attribute (no framework meaning)                                    |
+| `ref`                 | `(el \| null) => void` callback or `{ current }` cell — called post-commit   |
+| `disabled={true}`     | Boolean attribute → `disabled=""`; `false`/nullish remove the attribute      |
+| `title={sig}`         | Signal attribute values auto-unwrap (tracked read; updates diff correctly)   |
+| `value` / `checked` / `selected` | Synced as DOM **properties** on form elements; the template value re-asserts over user edits each render |
+| `data-x={object}`     | NOT supported — objects/functions are skipped with a dev warning             |
+| `onClick={fn}`        | Per-node listener (see components.md) — inline functions only                |
+
+Component props are the exception to Signal unwrapping: a Signal passed as a
+component prop stays wrapped so the child can subscribe directly. On
+component tags, `class`/`style`/`id`/`ref` are ordinary props (hostless —
+the component applies them itself).
+
+SVG (`<svg>`) and MathML (`<math>`) subtrees create namespaced elements;
+`<foreignObject>` children return to the HTML namespace. Component slices
+inherit the namespace of their mount position.
+
+Give loop items a stable `key` for keyed reordering instead of in-place
+rewrites — keys only need to be unique among siblings. On component tags,
+`key` preserves the instance (and its hook state) across reorders.
 
 ## Security / correctness notes
 
-- All text and attribute values are HTML-escaped; `raw()` is the only escape
-  hatch — treat its input as trusted.
+- All non-`raw()` content is text/attribute DATA — the reconciler never
+  parses strings as HTML, so there is no escaping to get wrong.
 - Native inline handlers (`onclick="..."` lowercase, or string values on
   `onClick`) are rejected — they would execute attribute text as JS.
 - Attribute names are validated (`/^[^\s"'>/=\\]+$/`) — dynamic prop spreads
   cannot inject attributes.
-- Writing a signal inside the render function is a reactivity cycle
-  (`Cycle detected`) — derive with `computed` instead.
+- Writing a signal inside the component body is a reactivity cycle
+  (`Cycle detected`) — derive with `useComputed` instead.

@@ -42,11 +42,6 @@ export function asRecord(value: unknown): Record<string, unknown> {
   return {};
 }
 
-/** Check if value is primitive or function (not a complex object) */
-function isPrimitiveOrFunc(value: unknown): boolean {
-  return !value || (typeof value !== "object" && typeof value !== "function");
-}
-
 // ============================================================
 // ID generation
 // ============================================================
@@ -140,62 +135,22 @@ export function funcWithTry(
 }
 
 // ============================================================
-// Data utilities
+// Dev warnings (deduped — render paths run every pass)
 // ============================================================
 
-/** Shared empty Set used as default value to avoid per-call allocation. */
-export const EMPTY_STRING_SET: ReadonlySet<string> = new Set();
+const warnedMessages = new Set<string>();
 
-/**
- * Set newData into oldData, tracking changed keys.
- * Returns whether any value changed.
- */
-export function setData(
-  newData: Record<string, unknown>,
-  oldData: Record<string, unknown>,
-  changedKeys: Set<string>,
-  excludes: ReadonlySet<string>,
-): boolean {
-  let changed = false;
-  for (const p in newData) {
-    if (hasOwnProperty(newData, p)) {
-      const now = newData[p];
-      const old = oldData[p];
-      if ((!isPrimitiveOrFunc(now) || old !== now) && !excludes.has(p)) {
-        changedKeys.add(p);
-        changed = true;
-      }
-      oldData[p] = now;
-    }
-  }
-  return changed;
+/** Warn once per unique message (render-path safe). */
+export function devWarn(message: string): void {
+  if (warnedMessages.has(message)) return;
+  warnedMessages.add(message);
+  // eslint-disable-next-line no-console
+  console.warn(`[lark-mvc] ${message}`);
 }
 
 // ============================================================
 // DOM utilities
 // ============================================================
-
-/** Get element by ID, or return the element itself if already an element */
-export function getById(id: string | Element | null): Element | null {
-  if (!id) return null;
-  if (typeof id === "object") return id;
-  return document.getElementById(id);
-}
-
-/** Get attribute from element safely */
-export function getAttribute(element: Element, attr: string): string {
-  return Element.prototype.getAttribute.call(element, attr) ?? "";
-}
-
-/** Ensure element has an ID, generating one if missing. Returns the ID. */
-export function ensureElementId(element: HTMLElement, prefix?: string): string {
-  const id = element.getAttribute("id");
-  if (id) return id;
-  element.autoId = 1;
-  const newId = generateId(prefix);
-  element.id = newId;
-  return newId;
-}
 
 /**
  * Check if node A is inside node B (or is the same node).

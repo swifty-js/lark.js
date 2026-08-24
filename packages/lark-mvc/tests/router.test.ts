@@ -98,10 +98,11 @@ describe("Router", () => {
       expect(result.get("nonexistent")).toBe("");
     });
 
-    it("parse results are cached", () => {
+    it("parsing the same href twice yields equal Locations (deterministic)", () => {
+      // NOTE: href→Location caching only activates after Framework.boot();
+      // pre-boot parses are recomputed. This asserts determinism, not caching.
       const result1 = Router.parse("https://a.b.c.com");
       const result2 = Router.parse("https://a.b.c.com");
-      // Same href returns equal result (may be cached object or new object)
       expect(result1).toStrictEqual(result2);
     });
   });

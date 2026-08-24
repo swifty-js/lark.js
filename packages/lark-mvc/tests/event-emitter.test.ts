@@ -203,8 +203,7 @@ describe("EmitterApi", () => {
       emitter.fire("e");
 
       const list =
-        (Reflect.get(emitter, "listeners") as Map<string, { handler: AnyFunc }[]>).get("\x1ee") ??
-        [];
+        (Reflect.get(emitter, "listeners") as Map<string, { handler: AnyFunc }[]>).get("e") ?? [];
       // After compaction, only `b` remains (no noop placeholders).
       expect(list.length).toBe(1);
       expect(list[0].handler).toBe(b);

@@ -27,12 +27,17 @@
  *
  * React's `@vitejs/plugin-react` and Vue's `@vitejs/plugin-vue` auto-inject
  * HMR boilerplate at compile time so users never write `import.meta.hot`
- * themselves. Lark's bundler integrations do the same for view modules:
- * any `.tsx` / `.jsx` / `.ts` / `.js` file whose default export is a
- * `defineView(...)` setup self-accepts, and on update calls
- * `hotSwapByView(old, new)` to swap the setup function on every mounted
- * instance — preserving view-local state (the `jsxTemplate` closure lives
- * inside the view module, so template edits ride the same swap).
+ * themselves. Lark's bundler integrations do the same for component modules:
+ * any `.tsx` / `.jsx` file with a line-leading `export default` self-accepts,
+ * and on update calls `hotSwapByComponent(old, new)` to swap the function on
+ * every live instance — preserving `useSignal`/`useRef` state.
+ *
+ * There is no compile-time "is this a component?" marker (components are
+ * plain functions), so the gate is intentionally broad and the RUNTIME is
+ * the guard: the snippet checks `typeof === "function"`, and
+ * `hotSwapByComponent` no-ops when the old value has no live instances and
+ * no registry entry. A `.tsx` file default-exporting a config object simply
+ * self-accepts and does nothing.
  *
  * ## Cross-bundler HMR API differences
  *
@@ -66,32 +71,36 @@
 export type Bundler = "vite" | "webpack" | "rspack";
 
 // ============================================================
-// View setup HMR injection
+// Component HMR injection
 // ============================================================
 
 /**
- * Generate the HMR snippet for a view module.
+ * Generate the HMR snippet for a component module.
  *
- * The snippet references `__lark_view__`, a named const holding the view
- * setup function. `injectViewHmrSnippet` (below) rewrites
- * `export default defineView(...)` into
- * `const __lark_view__ = defineView(...); export default __lark_view__;`
- * so the HMR callback can capture the old setup reference.
+ * The snippet references `__lark_component__`, a named const holding the
+ * module's default export. `injectComponentHmrSnippet` (below) rewrites
+ * `export default <expr>` into
+ * `const __lark_component__ = <expr>; export default __lark_component__;`
+ * so the HMR callback can capture the old reference.
  */
-function getViewHmrSnippet(bundler: Bundler): string {
+function getComponentHmrSnippet(bundler: Bundler): string {
   if (bundler === "vite") {
     return `
 // Auto-injected by larkMvcPlugin
 if (import.meta.hot) {
   import.meta.hot.dispose((data) => {
-    data.oldView = __lark_view__;
+    data.oldComponent = __lark_component__;
   });
   import.meta.hot.accept((newMod) => {
-    const newView = newMod?.default;
-    const oldView = import.meta.hot.data?.oldView;
-    if (oldView && newView && oldView !== newView) {
+    const newComponent = newMod?.default;
+    const oldComponent = import.meta.hot.data?.oldComponent;
+    if (
+      typeof oldComponent === "function" &&
+      typeof newComponent === "function" &&
+      oldComponent !== newComponent
+    ) {
       const hmr = globalThis.__lark_hmr__;
-      if (hmr && hmr.hotSwapByView) hmr.hotSwapByView(oldView, newView);
+      if (hmr && hmr.hotSwapByComponent) hmr.hotSwapByComponent(oldComponent, newComponent);
     }
   });
 }
@@ -106,17 +115,20 @@ if (import.meta.hot) {
   return `
 // Auto-injected by larkMvcPlugin
 if (import.meta.webpackHot) {
-  const oldView = import.meta.webpackHot.data?.oldView;
-  if (oldView) {
-
-    const newView = __lark_view__;
-    if (oldView !== newView) {
+  const oldComponent = import.meta.webpackHot.data?.oldComponent;
+  if (oldComponent) {
+    const newComponent = __lark_component__;
+    if (
+      typeof oldComponent === "function" &&
+      typeof newComponent === "function" &&
+      oldComponent !== newComponent
+    ) {
       const hmr = globalThis.__lark_hmr__;
-      if (hmr && hmr.hotSwapByView) hmr.hotSwapByView(oldView, newView);
+      if (hmr && hmr.hotSwapByComponent) hmr.hotSwapByComponent(oldComponent, newComponent);
     }
   }
   import.meta.webpackHot.dispose((data) => {
-    data.oldView = __lark_view__;
+    data.oldComponent = __lark_component__;
   });
   import.meta.webpackHot.accept((err) => {
     if (err) {
@@ -128,62 +140,67 @@ if (import.meta.webpackHot) {
 `;
 }
 
-/** Regex to detect a `defineView(` call in a view module source. */
-const DEFINE_VIEW_RE = /\bdefineView\s*\(/;
+/**
+ * Line-leading `export default` — avoids matches inside block comments
+ * (`* export default ...`) and line comments (`// export ...`).
+ */
+const EXPORT_DEFAULT_REGEXP = /^[ \t]*export\s+default\s+/m;
 
 /**
- * Quick check: does this source look like a Lark view module?
+ * Quick check: is this source eligible for component HMR injection?
  *
- * Used by the bundler integrations to decide whether to inject view HMR.
- * Files without a `defineView(...)` call are left untouched.
+ * Any module with a line-leading `export default` qualifies — components
+ * are plain functions with no compile-time marker, so the runtime snippet's
+ * `typeof` guard and `hotSwapByComponent`'s no-live-instance no-op carry the
+ * real filtering. Bundler integrations additionally restrict by file
+ * extension (`.tsx` / `.jsx`).
  */
-export function isLarkViewSource(source: string): boolean {
-  return DEFINE_VIEW_RE.test(source);
+export function isLarkComponentSource(source: string): boolean {
+  return EXPORT_DEFAULT_REGEXP.test(source);
 }
 
 /**
- * Transform a view module source to add view setup HMR.
+ * Transform a component module source to add component HMR.
  *
  * Strategy (no expression scanning — works for any legal statement,
  * including `as` casts, ternaries, and JSX text containing apostrophes):
  *
- * 1. Check the source contains a `defineView(...)` call. If not, return as-is.
- * 2. Replace the `export default ` keywords (at a line start, top level by
- *    convention) with `const __lark_view__ = ` — the rest of the original
- *    statement, whatever it is, now initializes the const.
- * 3. Append `export default __lark_view__;` and the HMR snippet at the end
- *    of the file (the const is initialized by then; nothing else in a module
- *    can reference its own default export, so moving the export is safe).
+ * 1. Replace the `export default ` keywords (at a line start, top level by
+ *    convention) with `const __lark_component__ = ` — the rest of the
+ *    original statement, whatever it is, now initializes the const.
+ * 2. Append `export default __lark_component__;` and the HMR snippet at the
+ *    end of the file (the const is initialized by then; nothing else in a
+ *    module can reference its own default export, so moving the export is
+ *    safe).
  *
- * Idempotent: sources already containing `__lark_view__` are returned
+ * `export default function Name() {}` also works: the rewrite turns it into
+ * `const __lark_component__ = function Name() {}` — a named function
+ * expression, still hoist-free but initialized before the appended export.
+ *
+ * Idempotent: sources already containing `__lark_component__` are returned
  * unchanged, so double-registration (plugin + manual loader rule) cannot
- * produce `const __lark_view__ = __lark_view__;`.
+ * produce `const __lark_component__ = __lark_component__;`.
  *
  * If the source has no line-leading `export default`, it is returned
- * unchanged — factory modules that export named `createXxxView()` helpers
- * hot-swap through their importers instead.
+ * unchanged — factory modules that export named helpers hot-swap through
+ * their importers instead.
  *
- * @param source - The view module source code (TS/TSX/JS/JSX)
+ * @param source - The component module source code (TSX/JSX)
  * @param bundler - Which bundler's HMR API to use
  * @returns The transformed source with HMR code, or the original if ineligible
  */
-export function injectViewHmrSnippet(source: string, bundler: Bundler): string {
-  if (!isLarkViewSource(source)) return source;
+export function injectComponentHmrSnippet(source: string, bundler: Bundler): string {
   // Idempotency guard — already transformed (or user-reserved identifier).
-  if (source.includes("__lark_view__")) return source;
+  if (source.includes("__lark_component__")) return source;
 
-  // Line-leading match only: avoids `export default` text inside block
-  // comments (`* export default ...`) and line comments (`// export ...`).
-  const exportDefaultRe = /^[ \t]*export\s+default\s+/m;
-  const match = exportDefaultRe.exec(source);
+  const match = EXPORT_DEFAULT_REGEXP.exec(source);
   if (!match) return source;
 
-  const transformed =
+  return (
     source.slice(0, match.index) +
-    "const __lark_view__ = " +
+    "const __lark_component__ = " +
     source.slice(match.index + match[0].length) +
-    "\nexport default __lark_view__;\n" +
-    getViewHmrSnippet(bundler);
-
-  return transformed;
+    "\nexport default __lark_component__;\n" +
+    getComponentHmrSnippet(bundler)
+  );
 }

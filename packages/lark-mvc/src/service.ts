@@ -34,7 +34,6 @@
  * - destroy: cancel pending requests
  * - createPayload(data?): response wrapper with `data` / `get` / `set` / `cacheInfo`
  */
-import { SPLITTER } from "./common";
 import { assign, funcWithTry, noop, generateId } from "./utils";
 import { createCache } from "./cache";
 import type { CacheApi } from "./types";
@@ -365,6 +364,11 @@ export function createService(
               prevArgs = args;
               funcWithTry(task, args, inst, noop);
             }
+            // Self-drain: keep pumping queued tasks (one per macrotask)
+            // unless the task itself made the instance busy again.
+            if (taskQueue.length && !inst.busy) {
+              dequeue(...args);
+            }
           }
         }, 0);
       }
@@ -435,13 +439,13 @@ function getMetaJson(meta: ServiceMetaEntry): string {
 }
 
 /**
- * Build the default cache key for a request: `JSON(attrs) + SPLITTER + JSON(meta)`.
+ * Build the default cache key for a request: `JSON(attrs) + "\\n" + JSON(meta)`.
  *
  * Combining both the endpoint metadata and the request attributes ensures
  * that different params or different endpoints produce different keys.
  */
 function defaultCacheKey(meta: ServiceMetaEntry, attrs: Record<string, unknown>): string {
-  return JSON.stringify(attrs) + SPLITTER + getMetaJson(meta);
+  return `${JSON.stringify(attrs)}\n${getMetaJson(meta)}`;
 }
 
 /**

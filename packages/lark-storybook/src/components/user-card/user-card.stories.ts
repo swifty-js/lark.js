@@ -9,8 +9,7 @@ type Args = UserCardProps & {
 const meta: Meta<Args> = {
   title: "Components/UserCard",
   render: larkRender<Args>({
-    path: "components/user-card",
-    view: UserCard,
+    component: UserCard,
     events: ["select"],
   }),
   argTypes: {

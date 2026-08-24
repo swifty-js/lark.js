@@ -9,8 +9,7 @@ type Args = CounterProps & {
 const meta: Meta<Args> = {
   title: "Components/Counter",
   render: larkRender<Args>({
-    path: "components/counter",
-    view: Counter,
+    component: Counter,
     events: ["change"],
   }),
   argTypes: {
@@ -45,11 +44,10 @@ export const StartsAtFifty: Story = {
   args: { initialCount: 50, label: "Starts at 50" },
 };
 
-/** Same view, but every args change tears the view down and mounts it again. */
+/** Same component, but every args change tears the tree down and mounts it again. */
 export const RemountOnArgsChange: Story = {
   render: larkRender<Args>({
-    path: "components/counter",
-    view: Counter,
+    component: Counter,
     events: ["change"],
     remountOnArgsChange: true,
   }),

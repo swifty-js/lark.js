@@ -21,90 +21,120 @@
  */
 
 /**
- * Hooks runtime for the functional view system.
+ * Hooks for function components (React rules of hooks).
  *
- * Hooks (`useSignal`, `useEffect`, `useSignalEffect`, etc.) work via a
- * module-level `currentCtx` that is set during setup function execution. The
- * setup function runs once on mount (inside `mountCtx`), and hooks register
- * signals, effects, and subscriptions on the ctx.
+ * The component function re-runs on EVERY render pass, so hooks are
+ * call-order-indexed slots on the current instance: call them
+ * unconditionally, in the same order, at the top level of the component body
+ * — never inside conditions, loops, or event handlers.
  *
- * Key difference from React hooks: Lark's setup runs ONCE (not on every
- * render). View-local state lives in signals closed over by the template —
- * the template runs inside the view's render effect, so signal reads
- * subscribe the view and writes re-render it automatically.
+ * Signals-first divergences from React worth knowing:
+ * - `useSignal(initial)` returns a stable `Signal` — write `sig.value` from
+ *   handlers, read it in JSX. There is no setState/re-render-the-world; only
+ *   readers of that signal re-render.
+ * - The component body is a TRACKED region: reading `props.x`, a signal,
+ *   `State.get(key)`, store state, or `Router.parse()` subscribes the
+ *   instance. Handlers and async callbacks read snapshots.
+ * - `useEffect` runs after the DOM commit (deps semantics match React:
+ *   no deps → every render, `[]` → mount only, cleanup before re-run and on
+ *   unmount).
  */
-import type { ViewCtx, AnyFunc } from "./types";
-import { signal, effect, type Signal } from "./reactive";
+import { signal, computed, effect, type Signal, type ReadonlySignal } from "./reactive";
+import { requireInstance, useValueSlot, useMemoSlot, useEffectSlot } from "./component";
 
 // ============================================================
-// Current context — set during setup function execution
-// ============================================================
-
-let currentCtx: ViewCtx | null = null;
-
-/**
- * Set the current ctx. Called by `mountCtx` before running the setup function.
- * @internal
- */
-export function setCurrentCtx(ctx: ViewCtx | null): void {
-  currentCtx = ctx;
-}
-
-/**
- * Get the current ctx. Throws if called outside a setup function.
- */
-function getCtx(): ViewCtx {
-  if (!currentCtx) {
-    throw new Error("Hooks can only be called inside a view setup function");
-  }
-  return currentCtx;
-}
-
-// ============================================================
-// useSignal — keyed view-local signal (HMR-stable)
+// State hooks
 // ============================================================
 
 /**
- * Declare a keyed view-local signal.
+ * Declare instance-local reactive state.
  *
- * Identical to `signal(initial)` except the signal is stored on the ctx by
- * key and REUSED when the setup re-runs on the same ctx (HMR hot-swap) — so
- * state survives hot updates. Use plain `signal()` when HMR persistence
- * doesn't matter.
- *
- * @param key - Stable key identifying this piece of state
- * @param initial - Initial value (used only when the signal is first created)
+ * Returns the SAME `Signal` on every render (created from `initial` on the
+ * first). Reading `sig.value` in JSX subscribes the component; writing it
+ * from a handler re-renders synchronously. State survives HMR swaps.
  *
  * @example
- * const count = useSignal("count", 0);
- * // template: <button onClick={() => count.value++}>{count.value}</button>
+ * function Counter() {
+ *   const count = useSignal(0);
+ *   return <button onClick={() => count.value++}>{count.value}</button>;
+ * }
  */
-export function useSignal<T>(key: string, initial: T): Signal<T> {
-  const ctx = getCtx();
-  let sig = ctx.signals.get(key);
-  if (!sig) {
-    sig = signal(initial) as Signal<unknown>;
-    ctx.signals.set(key, sig);
-  }
-  return sig as Signal<T>;
+export function useSignal<T>(initial: T): Signal<T> {
+  return useValueSlot(() => signal(initial), undefined, true);
+}
+
+/**
+ * Create a stable mutable `{ current }` cell. Pass it to a JSX `ref` prop to
+ * receive the DOM element after commit (`null` after unmount), or use it to
+ * hold any mutable value across renders without triggering re-renders.
+ *
+ * @example
+ * const input = useRef<HTMLInputElement>();
+ * useEffect(() => input.current?.focus(), []);
+ * return <input ref={input} />;
+ */
+export function useRef<T = Element>(initial: T | null = null): { current: T | null } {
+  return useValueSlot(() => ({ current: initial }), undefined, true);
+}
+
+/**
+ * Create a derived `computed` once per instance. Reading `.value` in JSX
+ * subscribes the component; the computation re-runs lazily when its signal
+ * dependencies change. Prefer this over `useMemo` for signal-derived data —
+ * no deps array needed.
+ *
+ * Note: the computation closure is captured on the FIRST render — read
+ * reactive inputs (signals/props/stores) inside it, not captured locals.
+ *
+ * @example
+ * const doubled = useComputed(() => count.value * 2);
+ */
+export function useComputed<T>(fn: () => T): ReadonlySignal<T> {
+  return useValueSlot(() => computed(fn));
+}
+
+/**
+ * Memoize a computation against a deps array (React semantics): recomputed
+ * when any dep changes (`Object.is`); no deps → every render. For
+ * signal-derived values prefer `useComputed`.
+ */
+export function useMemo<T>(fn: () => T, deps?: unknown[]): T {
+  return useMemoSlot(fn, deps);
 }
 
 // ============================================================
-// useSignalEffect — reactive side effect bound to the view lifecycle
+// Effect hooks
 // ============================================================
 
 /**
- * Run a reactive side effect tied to the view lifecycle.
+ * Run a side effect after the DOM commit (React semantics).
  *
- * The callback runs immediately and re-runs whenever any signal it read
- * changes (`State.get(key)`, `Router.parse()`, store reads, local signals).
- * A returned function is used as the between-runs / final cleanup, matching
- * `@preact/signals-core` `effect` semantics. The effect is disposed on view
- * destroy (and before HMR re-setup).
+ * - no `deps` → runs after every render
+ * - `[]` → runs once after mount
+ * - `[a, b]` → runs when any dep changes (`Object.is` comparison)
  *
- * Do not WRITE signals the callback also reads — that is a cycle. For async
- * work, read the signals first, then continue inside `untracked()` /
- * `ctx.wrapAsync`.
+ * A returned function is the cleanup: it runs before the next effect run and
+ * on unmount.
+ *
+ * @example
+ * useEffect(() => {
+ *   const timer = setInterval(tick, 1000);
+ *   return () => clearInterval(timer);
+ * }, []);
+ */
+export function useEffect(fn: () => void | (() => void), deps?: unknown[]): void {
+  useEffectSlot(fn, deps);
+}
+
+/**
+ * Run a REACTIVE side effect: created once on mount, re-runs whenever any
+ * signal it read changes (`@preact/signals-core` `effect` semantics — no
+ * deps array). A returned function is the between-runs / final cleanup.
+ * Disposed on unmount.
+ *
+ * Do not WRITE signals the callback also reads — that is a cycle. The
+ * callback closure is captured on the first render; read reactive inputs
+ * inside it.
  *
  * @example
  * useSignalEffect(() => {
@@ -113,114 +143,20 @@ export function useSignal<T>(key: string, initial: T): Signal<T> {
  * });
  */
 export function useSignalEffect(fn: () => void | (() => void)): void {
-  const ctx = getCtx();
-  const dispose = effect(fn);
-  ctx.cleanups.push(dispose);
+  useValueSlot(
+    () => effect(fn),
+    (dispose) => (dispose as () => void)(),
+  );
 }
 
-// ============================================================
-// useEffect — register cleanup functions
-// ============================================================
-
 /**
- * Register a side effect with optional cleanup.
- *
- * The effect function runs immediately during setup. If it returns a cleanup
- * function, that cleanup is called on view destroy (or on HMR re-setup).
- *
- * Unlike React's `useEffect`, this runs synchronously during setup (not
- * deferred to a later tick) and does not re-run on dependency changes
- * (since setup only runs once). For reactive re-runs use `useSignalEffect`.
- *
- * @example
- * useEffect(() => {
- *   const timer = setInterval(tick, 1000);
- *   return () => clearInterval(timer);
- * });
+ * Register a cleanup to run on unmount. Registered once per slot (safe under
+ * per-render re-runs — the first render's `fn` wins).
  */
-export function useEffect(fn: () => (() => void) | void, _deps?: unknown[]): void {
-  const ctx = getCtx();
-  const cleanup = fn();
-  if (typeof cleanup === "function") {
-    ctx.cleanups.push(cleanup);
-  }
-}
-
-// ============================================================
-// useInterval — setInterval with automatic cleanup
-// ============================================================
-
-/**
- * Set up an interval that is automatically cleared on view destroy.
- *
- * @param fn - Function to call on each interval
- * @param delay - Interval delay in milliseconds
- *
- * @example
- * const time = useSignal("time", Date.now());
- * useInterval(() => {
- *   time.value = Date.now();
- * }, 1000);
- */
-export function useInterval(fn: () => void, delay: number): void {
-  const ctx = getCtx();
-  const timer = setInterval(fn, delay);
-  ctx.cleanups.push(() => clearInterval(timer));
-}
-
-// ============================================================
-// useTimeout — setTimeout with automatic cleanup
-// ============================================================
-
-/**
- * Set up a timeout that is automatically cleared on view destroy.
- *
- * @param fn - Function to call after delay
- * @param delay - Timeout delay in milliseconds
- */
-export function useTimeout(fn: () => void, delay: number): void {
-  const ctx = getCtx();
-  const timer = setTimeout(fn, delay);
-  ctx.cleanups.push(() => clearTimeout(timer));
-}
-
-// ============================================================
-// useResource — capture a resource with automatic cleanup
-// ============================================================
-
-/**
- * Capture a resource (e.g., a Service instance, observer, etc.) that is
- * automatically destroyed on view destroy or render (if destroyOnRender).
- *
- * @param key - Unique key for the resource
- * @param resource - The resource object (must have a `destroy()` method)
- * @param destroyOnRender - If true, destroyed on next render
- *
- * @example
- * const service = createService(syncFn);
- * useResource('myService', service.instance(), true);
- */
-export function useResource(key: string, resource: unknown, destroyOnRender = false): void {
-  const ctx = getCtx();
-  ctx.capture(key, resource, destroyOnRender);
-}
-
-// ============================================================
-// useEvent — register an event handler on the ctx emitter
-// ============================================================
-
-/**
- * Register an event handler on the view's internal emitter.
- * Automatically unregistered on view destroy.
- *
- * @param event - Event name (e.g., "destroy", "render")
- * @param handler - Event handler function
- *
- * @example
- * useEvent("destroy", () => console.log("View destroyed"));
- */
-export function useEvent(event: string, handler: AnyFunc): void {
-  const ctx = getCtx();
-  const off = ctx.on(event, handler);
-  ctx.cleanups.push(off);
+export function onCleanup(fn: () => void): void {
+  const inst = requireInstance("onCleanup");
+  useValueSlot(() => {
+    inst.cleanups.push(fn);
+    return fn;
+  });
 }

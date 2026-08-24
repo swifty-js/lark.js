@@ -32,7 +32,7 @@
  * entire array (O(n log n)). For the typical `bufferSize = 5`, this is
  * effectively a linear scan with at most 5 in-bucket comparisons per iteration.
  */
-import { SPLITTER, nextCounter } from "./common";
+import { nextCounter } from "./common";
 import type { CacheEntry, CacheApi, CacheOptions } from "./types";
 
 /** Sort comparator: higher frequency first, more recent access first */
@@ -57,7 +57,7 @@ export function createCache<T = unknown>(options: CacheOptions<T> = {}): CacheAp
   /** Cache entries array */
   let entries: CacheEntry<T>[] = [];
 
-  /** Fast lookup: prefixed key -> entry */
+  /** Fast lookup: key -> entry */
   const lookup = new Map<string, CacheEntry<T>>();
 
   const maxSize = options.maxSize ?? 20;
@@ -66,15 +66,9 @@ export function createCache<T = unknown>(options: CacheOptions<T> = {}): CacheAp
   const onRemove = options.onRemove;
   const comparator = options.sortComparator ?? sortCacheEntries;
 
-  /** Prefix a key with SPLITTER for namespace isolation */
-  function prefixKey(key: string): string {
-    return SPLITTER + key;
-  }
-
   /** Read a value by key, bumping its frequency and timestamp on hit. */
   function get(key: string): T | undefined {
-    const prefixedKey = prefixKey(key);
-    const entry = lookup.get(prefixedKey);
+    const entry = lookup.get(key);
     if (!entry) return undefined;
     entry.frequency++;
     entry.lastTimestamp = nextCounter();
@@ -93,8 +87,7 @@ export function createCache<T = unknown>(options: CacheOptions<T> = {}): CacheAp
    * frequency. If the cache is at capacity, evicts the worst entries first.
    */
   function set(key: string, value: T): void {
-    const prefixedKey = prefixKey(key);
-    const existing = lookup.get(prefixedKey);
+    const existing = lookup.get(key);
 
     if (existing) {
       existing.value = value;
@@ -114,18 +107,17 @@ export function createCache<T = unknown>(options: CacheOptions<T> = {}): CacheAp
       lastTimestamp: nextCounter(),
     };
     entries.push(entry);
-    lookup.set(prefixedKey, entry);
+    lookup.set(key, entry);
   }
 
   /**
    * Remove a key from the cache immediately. Fires `onRemove` if configured.
    */
   function del(key: string): void {
-    const prefixedKey = prefixKey(key);
-    const entry = lookup.get(prefixedKey);
+    const entry = lookup.get(key);
     if (!entry) return;
 
-    lookup.delete(prefixedKey);
+    lookup.delete(key);
     const idx = entries.indexOf(entry);
     if (idx !== -1) entries.splice(idx, 1);
 
@@ -136,7 +128,7 @@ export function createCache<T = unknown>(options: CacheOptions<T> = {}): CacheAp
 
   /** Check whether a key exists in the cache (without bumping frequency). */
   function has(key: string): boolean {
-    return lookup.has(prefixKey(key));
+    return lookup.has(key);
   }
 
   /**
@@ -166,7 +158,7 @@ export function createCache<T = unknown>(options: CacheOptions<T> = {}): CacheAp
     if (entries.length <= bufferSize) {
       // Fast path: evict everything.
       for (const e of entries) {
-        lookup.delete(prefixKey(e.originalKey));
+        lookup.delete(e.originalKey);
         if (onRemove) onRemove(e.originalKey);
       }
       entries = [];
@@ -192,7 +184,7 @@ export function createCache<T = unknown>(options: CacheOptions<T> = {}): CacheAp
 
     const evictSet = new Set(worst);
     for (const e of worst) {
-      lookup.delete(prefixKey(e.originalKey));
+      lookup.delete(e.originalKey);
       if (onRemove) onRemove(e.originalKey);
     }
     entries = entries.filter((e) => !evictSet.has(e));

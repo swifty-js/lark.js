@@ -175,7 +175,7 @@ describe("Service", () => {
   });
 
   describe("all / one / save", () => {
-    it("all - calls syncFn to fetch data", async () => {
+    it("all - calls syncFn and delivers the populated payload to done", async () => {
       const syncFn = vi.fn((payload, callback) => {
         payload.set({ result: "data" });
         callback();
@@ -191,24 +191,39 @@ describe("Service", () => {
 
       // syncFn is asynchronous (via setTimeout)
       await new Promise((r) => setTimeout(r, 50));
-      expect(syncFn).toHaveBeenCalled();
+      expect(syncFn).toHaveBeenCalledTimes(1);
+      expect(done).toHaveBeenCalledTimes(1);
+      // done(errors, payload): slot 0 carries per-request errors (none here),
+      // slot 1 the payload populated by syncFn.
+      const [errors, payload] = done.mock.calls[0];
+      expect(errors.filter(Boolean)).toEqual([]);
+      expect(payload.get("result")).toBe("data");
     });
   });
 
   describe("enqueue / dequeue / destroy", () => {
-    it("enqueue - adds task to queue", () => {
+    it("enqueue - runs queued tasks serially (one per macrotask)", async () => {
       const service = createService(vi.fn()).instance();
-      const task = vi.fn();
+      const order: number[] = [];
 
-      const result = service.enqueue(task);
-      expect(result).toBe(service);
+      const result = service.enqueue(() => order.push(1));
+      service.enqueue(() => order.push(2));
+      expect(result).toBe(service); // chaining
+      expect(order).toEqual([]); // tasks are deferred, not synchronous
+
+      await new Promise((r) => setTimeout(r, 30));
+      expect(order).toEqual([1, 2]);
     });
 
-    it("destroy - marks service as destroyed", () => {
+    it("destroy - marks service destroyed and drops queued tasks", async () => {
       const service = createService(vi.fn()).instance();
+      const task = vi.fn();
+      service.enqueue(task);
       service.destroy();
-      // Should not process tasks after destruction
+
       expect(service["destroyed"]).toBe(1);
+      await new Promise((r) => setTimeout(r, 30));
+      expect(task).not.toHaveBeenCalled();
     });
   });
 

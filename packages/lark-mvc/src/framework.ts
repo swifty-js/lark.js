@@ -25,13 +25,15 @@
  *
  * Features:
  * - boot() with config
- * - Route-view mount on navigation (all other reactivity flows through signals)
- * - Module loading (require/use)
+ * - Route dispatch: every confirmed navigation renders the matched component
+ *   into the root container via `render()` (React-DOM style) — the diff keeps
+ *   the same component's instance (state survives param-only changes) and
+ *   pushes fresh URL params as props
+ * - Module loading (require/use) for lazily registered route components
  * - Utility methods: toUri, parseUri, assign, keys, nodeInside, ensureNodeId,
- *   generateId, mark/unmark, dispatchEvent, delay
- * - waitZoneViewsRendered
- * - Factory access: createEmitter, createCache, defineView
- * - Module access: Router, State, Frame
+ *   generateId, dispatchEvent, delay
+ * - Factory access: createEmitter, createCache
+ * - Module access: Router, State
  */
 import { RouterEvents } from "./common";
 import {
@@ -43,60 +45,90 @@ import {
   nodeInside,
   keys,
 } from "./utils";
-import { mark, unmark } from "./mark";
 import { createCache } from "./cache";
 import { createEmitter } from "./event-emitter";
 import { Router, markRouterBooted } from "./router";
 import { State } from "./state";
-import { Frame } from "./frame";
-import { EventDelegator } from "./event-delegator";
-import { defineView } from "./view";
-import { hotSwapByView } from "./hmr";
-import { isLarkView } from "./jsx/vnode";
-import { ensureViewName } from "./view-registry";
-import type { FrameworkConfig, ChangeEvent, FrameworkApi } from "./types";
+import { render } from "./jsx/reconcile";
+import { createVNode, type Component } from "./jsx/vnode";
+import { hotSwapByComponent } from "./hmr";
+import { getComponent, registerComponent, ensureComponentName } from "./component-registry";
+import type { FrameworkConfig, FrameworkApi } from "./types";
 
 // ============================================================
 // Internal state
 // ============================================================
 
-// config and use are imported from module-loader.ts to avoid circular dependency with frame.ts
+// config and use are imported from module-loader.ts to avoid circular deps.
 import { config, use } from "./module-loader";
 
 /** Whether framework has booted */
 let booted = false;
 
+/** Root container the route components render into. */
+let rootContainer: Element | undefined;
+
+/** Monotonic navigation token — guards async route-component loads. */
+let navSeq = 0;
+
 // ============================================================
-// Dispatcher: mount the route view on navigation
+// Route dispatch: render the matched component into the root
 // ============================================================
+
+/** Resolve (and lazily create) the root container element. */
+function resolveRootContainer(): Element {
+  const id = config.rootId || "root";
+  let el = document.getElementById(id);
+  if (!el) {
+    el = document.body;
+    el.id = id;
+  }
+  return el;
+}
 
 /**
- * Handle router CHANGED events.
+ * Render the route component for `viewPath` into the root container.
  *
- * Only the view-mount branch remains: when the matched route VIEW changes,
- * mount it on the root frame. Param-only and state changes propagate through
- * signals — views re-render via their own render effects (reads of
- * `Router.parse()` / `State.get(key)` / store state subscribe them), so no
- * frame-tree walk is needed.
+ * Synchronous when the component is registered; otherwise loads it through
+ * `config.require` (Module Federation / dynamic import), guarded by a
+ * navigation token so a stale load never overwrites a newer route.
+ *
+ * The current URL params are passed as props (refreshed on every navigation
+ * since each CHANGED re-renders). Components can also read `Router.parse()`
+ * directly for tracked URL access.
  */
-function dispatcherNotifyChange(e: ChangeEvent): void {
-  // The dispatcher only runs after boot, so the root frame is guaranteed
-  // to exist. If a caller somehow fires a change event before boot, we
-  // silently no-op rather than auto-creating a root.
-  const rootFrame = Frame.getRoot();
-  if (!rootFrame) return;
+function mountRoute(viewPath: string): void {
+  const container = rootContainer;
+  if (!container) return;
+  const token = ++navSeq;
+  const parsed = parseUri(viewPath);
+  const name = parsed.path;
+  if (!name) return;
 
-  // RouteChangedEvent extends ChangeEvent with LocationDiff fields
-  // (path, view, params, etc.). Use "view" in e to narrow.
-  if ("view" in e && e.view !== undefined) {
-    const view = e.view;
-    // View changed, mount new view
-    const viewPath =
-      typeof view === "object" && view !== null
-        ? String(Reflect.get(view, "to") || "")
-        : String(view);
-    rootFrame.mountView(viewPath);
+  const renderRoute = (fn: Component): void => {
+    const params: Record<string, unknown> = { ...Router.parse().params, ...parsed.params };
+    render(createVNode(fn, params), container);
+  };
+
+  const registered = getComponent(name);
+  if (registered) {
+    renderRoute(registered);
+    return;
   }
+
+  use(name, (loadedModule: unknown) => {
+    // Guard: a newer navigation may have started during the async load.
+    if (token !== navSeq) return;
+    if (typeof loadedModule === "function") {
+      registerComponent(name, loadedModule as Component);
+      renderRoute(loadedModule as Component);
+    } else {
+      const errorHandler = config.error;
+      if (errorHandler) {
+        errorHandler(new Error(`Cannot load view: ${name}`));
+      }
+    }
+  });
 }
 
 // ============================================================
@@ -113,40 +145,6 @@ function dispatchEvent(target: EventTarget, eventType: string, eventInit?: Custo
     ...eventInit,
   });
   target.dispatchEvent(event);
-}
-
-// use is imported from module-loader.ts (see top of file)
-
-// ============================================================
-// waitZoneViewsRendered
-// ============================================================
-
-/** Wait result: OK = rendered, TIMEOUT_OR_NOT_FOUND = not rendered */
-export const WAIT_OK = 1;
-export const WAIT_TIMEOUT_OR_NOT_FOUND = 0;
-
-/**
- * Wait for all views in a zone to be rendered.
- */
-function waitZoneViewsRendered(viewId: string, timeout?: number): Promise<number> {
-  if (timeout == null) {
-    timeout = 30 * 1000;
-  }
-  const checkFrame = Frame.get(viewId);
-  const endTime = Date.now() + timeout;
-  return new Promise((resolve) => {
-    const check = (): void => {
-      const currentTime = Date.now();
-      if (currentTime > endTime || !checkFrame) {
-        resolve(WAIT_TIMEOUT_OR_NOT_FOUND);
-      } else if (checkFrame.childrenCount === checkFrame.readyCount) {
-        resolve(WAIT_OK);
-      } else {
-        setTimeout(check, 9);
-      }
-    };
-    setTimeout(check, 9);
-  });
 }
 
 // ============================================================
@@ -196,35 +194,34 @@ export const Framework: FrameworkApi = {
    */
   boot(cfg?: FrameworkConfig): void {
     // Register the HMR swap function on globalThis so that auto-injected HMR
-    // snippets (in view modules) can call it WITHOUT importing @lark.js/mvc
-    // (which would create MF shared-consumer side effects and trigger
-    // ChunkLoadError). Done in boot() rather than at hmr.ts module load to
-    // guarantee execution — webpack tree-shaking can drop hmr.ts's top-level
-    // side-effect when its exports are unused by the app (e.g. boot.ts only
-    // imports Framework + registerViewClass).
+    // snippets (in component modules) can call it WITHOUT importing
+    // @lark.js/mvc (which would create MF shared-consumer side effects and
+    // trigger ChunkLoadError). Done in boot() rather than at hmr.ts module
+    // load to guarantee execution — webpack tree-shaking can drop hmr.ts's
+    // top-level side-effect when its exports are unused by the app.
     if (typeof globalThis !== "undefined" && !globalThis.__lark_hmr__) {
-      globalThis["__lark_hmr__"] = { hotSwapByView };
+      globalThis["__lark_hmr__"] = { hotSwapByComponent };
     }
     // Merge configuration
     if (cfg && typeof cfg === "object") {
       assign(config, cfg);
     }
 
-    // Normalize imported view components to internal registry names —
-    // Router and Frame operate on string view paths only.
-    if (isLarkView(config.defaultView)) {
-      config.defaultView = ensureViewName(config.defaultView);
+    // Normalize imported components to internal registry names — the Router
+    // operates on string view paths only.
+    if (typeof config.defaultView === "function") {
+      config.defaultView = ensureComponentName(config.defaultView);
     }
-    if (isLarkView(config.unmatchedView)) {
-      config.unmatchedView = ensureViewName(config.unmatchedView);
+    if (typeof config.unmatchedView === "function") {
+      config.unmatchedView = ensureComponentName(config.unmatchedView);
     }
     if (config.routes) {
       for (const routePath of Object.keys(config.routes)) {
         const entry = config.routes[routePath];
-        if (isLarkView(entry)) {
-          config.routes[routePath] = ensureViewName(entry);
-        } else if (entry && typeof entry === "object" && isLarkView(entry.view)) {
-          entry.view = ensureViewName(entry.view);
+        if (typeof entry === "function") {
+          config.routes[routePath] = ensureComponentName(entry);
+        } else if (entry && typeof entry === "object" && typeof entry.view === "function") {
+          entry.view = ensureComponentName(entry.view);
         }
       }
     }
@@ -242,55 +239,33 @@ export const Framework: FrameworkApi = {
     // Set config in Router
     Router._setConfig(config);
 
-    // Set frame getter in EventDelegator
-    EventDelegator.setFrameGetter((id: string) => Frame.get(id));
-
-    // Bind router events — the only remaining dispatch path (route-view
-    // mount). Param/state changes propagate through signals.
-    Router.on(RouterEvents.CHANGED, (data?: ChangeEvent) => {
-      if (data) dispatcherNotifyChange(data);
+    // Every confirmed navigation re-renders the root: route-view changes
+    // swap the component; param-only changes diff into fresh props on the
+    // SAME instance (state survives). Reactive URL reads (Router.parse())
+    // keep working independently of this dispatch.
+    Router.on(RouterEvents.CHANGED, () => {
+      const view = Router.parse().view;
+      if (view) mountRoute(view);
     });
 
     // Mark as booted
     booted = true;
     markRouterBooted();
 
-    // Create root frame BEFORE Router._bind(), so that when Router.diff()
-    // fires CHANGED → dispatcherNotifyChange → Frame.getRoot(), the rootFrame
-    // already exists with the correct rootId (e.g. "app").
-    // Without this, Frame.createRoot() would default to "root" and the view
-    // would render into document.body instead of the intended container.
-    const rootFrame = Frame.createRoot(config.rootId);
+    // Resolve the root container BEFORE Router._bind(), so that when the
+    // initial diff() fires CHANGED → mountRoute, the container exists with
+    // the configured rootId.
+    rootContainer = resolveRootContainer();
 
-    // Bind hashchange event
+    // Bind hashchange/popstate
     Router._bind();
 
-    // Mount root view: only if the router didn't already initiate a mount.
-    //
-    // CRITICAL: check `viewPath` (set synchronously at the top of mountView)
-    // instead of `view` (the viewInstance, which is only assigned inside
-    // doMountView — AFTER the async view setup load completes).
-    //
-    // When views are loaded asynchronously (via config.require / dynamic
-    // import), Router._bind() → diff() → CHANGED → mountView(routeView)
-    // starts an async load. At this point viewPath is already set to the
-    // route view, but viewInstance is still undefined. Checking viewInstance
-    // here would incorrectly fall back to defaultView, launching a SECOND
-    // async mountView(defaultView) in parallel. The signature guard in
-    // mountView then makes whichever import resolves first win — and since
-    // defaultView is usually a single module while the route view may pull
-    // in sub-components, defaultView tends to win, leaving the URL pointing
-    // at the route view while defaultView is actually rendered. Subsequent
-    // Router.to(routeView) is then a no-op because lastLocation.path already
-    // equals routeView, so the user is stuck on the wrong view.
-    //
-    // viewPath is set synchronously in mountView (before the sync/async
-    // branch), so it reliably indicates "a mount has been initiated for
-    // this frame" — which is exactly the condition we want to guard on.
-    // (boot normalization turned any LarkView defaultView into a string.)
+    // Mount the default view only if the router didn't already initiate a
+    // mount (navSeq is bumped synchronously at the top of mountRoute, before
+    // any async load — so it reliably indicates "a mount has started").
     const defaultView = (config.defaultView as string) || "";
-    if (defaultView && !rootFrame.getViewPath()) {
-      rootFrame.mountView(defaultView);
+    if (defaultView && navSeq === 0) {
+      mountRoute(defaultView);
     }
   },
 
@@ -303,12 +278,6 @@ export const Framework: FrameworkApi = {
   // Utility proxies
   // ============================================================
 
-  /** Mark async callback validity tracker */
-  mark,
-
-  /** Unmark (invalidate) async callbacks */
-  unmark,
-
   /** Fire a custom DOM event on a target */
   dispatchEvent,
 
@@ -320,9 +289,6 @@ export const Framework: FrameworkApi = {
   /** Load modules via configured require */
   use,
 
-  /** Wait for zone views to be rendered */
-  waitZoneViewsRendered,
-
   /**
    * Convert path + params to URL string.
    */
@@ -332,9 +298,6 @@ export const Framework: FrameworkApi = {
    * Parse URI string into path and params.
    */
   parseUri,
-
-  WAIT_OK,
-  WAIT_TIMEOUT_OR_NOT_FOUND,
 
   /**
    * Mix properties from source to target.
@@ -372,7 +335,7 @@ export const Framework: FrameworkApi = {
   },
 
   /**
-   * Base class with EventEmitter.
+   * Emitter factory (functional).
    */
   createEmitter,
 
@@ -385,10 +348,4 @@ export const Framework: FrameworkApi = {
 
   /** State module */
   State,
-
-  /** View factory (functional) */
-  defineView,
-
-  /** Frame class */
-  Frame,
 };

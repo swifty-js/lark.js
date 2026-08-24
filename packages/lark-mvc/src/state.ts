@@ -44,8 +44,9 @@
  *
  * ## Cleanup
  *
- * `State.clean("keys")(ctx)` is reference-counted per key; when the last
- * observing view is destroyed the key's data and signal are dropped.
+ * `State.clean("keys")` is reference-counted per key and returns a dispose
+ * function; when the last observer disposes, the key's data and signal are
+ * dropped. In a component: `useEffect(() => State.clean("a,b"), [])`.
  */
 import { hasOwnProperty } from "./utils";
 import { signal, batch, type Signal } from "./reactive";
@@ -155,15 +156,18 @@ export const State: StateApi = {
   },
 
   /**
-   * Create a cleanup function for state keys on view destroy.
-   * Call inside setup: `State.clean("keys")(ctx)` or `useEvent("destroy", State.clean("keys"))`
+   * Observe state keys with ref-counted cleanup: increments each key's
+   * observer count immediately and returns a dispose function that
+   * decrements it — when the last observer disposes, the key's data and
+   * signal are dropped.
+   *
+   * In a component: `useEffect(() => State.clean("a,b"), [])` — the returned
+   * dispose doubles as the effect cleanup.
    */
-  clean(keys: string): (ctx: { on: (event: string, handler: () => void) => void }) => void {
-    return (ctx) => {
-      const keyList = setupKeysRef(keys);
-      ctx.on("destroy", () => {
-        teardownKeysRef(keyList);
-      });
+  clean(keys: string): () => void {
+    const keyList = setupKeysRef(keys);
+    return () => {
+      teardownKeysRef(keyList);
     };
   },
 

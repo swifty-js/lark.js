@@ -29,10 +29,10 @@
  *    with `jsxImportSource: "@lark.js/mvc"` (unless the user already set one),
  *    so `.tsx` / `.jsx` files compile against `@lark.js/mvc/jsx-runtime`
  *    without any tsconfig/vite tweaking.
- * 2. **View HMR** — auto-injects state-preserving HMR into every module whose
- *    default export is a `defineView(...)` setup. Editing a view (template
- *    JSX included) hot-swaps all mounted instances in place — no
- *    `import.meta.hot` boilerplate required.
+ * 2. **Component HMR** — auto-injects state-preserving HMR into every
+ *    `.tsx` / `.jsx` module with a default export. Editing a component
+ *    hot-swaps all live instances in place (`useSignal`/`useRef` state
+ *    survives) — no `import.meta.hot` boilerplate required.
  *
  * Usage in vite.config.ts:
  * ```ts
@@ -44,10 +44,15 @@
  * ```
  */
 import type { Plugin, UserConfig } from "vite";
-import { injectViewHmrSnippet, isLarkViewSource } from "./hmr-inject";
+import { injectComponentHmrSnippet, isLarkComponentSource } from "./hmr-inject";
 
-/** Module ids eligible for view-HMR injection. */
-const VIEW_MODULE_ID_REGEXP = /\.[jt]sx?$/;
+/**
+ * Module ids eligible for component-HMR injection. Components are JSX
+ * function components, so only `.tsx` / `.jsx` files are transformed; the
+ * runtime guards inside the snippet make non-component default exports a
+ * no-op.
+ */
+const COMPONENT_MODULE_ID_REGEXP = /\.[jt]sx$/;
 
 /**
  * Create the Lark Mvc Vite plugin.
@@ -77,25 +82,24 @@ export function larkMvcPlugin(): Plugin {
     },
 
     /**
-     * Transform hook: inject view HMR into `defineView` modules.
+     * Transform hook: inject component HMR into `.tsx`/`.jsx` modules with a
+     * default export.
      *
-     * When a view file changes, the auto-injected snippet captures the old
-     * setup function (via dispose) and the new one (via accept), then calls
-     * `hotSwapByView(old, new)` to hot-swap all mounted views — preserving
-     * state. The `jsxTemplate` closure is recreated by the re-run setup, so
-     * template edits are covered by the same swap.
+     * When a component file changes, the auto-injected snippet captures the
+     * old default export (via dispose) and the new one (via accept), then
+     * calls `hotSwapByComponent(old, new)` to hot-swap all live instances —
+     * `useSignal`/`useRef` state survives.
      */
     transform(code, id) {
-      // Only process script modules (query-suffixed ids excluded)
-      if (!VIEW_MODULE_ID_REGEXP.test(id.split("?")[0])) return undefined;
+      // Only process JSX modules (query-suffixed ids excluded)
+      if (!COMPONENT_MODULE_ID_REGEXP.test(id.split("?")[0])) return undefined;
       if (id.includes("node_modules")) return undefined;
-      // Fast-path: skip modules that don't define a view. Returning the
+      // Fast-path: skip modules without a default export. Returning the
       // unchanged string would be treated as a transformation by Rolldown,
       // triggering [SOURCEMAP_BROKEN] warnings when build.sourcemap is true.
-      if (!isLarkViewSource(code)) return undefined;
-      const transformed = injectViewHmrSnippet(code, "vite");
-      // If no `export default` was found, injectViewHmrSnippet returns the
-      // source unchanged — skip to avoid a no-op transformation.
+      if (!isLarkComponentSource(code)) return undefined;
+      const transformed = injectComponentHmrSnippet(code, "vite");
+      // Idempotency guard may return the source unchanged — skip the no-op.
       if (transformed === code) return undefined;
       // Return { code, map: null } so Rolldown knows we don't emit a
       // sourcemap for the HMR injection, suppressing SOURCEMAP_BROKEN.

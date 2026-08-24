@@ -135,35 +135,31 @@ describe("State", () => {
     expect(handler).toHaveBeenCalledTimes(1);
   });
 
-  it("clean - creates cleanup function", () => {
-    const cleanup = State.clean("cleanTest1,cleanTest2");
+  it("clean - returns a dispose function", () => {
+    const dispose = State.clean("cleanTest1,cleanTest2");
 
-    expect(typeof cleanup).toBe("function");
+    expect(typeof dispose).toBe("function");
+    dispose();
   });
 
-  it("clean - calling cleanup registers destroy callback", () => {
-    const cleanup = State.clean("cleanTest3");
-    const mockObj = {
-      on: vi.fn(),
-    };
-
-    cleanup(mockObj);
-
-    expect(mockObj.on).toHaveBeenCalledWith("destroy", expect.any(Function));
-  });
-
-  it("clean - last observer destroy drops the key data", () => {
+  it("clean - dispose drops the key data when last observer leaves", () => {
     State.set({ refCounted: "alive" });
-    let destroyCb: (() => void) | undefined;
-    const ctx = {
-      on: (_event: string, handler: () => void) => {
-        destroyCb = handler;
-      },
-    };
-    State.clean("refCounted")(ctx);
+    const dispose = State.clean("refCounted");
     expect(State.get("refCounted")).toBe("alive");
 
-    destroyCb!();
+    dispose();
     expect(State.get("refCounted")).toBeUndefined();
+  });
+
+  it("clean - ref-counted across multiple observers", () => {
+    State.set({ shared: "kept" });
+    const first = State.clean("shared");
+    const second = State.clean("shared");
+
+    first();
+    expect(State.get("shared")).toBe("kept"); // second observer still holds it
+
+    second();
+    expect(State.get("shared")).toBeUndefined();
   });
 });

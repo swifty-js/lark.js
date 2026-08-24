@@ -48,7 +48,7 @@
  * by `(oldHref + newHref)` — repeated parses of the same URL return the
  * cached `Location` without re-parsing.
  */
-import { SPLITTER, URL_TRIM_HASH_REGEXP, URL_TRIM_QUERY_REGEXP, RouterEvents } from "./common";
+import { URL_TRIM_HASH_REGEXP, URL_TRIM_QUERY_REGEXP, RouterEvents } from "./common";
 import { hasOwnProperty, assign, parseUri, toUri, asRecord } from "./utils";
 import { signal } from "./reactive";
 import { createCache } from "./cache";
@@ -157,9 +157,9 @@ function attachViewAndPath(loc: Location): void {
   if (!frameworkConfig) return;
 
   if (!cachedRoutes) {
-    // Framework.boot normalizes LarkView entries (routes / unmatchedView /
-    // defaultView) to registry-name strings before Router._setConfig runs,
-    // so the router only ever sees string view paths.
+    // Framework.boot normalizes function-component entries (routes /
+    // unmatchedView / defaultView) to registry-name strings before
+    // Router._setConfig runs, so the router only ever sees string view paths.
     cachedRoutes = (frameworkConfig.routes || {}) as Record<string, string | RouteViewConfig>;
     cachedUnmatchedView = frameworkConfig.unmatchedView as string | undefined;
     cachedDefaultView = frameworkConfig.defaultView as string | undefined;
@@ -198,7 +198,7 @@ function attachViewAndPath(loc: Location): void {
 function getChanged(oldLoc: Location, newLoc: Location): { changed: boolean; diff: LocationDiff } {
   const oKey = oldLoc.href;
   const nKey = newLoc.href;
-  const tKey = oKey + SPLITTER + nKey;
+  const tKey = `${oKey}\n${nKey}`;
 
   const cached = changedCache.get(tKey);
   if (cached) {

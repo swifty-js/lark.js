@@ -10,10 +10,9 @@ interface Args {
 const meta: Meta<Args> = {
   title: "Framework/State",
   render: larkRender<Args>({
-    path: "components/state-banner",
-    view: StateBanner,
+    component: StateBanner,
     // Controls write to the State singleton instead of pushing props; the
-    // framework dispatcher then re-renders every view observing those keys.
+    // tracked State.get() reads re-render every component observing them.
     state: (args) => ({ sbTheme: args.theme, sbMessage: args.message }),
   }),
   argTypes: {

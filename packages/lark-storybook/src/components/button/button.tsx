@@ -1,11 +1,13 @@
-import { defineView, jsxTemplate } from "@lark.js/mvc";
+import { useSignal } from "@lark.js/mvc";
 import styles from "./button.module.css";
 
 export interface ButtonProps {
-  label: string;
-  variant: "primary" | "secondary" | "ghost";
-  size: "sm" | "md" | "lg";
-  disabled: boolean;
+  label?: string;
+  variant?: "primary" | "secondary" | "ghost";
+  size?: "sm" | "md" | "lg";
+  disabled?: boolean;
+  /** Child → parent callback (wired to the Actions panel by larkRender). */
+  onClick?: (data: { clicks: number }) => void;
 }
 
 const variantMap = {
@@ -20,36 +22,31 @@ const sizeMap = {
   lg: "l",
 } as const;
 
-export default defineView<ButtonProps>((ctx, params) => {
-  const props = (params ?? {}) as Partial<ButtonProps>;
-
-  let clicks = 0;
+export default function Button(props: ButtonProps) {
+  // Slot state — survives re-renders (a plain `let` would reset every render).
+  const clicks = useSignal(0);
 
   const press = (): void => {
     if (props.disabled) return;
-    clicks += 1;
-    ctx.owner.fire("click", { clicks });
+    clicks.value += 1;
+    props.onClick?.({ clicks: clicks.value });
   };
 
-  // Derived data is computed inline — the template re-runs whenever the
-  // `variant` / `size` / `label` / `disabled` params signals change.
-  const template = jsxTemplate(() => {
-    const { waVariant, waAppearance } = variantMap[props.variant ?? "primary"];
-    const waSize = sizeMap[props.size ?? "md"];
-    return (
-      <wa-button
-        class={styles["button"]}
-        type="button"
-        variant={waVariant}
-        appearance={waAppearance}
-        size={waSize}
-        disabled={props.disabled ?? false}
-        onClick={press}
-      >
-        {props.label ?? "Button"}
-      </wa-button>
-    );
-  });
-
-  return { template };
-});
+  // Derived data is computed inline — the body re-runs whenever the
+  // `variant` / `size` / `label` / `disabled` prop signals change.
+  const { waVariant, waAppearance } = variantMap[props.variant ?? "primary"];
+  const waSize = sizeMap[props.size ?? "md"];
+  return (
+    <wa-button
+      class={styles["button"]}
+      type="button"
+      variant={waVariant}
+      appearance={waAppearance}
+      size={waSize}
+      disabled={props.disabled ?? false}
+      onClick={press}
+    >
+      {props.label ?? "Button"}
+    </wa-button>
+  );
+}

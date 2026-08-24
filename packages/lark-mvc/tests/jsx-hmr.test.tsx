@@ -21,210 +21,193 @@
  */
 
 /**
- * HMR tests for JSX views: hotSwapByView must preserve keyed signal state,
- * render the new JSX markup, re-wire inline handlers, and keep the
- * EventDelegator bind/unbind refcount balanced across consecutive swaps.
+ * JSX-level HMR behavior: hot-swapping components mounted as JSX tags —
+ * state preservation, handler freshness, effect re-runs, and nested
+ * parent/child swaps with stale imports.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { hotSwapByView } from "../src/hmr";
-import { defineView } from "../src/view";
-import { useSignal } from "../src/hooks";
-import { signal, type Signal } from "../src/reactive";
-import { Frame, createFrame, registerViewClass, invalidateViewClass } from "../src/frame";
-import { getViewClassRegistry, ensureViewName } from "../src/view-registry";
-import { EventDelegator } from "../src/event-delegator";
-import { jsxTemplate } from "../src/jsx/template";
-import type { FrameObj } from "../src/types";
+import { hotSwapByComponent } from "../src/hmr";
+import { render, unmount } from "../src/jsx/reconcile";
+import { signal } from "../src/reactive";
+import { useSignal, useEffect } from "../src/hooks";
+import type { Component } from "../src/jsx/vnode";
 
-function flush(): Promise<void> {
-  return new Promise((r) => setTimeout(r, 0));
-}
+let host: HTMLElement;
 
-function makeFrame(id: string): FrameObj {
-  const el = document.createElement("div");
-  el.id = id;
-  document.body.appendChild(el);
-  return createFrame(id);
-}
+beforeEach(() => {
+  host = document.createElement("div");
+  document.body.appendChild(host);
+});
 
-function cleanupFrames(): void {
-  for (const [id, frame] of Frame.getAll()) {
-    frame.unmountView();
-    const el = document.getElementById(id);
-    if (el) el.remove();
-    Frame.getAll().delete(id);
-  }
-}
+afterEach(() => {
+  unmount(host);
+  host.remove();
+});
 
-function click(el: Element): void {
-  el.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-}
+const click = (el: Element | null): void => {
+  el!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+};
 
-/** Build a JSX view setup whose markup carries `label` and an inline handler. */
-function makeJsxSetup(label: string, onHit: (label: string) => void) {
-  return defineView(() => {
-    // Keyed signal — hotSwapView re-runs setup against the preserved ctx
-    // and useSignal reuses the stored signal (state survives the swap).
-    const count = useSignal("count", 0);
-    return {
-      template: jsxTemplate(() => (
-        <div class={label}>
-          <span data-role="count">{count.value}</span>
-          <button data-role="hit" onClick={() => onHit(label)}>
-            hit
-          </button>
-        </div>
-      )),
-    };
-  });
-}
-
-describe("JSX views + HMR", () => {
-  beforeEach(() => {
-    EventDelegator.setFrameGetter((id) => Frame.get(id));
-    const reg = getViewClassRegistry();
-    for (const key of Object.keys(reg)) invalidateViewClass(key);
-  });
-
-  afterEach(() => cleanupFrames());
-
-  it("hotSwapByView preserves data, renders new markup, re-wires inline handlers", async () => {
-    const hits: string[] = [];
-    const OldView = makeJsxSetup("gen-old", (l) => hits.push(l));
-    registerViewClass("jsx/hmr", OldView);
-
-    const frame = makeFrame("jsx-hmr");
-    frame.mountView("jsx/hmr");
-    await flush();
-
-    (frame.view!.signals.get("count") as Signal<number>).value = 9;
-    await flush();
-    expect(document.querySelector("#jsx-hmr [data-role='count']")!.textContent).toBe("9");
-
-    const NewView = makeJsxSetup("gen-new", (l) => hits.push(l));
-    hotSwapByView(OldView, NewView);
-    await flush();
-
-    // Keyed signal state preserved, new markup rendered
-    expect(document.querySelector("#jsx-hmr [data-role='count']")!.textContent).toBe("9");
-    expect(document.querySelector("#jsx-hmr .gen-new")).toBeTruthy();
-    expect(document.querySelector("#jsx-hmr .gen-old")).toBeNull();
-    expect(getViewClassRegistry()["jsx/hmr"]).toBe(NewView.setup);
-
-    // Inline handler re-wired to the new generation
-    click(document.querySelector("#jsx-hmr [data-role='hit']")!);
-    expect(hits).toEqual(["gen-new"]);
-  });
-
-  it("keeps bind/unbind balanced across two consecutive swaps and unmount", async () => {
-    const bindSpy = vi.spyOn(EventDelegator, "bind");
-    const unbindSpy = vi.spyOn(EventDelegator, "unbind");
-    const countCalls = (spy: { mock: { calls: unknown[][] } }, type: string): number =>
-      spy.mock.calls.filter((c) => c[0] === type).length;
-
-    const V1 = makeJsxSetup("v1", () => undefined);
-    registerViewClass("jsx/hmr-balance", V1);
-
-    const frame = makeFrame("jsx-hmr-balance");
-    frame.mountView("jsx/hmr-balance");
-    await flush();
-    // Mount: jsx wiring binds click once
-    expect(countCalls(bindSpy, "click")).toBe(1);
-
-    const V2 = makeJsxSetup("v2", () => undefined);
-    hotSwapByView(V1, V2);
-    await flush();
-    // Swap 1: cleanup unbinds, re-render re-binds
-    expect(countCalls(unbindSpy, "click")).toBe(1);
-    expect(countCalls(bindSpy, "click")).toBe(2);
-
-    const V3 = makeJsxSetup("v3", () => undefined);
-    hotSwapByView(V2, V3);
-    await flush();
-    // Swap 2 (regression: WeakMap state must reset per swap)
-    expect(countCalls(unbindSpy, "click")).toBe(2);
-    expect(countCalls(bindSpy, "click")).toBe(3);
-
-    frame.unmountView();
-    await flush();
-    // Final unmount releases the last bind — perfectly balanced
-    expect(countCalls(unbindSpy, "click")).toBe(3);
-    expect(countCalls(bindSpy, "click")).toBe(3);
-
-    // Inline handler still works between swaps proves attribute/name coherence
-    bindSpy.mockRestore();
-    unbindSpy.mockRestore();
-  });
-
-  it("swapped-in view can change its inline event types safely", async () => {
-    const V1 = defineView(() => ({
-      template: jsxTemplate(() => (
-        <button data-role="a" onClick={() => undefined}>
-          a
+describe("JSX HMR", () => {
+  it("preserves useSignal state and swaps rendered JSX", () => {
+    const CounterV1: Component = function Counter() {
+      const count = useSignal(0);
+      return (
+        <button class="v1" onClick={() => count.value++}>
+          v1:{count.value}
         </button>
-      )),
-    }));
-    registerViewClass("jsx/hmr-types", V1);
+      );
+    };
+    render(<CounterV1 />, host);
+    click(host.querySelector("button"));
+    click(host.querySelector("button"));
+    expect(host.querySelector("button.v1")!.textContent).toBe("v1:2");
 
-    const frame = makeFrame("jsx-hmr-types");
-    frame.mountView("jsx/hmr-types");
-    await flush();
+    const CounterV2: Component = function Counter() {
+      const count = useSignal(0);
+      return (
+        <button class="v2" onClick={() => (count.value += 10)}>
+          v2:{count.value}
+        </button>
+      );
+    };
+    hotSwapByComponent(CounterV1, CounterV2);
 
-    const seen: string[] = [];
-    const V2 = defineView(() => ({
-      template: jsxTemplate(() => <input data-role="b" onInput={() => seen.push("input")} />),
-    }));
-    hotSwapByView(V1, V2);
-    await flush();
+    // New JSX, preserved state.
+    const btn = host.querySelector("button")!;
+    expect(btn.className).toBe("v2");
+    expect(btn.textContent).toBe("v2:2");
 
-    const input = document.querySelector("#jsx-hmr-types [data-role='b']")!;
-    input.dispatchEvent(new Event("input", { bubbles: true }));
-    expect(seen).toEqual(["input"]);
-
-    // Old generation's key must be gone from the handler map
-    const keys = Object.keys(frame.view!.getEvents() || {});
-    expect(keys.filter((k) => k.startsWith("__jsx"))).toEqual(["__jsx1"]);
+    // The new closure (step +10) is live.
+    click(btn);
+    expect(btn.textContent).toBe("v2:12");
   });
 
-  it("aliases the new component to the old auto-registered name (stale parent imports keep matching)", async () => {
-    const Old = defineView(() => ({
-      template: jsxTemplate(() => <i data-role="gen">old</i>),
-    }));
-    const parentTick = signal(0);
-    // Auto-register by serializing through a parent template once
-    registerViewClass(
-      "jsx/hmr-alias-parent",
-      defineView(() => ({
-        template: jsxTemplate(() => (
-          <div data-tick={parentTick.value}>
-            <Old id="alias-child" />
-          </div>
-        )),
-      })),
+  it("swaps a CHILD component while the parent keeps its stale import", () => {
+    const badge = (label: string): Component =>
+      function Badge(props: { text: string }) {
+        return (
+          <em class={label}>
+            {label}:{props.text}
+          </em>
+        );
+      };
+    const BadgeV1 = badge("b1");
+    const text = signal("hello");
+    function Parent() {
+      return (
+        <div>
+          <BadgeV1 text={text.value} />
+        </div>
+      );
+    }
+    render(<Parent />, host);
+    expect(host.querySelector("em.b1")!.textContent).toBe("b1:hello");
+
+    const BadgeV2 = badge("b2");
+    hotSwapByComponent(BadgeV1, BadgeV2);
+    expect(host.querySelector("em.b2")!.textContent).toBe("b2:hello");
+    const em = host.querySelector("em.b2")!;
+
+    // Parent re-render still references BadgeV1 (stale import) — the alias
+    // map must match the live instance and just push props, not remount.
+    text.value = "world";
+    expect(host.querySelector("em.b2")).toBe(em);
+    expect(em.textContent).toBe("b2:world");
+  });
+
+  it("re-runs mount effects with the NEW closure after a swap", () => {
+    const log: string[] = [];
+    const V1: Component = function Fx() {
+      useEffect(() => {
+        log.push("v1-run");
+        return () => log.push("v1-clean");
+      }, []);
+      return <p>v1</p>;
+    };
+    render(<V1 />, host);
+    expect(log).toEqual(["v1-run"]);
+
+    const V2: Component = function Fx() {
+      useEffect(() => {
+        log.push("v2-run");
+        return () => log.push("v2-clean");
+      }, []);
+      return <p>v2</p>;
+    };
+    hotSwapByComponent(V1, V2);
+    // Old effect cleaned up, new effect ran against the swapped DOM.
+    expect(log).toEqual(["v1-run", "v1-clean", "v2-run"]);
+    expect(host.querySelector("p")!.textContent).toBe("v2");
+
+    unmount(host);
+    expect(log).toEqual(["v1-run", "v1-clean", "v2-run", "v2-clean"]);
+  });
+
+  it("swaps ALL live instances of a component", () => {
+    const V1: Component = function Tag() {
+      return <i class="v1">x</i>;
+    };
+    render(
+      <div>
+        <V1 />
+        <V1 />
+        <V1 />
+      </div>,
+      host,
     );
-    const frame = makeFrame("jsx-hmr-alias");
-    frame.mountView("jsx/hmr-alias-parent");
-    await flush();
+    expect(host.querySelectorAll("i.v1")).toHaveLength(3);
 
-    const nameBefore = ensureViewName(Old);
-    const childBefore = Frame.get("alias-child");
-    expect(childBefore?.view).toBeTruthy();
+    const V2: Component = function Tag() {
+      return <i class="v2">x</i>;
+    };
+    hotSwapByComponent(V1, V2);
+    expect(host.querySelectorAll("i.v1")).toHaveLength(0);
+    expect(host.querySelectorAll("i.v2")).toHaveLength(3);
+  });
 
-    const New = defineView(() => ({
-      template: jsxTemplate(() => <i data-role="gen">new</i>),
-    }));
-    hotSwapByView(Old, New);
-    await flush();
+  it("chained swaps (v1 → v2 → v3) keep matching stale imports", () => {
+    const make = (label: string): Component =>
+      function Chained() {
+        const count = useSignal(0);
+        return (
+          <button class={label} onClick={() => count.value++}>
+            {label}:{count.value}
+          </button>
+        );
+      };
+    const V1 = make("v1");
+    const V2 = make("v2");
+    const V3 = make("v3");
 
-    // Same internal name for the replacement — parents holding the stale
-    // import re-serialize to the same v-lark path and frame identity.
-    expect(ensureViewName(New)).toBe(nameBefore);
-    expect(document.querySelector("#jsx-hmr-alias [data-role='gen']")!.textContent).toBe("new");
+    render(<V1 />, host);
+    click(host.querySelector("button"));
+    hotSwapByComponent(V1, V2);
+    hotSwapByComponent(V2, V3);
+    expect(host.querySelector("button")!.className).toBe("v3");
+    expect(host.querySelector("button")!.textContent).toBe("v3:1");
 
-    // Parent re-render must not remount the child frame
-    parentTick.value = 1;
-    await flush();
-    expect(Frame.get("alias-child")).toBe(childBefore);
+    // Root re-render with the ORIGINAL import — alias chain resolves to v3.
+    const btn = host.querySelector("button")!;
+    render(<V1 />, host);
+    expect(host.querySelector("button")).toBe(btn);
+    expect(btn.textContent).toBe("v3:1");
+  });
+
+  it("does not resurrect unmounted instances", () => {
+    const V1: Component = function Gone() {
+      return <p>v1</p>;
+    };
+    render(<V1 />, host);
+    unmount(host);
+
+    const V2: Component = function Gone() {
+      return <p>v2</p>;
+    };
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    expect(hotSwapByComponent(V1, V2)).toBe(false); // no live instances
+    expect(host.innerHTML).toBe("");
+    spy.mockRestore();
   });
 });

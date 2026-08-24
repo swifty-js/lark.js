@@ -21,7 +21,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { parseUri, toUri, setData, EMPTY_STRING_SET } from "../src/utils";
+import { parseUri, toUri } from "../src/utils";
 
 describe("utils", () => {
   describe("parseUri", () => {
@@ -82,28 +82,6 @@ describe("utils", () => {
 
     it("returns the path unchanged when there are no params", () => {
       expect(toUri("/x", {})).toBe("/x");
-    });
-  });
-
-  describe("setData", () => {
-    it("tracks changed keys into a Set", () => {
-      const old: Record<string, unknown> = { a: 1 };
-      const changed = new Set<string>();
-      const result = setData({ a: 1, b: 2 }, old, changed, EMPTY_STRING_SET);
-      expect(result).toBe(true);
-      expect(changed.has("b")).toBe(true);
-      // a === a → not tracked
-      expect(changed.has("a")).toBe(false);
-      expect(old).toEqual({ a: 1, b: 2 });
-    });
-
-    it("respects the excludes set", () => {
-      const old: Record<string, unknown> = {};
-      const changed = new Set<string>();
-      const excludes = new Set(["secret"]);
-      setData({ secret: "x", visible: "y" }, old, changed, excludes);
-      expect(changed.has("secret")).toBe(false);
-      expect(changed.has("visible")).toBe(true);
     });
   });
 });

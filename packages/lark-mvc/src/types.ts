@@ -29,29 +29,30 @@
  *
  * ## Framework architecture
  *
- * Lark is a lightweight Mvc frontend framework for single-page applications
+ * Lark is a lightweight frontend framework for single-page applications
  * and micro-frontend scenarios:
  *
- * - **View** — functional view system via `defineView()` + `ViewCtx` + Hooks
+ * - **Component** — plain function components `(props) => JSXNode` (`FC<P>`),
+ *   mounted hostless by the VNode reconciler; state via hooks
  * - **Router** — history/hash two-phase route confirmation with async guards
  * - **State** — simple cross-view observable singleton (for lightweight data)
  * - **Store** — zustand-aligned state management with `createStore` /
  *   `getState` / `setState` / `subscribe` / `computed` (for complex reactive state)
+ * - **Query** — TanStack-style async state on signals (`createQuery`/`useQuery`)
  * - **Service** — API request management with LFU caching, deduplication,
  *   serial queuing, and lifecycle events
- * - **Frame** — view lifecycle management (mount/unmount, parent-child tree,
- *   cross-view method invocation)
  *
  * ## Design principles
  *
  * - Functional API — no `class`, no `this`, no `prototype`, no `mixin`
  * - Signals-based reactivity (`@preact/signals-core`) — read = subscribe,
  *   write = re-render; shallow (reference) comparison
- * - Real DOM diff via `innerHTML` + keyed comparison (not virtual DOM by default)
+ * - Direct VNode → DOM reconciliation (hostless component instances, keyed
+ *   diff, per-node event listeners)
  * - Module Federation support for micro-frontends
  */
 
-import type { Signal } from "@preact/signals-core";
+import type { Component } from "./jsx/vnode";
 
 // ============================================================
 // Function types
@@ -212,64 +213,24 @@ export type RouteChangedEvent = LocationDiff & ChangeEvent;
 // DOM types
 // ============================================================
 
-export interface DomRef {
-  /** ID update list: [element, newId][] */
-  idUpdates: [Element, string][];
-  /** DOM operation list: [opCode, parent, newChild?, oldChild?][] */
-  domOps: DomOp[];
-  /** Whether anything changed */
-  hasChanged: number;
-}
-
 /**
- * Encoded DOM mutation. The op code matches `Node.appendChild` family at the
- * DOM level — parents are always Elements (you can't appendChild onto text)
- * but the moving / replaced child can be any ChildNode (Element / Text /
- * Comment), so the child slots are typed as ChildNode.
+ * Value for the JSX `ref` prop: a callback receiving the element (and `null`
+ * on unmount), or a mutable `{ current }` cell (see `useRef`).
  */
-export type DomOp =
-  | [1, Element, ChildNode] // appendChild(parent, newChild)
-  | [2, Element, ChildNode] // removeChild(parent, oldChild)
-  | [4, Element, ChildNode, ChildNode] // replaceChild(parent, newChild, oldChild)
-  | [8, Element, ChildNode, ChildNode]; // insertBefore(parent, newChild, refChild)
+export type RefValue = ((el: Element | null) => void) | { current: Element | null };
 
 // ============================================================
-// Frame internal types
-// ============================================================
-
-export interface FrameInvokeEntry {
-  /** Method name */
-  name: string;
-  /** Method arguments */
-  args: unknown[];
-  /** Internal key */
-  key: string;
-  /** Whether removed (args match) */
-  removed?: boolean;
-}
-
-// Event handler types are inline in the events map returned by ViewSetup
-
-// ============================================================
-// View instance types
+// Component types
 // ============================================================
 
 /**
- * Template function signature.
- * Called with `(viewId, refData)` inside the view's render effect and must
- * return an HTML string. Produced by `jsxTemplate()` (which serializes the
- * JSX VNode tree), or hand-written for fully custom rendering. Reactive data
- * is read via closures (signals, `params`, `State`, stores) — every signal
- * read during the call subscribes the view.
+ * A function component (React-FC style): receives the reactive props proxy
+ * and returns JSX. The function re-runs per render inside the instance's
+ * render effect; state lives in hooks (`useSignal`, `useEffect`, ...).
+ *
+ * Alias of `Component<P>` for React muscle memory.
  */
-export type ViewTemplate = (viewId: string, refData: Record<string, unknown>) => string;
-
-export interface ViewResourceEntry {
-  /** The resource entity */
-  entity: unknown;
-  /** Whether to destroy when render() is called */
-  destroyOnRender: boolean;
-}
+export type FC<P = Record<string, unknown>> = Component<P>;
 
 /**
  * Router interface providing URL parsing, navigation, diff, and event listening capabilities.
@@ -382,188 +343,6 @@ export interface CacheApi<T = unknown> {
   getSize(): number;
 }
 
-/**
- * Mutable reference cell — used for `signature` and `rendered` on `ViewCtx`.
- * Wraps mutable state in a `Ref<T>` to avoid getter/setter syntax.
- */
-export interface Ref<T> {
-  value: T;
-}
-
-/**
- * Functional view context.
- *
- * Passed as the first argument to every view setup function. Provides
- * framework APIs without `this` binding.
- */
-export interface ViewCtx {
-  /** View ID (same as owner frame ID) */
-  id: string;
-  /** Owner frame reference */
-  owner: FrameObj;
-  /** Ref-token store read by templates (JSX object/function values). */
-  refData: Record<string, unknown>;
-  /** Resolve a refFn token (emitted by the JSX serializer for object/function
-   *  values) back to the live value; non-token inputs pass through. */
-  translate(data: unknown): unknown;
-  /** Keyed signals created via `useSignal` — reused across HMR re-setups. */
-  signals: Map<string, Signal<unknown>>;
-  /** Signature: >0 means active, incremented on render, 0 = destroyed */
-  signature: Ref<number>;
-  /** Whether rendered at least once */
-  rendered: Ref<boolean>;
-  /** View template function (accessed via getTemplate/setTemplate) */
-  getTemplate(): ViewTemplate | undefined;
-  setTemplate(v: ViewTemplate | undefined): void;
-  /** Resource map */
-  resources: Record<string, ViewResourceEntry>;
-  /** Internal emitter for lifecycle events ("destroy", "render", etc.) */
-  emitter: EmitterApi;
-  /** Event handlers returned by setup (accessed via getEvents/setEvents) */
-  getEvents(): Record<string, AnyFunc> | undefined;
-  setEvents(v: Record<string, AnyFunc> | undefined): void;
-  /** Cleanup functions registered by useEffect */
-  cleanups: Array<() => void>;
-
-  // Lifecycle / framework API methods
-  render(): void;
-  endUpdate(id?: string, inner?: boolean): void;
-  wrapAsync<Fn extends AnyFunc>(
-    fn: Fn,
-    context?: unknown,
-  ): (...args: Parameters<Fn>) => ReturnType<Fn> | undefined;
-  capture(key: string, resource?: unknown, destroyOnRender?: boolean): unknown;
-  release(key: string, destroy?: boolean): unknown;
-  fire(
-    event: string,
-    data?: Record<string, unknown>,
-    remove?: boolean,
-    lastToFirst?: boolean,
-  ): void;
-  on(event: string, handler: AnyFunc): () => void;
-  off(event: string, handler?: AnyFunc): void;
-}
-
-/**
- * Functional frame object.
- *
- * Created by `createFrame()`. Uses `ViewCtx` for its view reference.
- */
-export interface FrameObj {
-  id: string;
-  /** View path (accessed via getViewPath) */
-  getViewPath(): string | undefined;
-  readonly parentId: string | undefined;
-  view: ViewCtx | undefined;
-  invokeList: FrameInvokeEntry[];
-  signature: number;
-  destroyed: number;
-  hasAltered: number;
-  originalTemplate?: string;
-  holdFireCreated: number;
-  childrenCreated: number;
-  childrenAlter: number;
-  childrenMap: Record<string, string>;
-  childrenCount: number;
-  readyCount: number;
-  readyMap: Set<string>;
-  emitter: EmitterApi;
-  /**
-   * Reactive props store — one signal per prop key behind a stable proxy.
-   * The proxy is passed to the child setup as `params`; reading a key inside
-   * a tracked region (template/computed/effect) subscribes the reader.
-   * `mountZone` batch-writes fresh props each parent render.
-   */
-  paramsStore?: { signals: Map<string, Signal<unknown>>; proxy: Record<string, unknown> };
-  /**
-   * Child→parent event trampolines, keyed by event name. The frame emitter
-   * subscribes ONE stable wrapper per name; each parent render swaps
-   * `.current` to the fresh handler prop (mountZone), so inline closures
-   * never go stale. `undefined` current = handler prop removed.
-   */
-  hostEvents?: Record<string, { current?: AnyFunc }>;
-
-  mountView(viewPath: string, viewInitParams?: Record<string, unknown>): void;
-  unmountView(): void;
-  mountFrame(frameId: string, viewPath: string, viewInitParams?: Record<string, unknown>): FrameObj;
-  unmountFrame(id?: string): void;
-  mountZone(zoneId?: string): void;
-  unmountZone(zoneId?: string): void;
-  parent(level?: number): FrameObj | undefined;
-  invoke(name: string, args?: unknown[]): unknown;
-  children(): string[];
-  on(event: string, handler: AnyFunc): FrameObj;
-  off(event: string, handler?: AnyFunc): FrameObj;
-  fire(event: string, data?: Record<string, unknown>): FrameObj;
-}
-
-/**
- * View setup function — the functional API for defining views.
- *
- * Called once on mount with a `ViewCtx` and optional init params.
- * Returns a descriptor with `template`. Reactive data is read inside the
- * template via signals/`params`/`State`/stores (read = subscribe); events
- * are declared as inline functions in the JSX template (`onClick={() => ...}`).
- */
-export type ViewSetup<T = unknown> = (ctx: ViewCtx, params?: T) => ViewSetupResult;
-
-/** The descriptor returned by a view setup function. */
-export interface ViewSetupResult {
-  template?: ViewTemplate;
-}
-
-/** Class attribute value: string, array (falsy entries dropped), or truthy-key map. */
-export type ClassValue =
-  | string
-  | Array<string | false | null | undefined>
-  | Record<string, unknown>;
-
-/**
- * Props reserved for the auto-generated host element when a view component
- * is used as a JSX tag (`<MyView id class style key/>`). All other props are
- * delivered to the child view; `on[A-Z]*` function props become child→parent
- * event subscriptions. `children` are intentionally NOT supported.
- */
-export interface LarkHostProps {
-  id?: string | number;
-  key?: string | number;
-  class?: ClassValue;
-  className?: ClassValue;
-  style?: string | Record<string, string | number>;
-}
-
-/**
- * The params a view setup receives, derived from the component's JSX props:
- * camelCase `on*` event props are stripped (they are wired to the frame
- * emitter, not delivered as data).
- *
- * Note: the type strips every `on${Capitalize}` key; the runtime strips only
- * function-valued ones — declare non-handler props without the `on` prefix.
- */
-export type ViewParams<P> = {
-  [K in keyof P as K extends `on${infer R}` ? (R extends Uncapitalize<R> ? K : never) : K]: P[K];
-};
-
-/**
- * A mountable view component created by `defineView`.
- *
- * Typed as a callable so TSX validates `<MyView prop={x}/>` props against
- * `P`, but it is never legitimately invoked — the JSX serializer intercepts
- * the `VIEW_MARK` brand and mounts the view through the Frame tree instead.
- */
-export type LarkView<P extends object = object> = ((props: P & LarkHostProps) => null) & {
-  /** Brand marker — `Symbol.for("lark.mvc.view")`. */
-  $$: symbol;
-  /** The original setup function passed to `defineView`. */
-  setup: ViewSetup;
-};
-
-/**
- * Supertype accepting any `LarkView<P>` (props param is contravariant, so
- * `never` admits every instantiation). Used in config positions.
- */
-export type AnyLarkView = LarkView<never>;
-
 // ============================================================
 // Service types
 // ============================================================
@@ -607,9 +386,9 @@ export interface ChangeEvent {
 }
 
 /**
- * Global state interface providing cross-view data sharing and data change notification capabilities.
- * State is a singleton object managing app-level state data via get/set/digest.
- * Supports `clean()` method for automatic cleanup on view destruction.
+ * Global state interface providing cross-view data sharing backed by per-key
+ * signals: reads in tracked regions subscribe, `set()` notifies directly.
+ * Supports `clean()` for ref-counted key cleanup.
  *
  * Use State for SIMPLE cross-view data (lightweight shared values: counters,
  * toggles, page title, session info, etc.). For COMPLEX reactive state —
@@ -628,19 +407,19 @@ export interface StateApi {
    */
   get<T = unknown>(key?: string): T;
   /**
-   * Set global state data.
-   * After set, must explicitly call `digest()` to dispatch changed event and notify views to update.
+   * Set global state data. Writes are batched per-key signal writes —
+   * subscribed readers re-render automatically (no digest call exists).
    * @param data Data object, e.g., `{ a: 1, b: 2 }`
    * @param excludes Set of keys to exclude from change tracking
    */
   set(data: Record<string, unknown>, excludes?: ReadonlySet<string>): this;
   /**
-   * Create a cleanup function for state keys on view destroy.
-   * Call inside setup: `State.clean("keys")(ctx)`
+   * Observe state keys with ref-counted cleanup. Returns a dispose function;
+   * when the last observer disposes, the key's data and signal are dropped.
+   * In a component: `useEffect(() => State.clean("a,b"), [])`.
    * @param keys Comma-separated key string
-   * @returns Function that registers destroy cleanup on a ctx
    */
-  clean(keys: string): (ctx: { on: (event: string, handler: () => void) => void }) => void;
+  clean(keys: string): () => void;
   onChanged?: (e?: ChangeEvent) => void;
 }
 
@@ -765,14 +544,6 @@ export interface FrameworkApi {
    */
   generateId(prefix?: string): string;
   /**
-   * Create async callback validity marker.
-   * Returns a check function; if host object is unmarked (e.g., view re-rendered), check function returns false, preventing expired async callbacks from executing.
-   * Typical usage: `const check = Framework.mark(this, 'render'); setTimeout(() => { if (check()) ... })`
-   * @param host Host object (usually view instance)
-   * @param key Marker key name (usually "render" or specific async operation identifier)
-   */
-  mark(host: object, key: string): () => boolean;
-  /**
    * Delay wait, Promise-based setTimeout wrapper.
    * @param time Delay time in milliseconds
    */
@@ -782,12 +553,6 @@ export interface FrameworkApi {
    */
   isBooted(): boolean;
   /**
-   * Invalidate (unmark) async callback markers for a host object.
-   * Typically called when a view is re-rendered or destroyed.
-   * @param host The host object whose markers should be invalidated
-   */
-  unmark(host: object): void;
-  /**
    * Fire a custom DOM event on a target element.
    * @param target Target element or EventTarget
    * @param eventType Event type string
@@ -795,26 +560,10 @@ export interface FrameworkApi {
    */
   dispatchEvent(target: EventTarget, eventType: string, eventInit?: CustomEventInit): void;
   /**
-   * Wait for all views in a zone to be rendered.
-   * Returns WAIT_OK if rendered, WAIT_TIMEOUT_OR_NOT_FOUND if timeout or not found.
-   * @param viewId Zone view ID
-   * @param timeout Timeout in milliseconds (default: 30000)
-   */
-  waitZoneViewsRendered(viewId: string, timeout?: number): Promise<number>;
-  /** Wait result: views rendered successfully */
-  WAIT_OK: number;
-  /** Wait result: timeout or view not found */
-  WAIT_TIMEOUT_OR_NOT_FOUND: number;
-  /**
    * Emitter factory function.
    * Use `createEmitter()` to create emitter instances.
    */
   createEmitter: typeof import("./event-emitter").createEmitter;
-  /**
-   * View factory function.
-   * Use `defineView()` to create view setups.
-   */
-  defineView: typeof import("./view").defineView;
   /**
    * Cache factory function.
    * Use `createCache()` to create cache instances.
@@ -828,11 +577,6 @@ export interface FrameworkApi {
    * Router object.
    */
   Router: RouterApi;
-  /**
-   * Frame singleton.
-   * Frame tree for view lifecycle management. Use createFrame() to create frames.
-   */
-  Frame: typeof import("./frame").Frame;
 }
 
 // ============================================================
@@ -857,10 +601,10 @@ export interface FrameworkConfig {
    */
   routeMode?: "history" | "hash";
   /**
-   * Default view: registered view path or an imported view component.
+   * Default view: registered view path or an imported function component.
    * Root view to load when the URL doesn't match any route.
    */
-  defaultView?: string | AnyLarkView;
+  defaultView?: string | Component;
   /**
    * Default path when no hash present,
    * Path used when URL hash is empty, defaults to "/".
@@ -873,7 +617,7 @@ export interface FrameworkConfig {
    * - Config mapping: `{ "/detail": { view: DetailView, title: "Detail" } }`
    * Use rewrite config item for path rewriting logic.
    */
-  routes?: Record<string, string | AnyLarkView | RouteViewConfig>;
+  routes?: Record<string, string | Component | RouteViewConfig>;
   /** Hashbang prefix (only used in hash mode) */
   hashbang?: string;
   /**
@@ -893,7 +637,7 @@ export interface FrameworkConfig {
    * Unmatched view (404).
    * View to use when no matching view is found in routes, e.g., 404 page.
    */
-  unmatchedView?: string | AnyLarkView;
+  unmatchedView?: string | Component;
   /**
    * Module require function for asynchronous view loading.
    * Called by `Framework.use()` when a view setup is not found in the registry.
@@ -907,22 +651,8 @@ export interface FrameworkConfig {
 }
 
 export interface RouteViewConfig {
-  /** View path or imported view component */
-  view: string | AnyLarkView;
+  /** View path or imported function component */
+  view: string | Component;
   /** Additional properties merged into location */
   [k: string]: unknown;
-}
-
-// ============================================================
-// Extended HTMLElement types
-// ============================================================
-
-/** Element with DOM diff cached compare key */
-export interface DomElement extends Element {
-  /** Whether compare key is cached */
-  compareKeyCached?: number | undefined;
-  /** Cached compare key */
-  cachedCompareKey?: string | undefined;
-  /** Whether auto-generated ID */
-  autoId?: number;
 }

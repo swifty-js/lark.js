@@ -23,10 +23,10 @@
 /**
  * @lark.js/mvc Webpack Integration.
  *
- * Injects state-preserving view HMR into every module whose default export
- * is a `defineView(...)` setup (`.ts` / `.tsx` / `.js` / `.jsx`). Editing a
- * view — its `jsxTemplate` JSX included — hot-swaps all mounted instances in
- * place without a full reload.
+ * Injects state-preserving component HMR into every `.tsx` / `.jsx` module
+ * with a default export. Editing a component hot-swaps all live instances in
+ * place (`useSignal`/`useRef` state survives) without a full reload —
+ * runtime guards make non-component default exports a no-op.
  *
  * The JSX transform itself is the responsibility of your TS/JS loader
  * (babel-loader / swc-loader / ts-loader): configure the automatic runtime
@@ -58,7 +58,7 @@
  * export default {
  *   module: {
  *     rules: [{
- *       test: /\.[jt]sx?$/,
+ *       test: /\.[jt]sx$/,
  *       exclude: /node_modules/,
  *       enforce: 'pre',
  *       loader: '@lark.js/mvc/webpack',
@@ -67,11 +67,11 @@
  * };
  * ```
  */
-import { injectViewHmrSnippet } from "./hmr-inject";
+import { injectComponentHmrSnippet } from "./hmr-inject";
 
 /** Plugin options */
 export interface LarkMvcWebpackPluginOptions {
-  /** View-module extensions to match (default: /\.[jt]sx?$/) */
+  /** Component-module extensions to match (default: /\.[jt]sx$/) */
   test?: RegExp;
   /** Exclude pattern (default: /node_modules/) */
   exclude?: RegExp;
@@ -80,14 +80,14 @@ export interface LarkMvcWebpackPluginOptions {
 /**
  * Webpack loader entry point.
  *
- * Injects the view HMR snippet into `defineView` modules. Runs with
- * `enforce: "pre"` (before ts-loader/babel/SWC), receiving raw source — the
- * injected code is plain `import.meta.webpackHot` JavaScript, valid in both
- * TS and TSX. Non-view modules pass through untouched.
+ * Injects the component HMR snippet into modules with a default export.
+ * Runs with `enforce: "pre"` (before ts-loader/babel/SWC), receiving raw
+ * source — the injected code is plain `import.meta.webpackHot` JavaScript,
+ * valid in both TS and TSX. Other modules pass through untouched.
  */
 function larkMvcLoader(this: unknown, source: string): string {
   try {
-    return injectViewHmrSnippet(source, "webpack");
+    return injectComponentHmrSnippet(source, "webpack");
   } catch (err) {
     console.error(err);
     return source;
@@ -98,15 +98,15 @@ function larkMvcLoader(this: unknown, source: string): string {
  * Webpack plugin that auto-registers the @lark.js/mvc HMR loader.
  *
  * This is the recommended integration approach. The plugin adds a single
- * `enforce: "pre"` rule over script modules; the loader is a fast no-op for
- * files without a `defineView(...)` call.
+ * `enforce: "pre"` rule over JSX modules; the loader is a fast no-op for
+ * files without a line-leading `export default`.
  */
 class LarkMvcPlugin {
   private options: LarkMvcWebpackPluginOptions;
 
   constructor(options: LarkMvcWebpackPluginOptions = {}) {
     this.options = {
-      test: /\.[jt]sx?$/,
+      test: /\.[jt]sx$/,
       exclude: /node_modules/,
       ...options,
     };
@@ -128,8 +128,8 @@ class LarkMvcPlugin {
     compiler.options.module = compiler.options.module || {};
     compiler.options.module.rules = compiler.options.module.rules || [];
 
-    // View HMR injection rule. `enforce: "pre"` ensures this loader runs
-    // BEFORE ts-loader/SWC/babel, receiving the raw TypeScript/TSX source.
+    // Component HMR injection rule. `enforce: "pre"` ensures this loader
+    // runs BEFORE ts-loader/SWC/babel, receiving the raw TSX/JSX source.
     compiler.options.module.rules.push({
       test,
       exclude,

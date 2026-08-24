@@ -31,11 +31,10 @@
  * ```
  *
  * `<div/>` then compiles to `jsx("div", {})` importing from
- * `@lark.js/mvc/jsx-runtime`. The produced `VNode` tree is PURE DATA — it is
- * serialized to an HTML string at render time by `jsxTemplate()` (exported
- * from the main `@lark.js/mvc` entry), and flows through the framework's
- * existing string-based DOM diff, event delegation, and `v-lark` child-view
- * mounting.
+ * `@lark.js/mvc/jsx-runtime`. The produced `VNode` tree is PURE DATA — at
+ * render time it is reconciled directly into the live DOM by the framework's
+ * VNode reconciler (`@lark.js/mvc` main entry): keyed diff, per-node event
+ * listeners, and hostless component instances for function tags.
  *
  * This entry is intentionally tiny and framework-free — safe to import from
  * any module without pulling the framework in.
@@ -47,18 +46,15 @@ export { Fragment, raw };
 export type { Component, JSXNode, VNode };
 
 /**
- * Extended DOM event delivered to Lark event handlers.
- * Mirrors the shape attached by the event delegator (`src/event-delegator.ts`).
+ * DOM event delivered to Lark event handlers. Handlers receive the native
+ * event from a per-node listener — use `e.target` / `e.currentTarget`.
  */
-export type LarkEvent = Event & {
-  /** The original hit element (event delegation target). */
-  eventTarget?: EventTarget | null;
-};
+export type LarkEvent = Event;
 
 /**
- * Value for `onXxx` JSX event props: an inline handler function,
- * auto-registered per render by `jsxTemplate()`. Closures capture loop
- * variables directly.
+ * Value for `onXxx` JSX event props: an inline handler function, wired to a
+ * stable per-node listener whose current handler is swapped every render.
+ * Closures capture loop variables directly.
  */
 export type JsxEventValue = (e: LarkEvent) => unknown;
 
@@ -91,10 +87,12 @@ export const jsxs = jsx;
 export interface LarkAttributes {
   /** Permissive catch-all — any attribute is serialized (escaped). */
   [attr: string]: unknown;
-  /** Stable element id — doubles as the keyed-diff compare key. */
+  /** Stable element id. */
   id?: string | number;
-  /** `key` — emitted as `id` when no explicit `id` is set (keyed diff). */
+  /** `key` — sibling compare key for the keyed diff (never written to the DOM). */
   key?: string | number;
+  /** Element ref: callback (null on unmount) or a `{ current }` cell. */
+  ref?: ((el: Element | null) => void) | { current: Element | null };
   /** Class value: string, array (falsy entries dropped), or truthy-key map. */
   class?: string | Array<string | false | null | undefined> | Record<string, unknown>;
   /** Alias of `class` (React muscle memory). */

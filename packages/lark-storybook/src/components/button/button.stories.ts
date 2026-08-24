@@ -10,9 +10,8 @@ type Args = ButtonProps & {
 const meta: Meta<Args> = {
   title: "Components/Button",
   render: larkRender<Args>({
-    path: "components/button",
-    view: Button,
-    // `ctx.owner.fire("click", ...)` → the `click` arg → Actions panel.
+    component: Button,
+    // `props.onClick?.(...)` → the `click` arg → Actions panel.
     events: ["click"],
   }),
   argTypes: {

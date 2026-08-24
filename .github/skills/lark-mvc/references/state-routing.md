@@ -17,9 +17,9 @@ untracked(() => count.value);                    // read without subscribing
 count.peek();                                    // same, signal-method form
 ```
 
-Tracked regions (reads subscribe): **template body**, **computed(fn)**,
-**effect / useSignalEffect(fn)**. Everything else (setup body — it runs
-inside `untracked()` —, event handlers, async callbacks) reads snapshots.
+Tracked regions (reads subscribe): **the component body**, **computed /
+useComputed(fn)**, **effect / useSignalEffect(fn)**. Everything else (event
+handlers, async callbacks) reads snapshots.
 
 **Shallow semantics everywhere**: comparison is by reference (`===` /
 `Object.is`). In-place mutation is invisible — replace the reference
@@ -45,17 +45,21 @@ State.on / State.off / State.fire;        // general-purpose pub/sub (non-reacti
 ```
 
 There is **no `State.digest()` and no `State.diff()`** — writes notify
-tracked readers directly. Views react by reading in the template:
+tracked readers directly. Components react by reading in the body:
 
 ```tsx
-export default defineView((ctx) => {
-  State.clean("count,title")(ctx); // ref-counted: keys dropped when last reader dies
-  const template = jsxTemplate(() => (
+export default function Header() {
+  // ref-counted: keys dropped when the last observer unmounts
+  useEffect(() => State.clean("count,title"), []);
+  return (
     <p>{String(State.get("title"))}: {Number(State.get("count"))}</p>
-  ));
-  return { template };
-});
+  );
+}
 ```
+
+`State.clean(keys)` increments the per-key observer count immediately and
+returns a dispose function — pair it with `useEffect(..., [])` so the
+returned dispose doubles as the effect cleanup.
 
 ## createStore / computed
 
@@ -93,13 +97,13 @@ Semantics (from `src/store.ts`):
   unknown keys create new state slots (zustand semantics).
 - Store names must be unique (global registry).
 
-In views: **no hook needed** — read `getState()` in the template:
+In components: **no hook needed** — read `getState()` in the body:
 
 ```tsx
-const template = jsxTemplate(() => {
+function CounterButton() {
   const { count, doubled, increment } = useCountStore.getState();
   return <button onClick={increment}>{count} ×2={doubled}</button>;
-});
+}
 ```
 
 Removed: `bindStore`, `useStore`, and the `computed(deps[], fn)` deps-array
@@ -134,27 +138,31 @@ Router.join("/a", "b", "../c"); // path normalization (dot segments, doubles)
 ### Reactive navigation (replaces observeLocation)
 
 `Router.parse()` reads an internal location-version signal, bumped on every
-non-silent route change. Views that read the URL in a tracked region
+non-silent route change. Components that read the URL in a tracked region
 re-render automatically:
 
 ```tsx
-const template = jsxTemplate(() => <p>page {Router.parse().get("page", "1")}</p>);
+function Pager() {
+  return <p>page {Router.parse().get("page", "1")}</p>;
+}
 
-// Async work driven by navigation (docs-layout pattern):
+// Async work driven by navigation:
 useSignalEffect(() => {
   const path = Router.parse().path;          // subscribe
   untracked(() => void loadContent(path));   // async body untracked
 });
 ```
 
-Route-VIEW changes still mount through the framework: `Router` fires
-`changed` → `Framework` mounts the new root view. Param-only changes are
-purely reactive (no dispatcher, no frame-tree walk).
+Route dispatch: every confirmed navigation `render()`s the matched component
+into the root container. Route-VIEW changes swap the component (old instance
+unmounted); param-only changes diff into the SAME instance with fresh URL
+params as props (state survives). Reactive `Router.parse()` reads work
+independently of this dispatch.
 
 ### Two-phase navigation + guards
 
 Phase 1 `change` (preventable) → beforeEach guards → Phase 2 `changed`
-(location signal bump + route-view mount).
+(location signal bump + route dispatch).
 
 ```ts
 Router.on("change", (e) => {
@@ -180,18 +188,17 @@ hooks `beforeunload`.
 ```tsx
 import { useUrlState } from "@lark.js/mvc";
 
-export default defineView(() => {
+export default function Pager() {
   const [readPage, writePage] = useUrlState({ page: "1", size: "20" });
   // readPage(): URL params merged over defaults (all strings) — a TRACKED
-  //   read via Router.parse(); call it IN THE TEMPLATE, not once in setup.
+  //   read via Router.parse(); call it in the body each render.
   // writePage(patch | prevFn): Router.to(patch) — other URL params preserved.
-  const template = jsxTemplate(() => (
+  return (
     <button onClick={() => writePage((p) => ({ page: String(Number(p.page) + 1) }))}>
       Page {readPage().page}
     </button>
-  ));
-  return { template };
-});
+  );
+}
 ```
 
 The old signature `useUrlState(ctx, defaults)` → `[state, setState]` is

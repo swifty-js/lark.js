@@ -36,7 +36,6 @@
  * Replaces the former `EventEmitter` class with a `createEmitter()` factory.
  * No `class`, no `this`, no `prototype`.
  */
-import { SPLITTER } from "./common";
 import { noop, funcWithTry } from "./utils";
 import type { AnyFunc, ChangeEvent, EmitterApi, EventListenerEntry } from "./types";
 
@@ -73,7 +72,7 @@ export function createEmitter<T = unknown>(): EmitterApi<T> {
   let pendingCompaction: Set<string> | undefined;
 
   function on(event: string, handler: (e: ChangeEvent) => void): EmitterApi<T> {
-    const key = SPLITTER + event;
+    const key = event;
     let list = listeners.get(key);
     if (!list) {
       list = [];
@@ -84,7 +83,7 @@ export function createEmitter<T = unknown>(): EmitterApi<T> {
   }
 
   function off(event: string, handler?: AnyFunc): EmitterApi<T> {
-    const key = SPLITTER + event;
+    const key = event;
     if (handler) {
       const list = listeners.get(key);
       if (!list) return api;
@@ -121,11 +120,8 @@ export function createEmitter<T = unknown>(): EmitterApi<T> {
     remove?: boolean,
     lastToFirst?: boolean,
   ): EmitterApi<T> {
-    // Event names match exactly (case-sensitive). The HTML attribute
-    // lowercasing problem is solved at the boundary instead: the JSX
-    // serializer emits kebab-case `e-lark-*` names and `mountZone`
-    // camelizes them back before subscribing.
-    const key = SPLITTER + event;
+    // Event names match exactly (case-sensitive).
+    const key = event;
     const list = listeners.get(key);
 
     const eventData: Record<string, unknown> = data ?? {};

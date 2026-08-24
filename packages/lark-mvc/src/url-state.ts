@@ -40,22 +40,21 @@ import { Router } from "./router";
  *   present in the URL use these defaults; keys present in the URL override.
  * @returns A tuple `[read, write]`:
  *   - `read()`: current values from the URL merged with defaults (tracked —
- *     call it inside the template, not once in setup)
+ *     call it inside the component body each render, not once and cached)
  *   - `write(patch)`: update URL params. Accepts a partial object or an
  *     updater function. Only the specified keys change; other URL params
  *     are preserved.
  *
  * @example
  * ```tsx
- * export default defineView((ctx) => {
+ * export default function Pager() {
  *   const [readPage, writePage] = useUrlState({ page: "1", size: "20" });
- *   const template = jsxTemplate(() => (
+ *   return (
  *     <button onClick={() => writePage((prev) => ({ page: String(Number(prev.page) + 1) }))}>
  *       Page {readPage().page}
  *     </button>
- *   ));
- *   return { template };
- * });
+ *   );
+ * }
  * ```
  */
 export function useUrlState<S extends Record<string, string>>(

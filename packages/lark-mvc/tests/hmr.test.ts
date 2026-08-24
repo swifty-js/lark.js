@@ -20,142 +20,116 @@
  * SOFTWARE.
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { hotSwapView, hotSwapByView } from "../src/hmr";
-import { injectViewHmrSnippet, isLarkViewSource } from "../src/hmr-inject";
-import { defineView } from "../src/view";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { hotSwapByComponent } from "../src/hmr";
+import { raw, createVNode, type Component } from "../src/jsx/vnode";
+import { injectComponentHmrSnippet, isLarkComponentSource } from "../src/hmr-inject";
 import { useSignal } from "../src/hooks";
-import type { Signal } from "../src/reactive";
-import { Frame, createFrame, registerViewClass, invalidateViewClass } from "../src/frame";
-import { getViewClassRegistry } from "../src/view-registry";
-import type { FrameObj } from "../src/types";
+import { render, unmount } from "../src/jsx/reconcile";
+import {
+  registerComponent,
+  invalidateComponent,
+  getComponentRegistry,
+} from "../src/component-registry";
 
-/** Simple template factory for testing (reads a keyed signal via hooks). */
-function makeCountView(label: string) {
-  return defineView(() => {
-    const count = useSignal("count", 0);
-    return { template: () => `<div class="${label}">count=${count.value}</div>` };
-  });
+/** Component factory: label distinguishes versions; count state via useSignal. */
+function makeCounter(label: string): Component {
+  return function Counter() {
+    const count = useSignal(0);
+    return raw(`<div class="${label}">count=${count.value}</div>`);
+  };
 }
 
-/** Flush microtasks so deferred renders complete. */
-function flushMicrotasks(): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, 0));
-}
-
-function createTestFrame(id: string): FrameObj {
-  const el = document.createElement("div");
-  el.id = id;
-  document.body.appendChild(el);
-  return createFrame(id);
-}
-
-function cleanupFrame(frame: FrameObj): void {
-  const el = document.getElementById(frame.id);
-  if (el) el.remove();
-  Frame.getAll().delete(frame.id);
-}
+let host: HTMLElement;
 
 describe("HMR", () => {
   beforeEach(() => {
-    const reg = getViewClassRegistry();
-    for (const key of Object.keys(reg)) invalidateViewClass(key);
+    const reg = getComponentRegistry();
+    for (const key of Object.keys(reg)) invalidateComponent(key);
+    host = document.createElement("div");
+    document.body.appendChild(host);
   });
 
   afterEach(() => {
-    for (const [id] of Frame.getAll()) {
-      const el = document.getElementById(id);
-      if (el) el.remove();
-      Frame.getAll().delete(id);
-    }
+    unmount(host);
+    host.remove();
   });
 
   // ============================================================
-  // hotSwapView
+  // hotSwapByComponent
   // ============================================================
-  describe("hotSwapView", () => {
-    it("preserves keyed useSignal state across hot-swap", async () => {
-      const frame = createTestFrame("hot-swap-preserve");
-      const OldView = makeCountView("old");
-      registerViewClass("test/preserve", OldView);
-      frame.mountView("test/preserve");
-      await flushMicrotasks();
+  describe("hotSwapByComponent", () => {
+    it("swaps live instances in place, preserving useSignal state", () => {
+      let captured: { value: number } | undefined;
+      const V1: Component = function Counter() {
+        const count = useSignal(0);
+        captured = count;
+        return raw(`<div class="old">count=${count.value}</div>`);
+      };
+      render(createVNode(V1, {}), host);
+      captured!.value = 42;
+      expect(host.querySelector(".old")!.textContent).toBe("count=42");
 
-      (frame.view!.signals.get("count") as Signal<number>).value = 42;
-      const NewView = makeCountView("new");
-      const viewBefore = frame.view;
+      const V2 = makeCounter("new");
+      const swapped = hotSwapByComponent(V1, V2);
+      expect(swapped).toBe(true);
 
-      hotSwapView(frame, NewView);
-
-      // Same ctx, same keyed signal — the new setup reused it via useSignal.
-      expect((frame.view!.signals.get("count") as Signal<number>).value).toBe(42);
-      expect(frame.view).toBe(viewBefore);
-      const host = document.getElementById("hot-swap-preserve")!;
-      expect(host.querySelector(".new")).not.toBeNull();
+      // Same instance, same signal slot — the new code renders count=42.
+      expect(host.querySelector(".old")).toBeNull();
       expect(host.querySelector(".new")!.textContent).toBe("count=42");
-      cleanupFrame(frame);
     });
 
-    it("the rebuilt render effect stays reactive after the swap", async () => {
-      const frame = createTestFrame("hot-swap-reactive");
-      registerViewClass("test/reactive", makeCountView("old"));
-      frame.mountView("test/reactive");
-      await flushMicrotasks();
+    it("keeps the swapped instance reactive", () => {
+      let captured: { value: number } | undefined;
+      const V1: Component = function Counter() {
+        const count = useSignal(0);
+        captured = count;
+        return raw(`<div class="old">count=${count.value}</div>`);
+      };
+      render(createVNode(V1, {}), host);
 
-      hotSwapView(frame, makeCountView("new"));
-      (frame.view!.signals.get("count") as Signal<number>).value = 7;
-      expect(document.getElementById("hot-swap-reactive")!.textContent).toBe("count=7");
-      cleanupFrame(frame);
+      hotSwapByComponent(V1, makeCounter("new"));
+      captured!.value = 7; // the preserved signal still drives renders
+      expect(host.querySelector(".new")!.textContent).toBe("count=7");
     });
 
-    it("falls back to mountView when frame has no existing view", () => {
-      const frame = createTestFrame("hot-swap-fallback");
-      vi.spyOn(frame, "getViewPath").mockReturnValue("test/fallback");
-      const NewView = makeCountView("fb");
-      registerViewClass("test/fallback", NewView);
+    it("survives root re-renders with the STALE import (alias matching)", () => {
+      const V1 = makeCounter("old");
+      render(createVNode(V1, {}), host);
+      const V2 = makeCounter("new");
+      hotSwapByComponent(V1, V2);
+      expect(host.querySelector(".new")).not.toBeNull();
+      const domBefore = host.querySelector(".new")!;
 
-      const spy = vi.spyOn(frame, "mountView");
-      hotSwapView(frame, NewView);
-
-      expect(spy).toHaveBeenCalledWith("test/fallback");
-      spy.mockRestore();
-      cleanupFrame(frame);
-    });
-  });
-
-  // ============================================================
-  // hotSwapByView
-  // ============================================================
-  describe("hotSwapByView", () => {
-    it("swaps and updates registry for matching class", async () => {
-      const OldView = makeCountView("old");
-      registerViewClass("test/swap", OldView);
-      const frame = createTestFrame("swap");
-      frame.mountView("test/swap");
-      await flushMicrotasks();
-      (frame.view!.signals.get("count") as Signal<number>).value = 33;
-
-      const NewView = makeCountView("new");
-      hotSwapByView(OldView, NewView);
-
-      expect((frame.view!.signals.get("count") as Signal<number>).value).toBe(33);
-      expect(getViewClassRegistry()["test/swap"]).toBe(NewView.setup);
-      cleanupFrame(frame);
+      // The caller still holds V1 (stale import) — canonical matching must
+      // keep the same instance instead of remounting.
+      render(createVNode(V1, {}), host);
+      expect(host.querySelector(".new")).toBe(domBefore);
     });
 
-    it("does nothing when oldClass === newClass", async () => {
-      const V = defineView(() => {
-        const count = useSignal("count", 1);
-        return { template: () => `<div class="same">count=${count.value}</div>` };
-      });
-      registerViewClass("test/same-class", V);
-      const frame = createTestFrame("same-class");
-      frame.mountView("test/same-class");
-      await flushMicrotasks();
+    it("updates registry entries so string routes resolve the new code", () => {
+      const V1 = makeCounter("old");
+      registerComponent("test/swap", V1);
+      render(createVNode(V1, {}), host);
 
-      hotSwapByView(V, V);
-      expect((frame.view!.signals.get("count") as Signal<number>).value).toBe(1);
-      cleanupFrame(frame);
+      const V2 = makeCounter("new");
+      hotSwapByComponent(V1, V2);
+      expect(getComponentRegistry()["test/swap"]).toBe(V2);
+    });
+
+    it("no-ops for identical or non-function arguments", () => {
+      const V = makeCounter("same");
+      render(createVNode(V, {}), host);
+      expect(hotSwapByComponent(V, V)).toBe(false);
+      expect(hotSwapByComponent(undefined, V)).toBe(false);
+      expect(hotSwapByComponent({ not: "fn" }, V)).toBe(false);
+      expect(host.querySelector(".same")).not.toBeNull();
+    });
+
+    it("returns false when the old fn has no live instances", () => {
+      const A = makeCounter("a");
+      const B = makeCounter("b");
+      expect(hotSwapByComponent(A, B)).toBe(false);
     });
   });
 
@@ -163,78 +137,71 @@ describe("HMR", () => {
   // hmr-inject — snippet generation
   // ============================================================
   describe("hmr-inject", () => {
-    it("detects view module sources via defineView", () => {
-      expect(isLarkViewSource("export default defineView(() => ({}));")).toBe(true);
-      expect(isLarkViewSource('import { x } from "./y";\nconst a = 1;')).toBe(false);
+    it("detects component module sources via a line-leading export default", () => {
+      expect(isLarkComponentSource("export default function Home() {}")).toBe(true);
+      expect(isLarkComponentSource("const x = 1;\nexport default x;")).toBe(true);
+      expect(isLarkComponentSource('import { x } from "./y";\nconst a = 1;')).toBe(false);
     });
 
-    it("wraps export default and injects view HMR for a defineView module", () => {
-      const src = `import { defineView } from "@lark.js/mvc";\nexport default defineView(() => ({}));`;
-      const result = injectViewHmrSnippet(src, "vite");
-      expect(result).toContain("const __lark_view__ =");
+    it("wraps export default and injects component HMR (vite)", () => {
+      const src = `import { useSignal } from "@lark.js/mvc";\nexport default function Home() { return null; }`;
+      const result = injectComponentHmrSnippet(src, "vite");
+      expect(result).toContain("const __lark_component__ =");
+      expect(result).toContain("export default __lark_component__;");
       expect(result).toContain("import.meta.hot");
-      expect(result).toContain("hotSwapByView");
+      expect(result).toContain("hotSwapByComponent");
     });
 
-    it("injects view HMR into TSX view sources", () => {
-      const src = [
-        `import { defineView, jsxTemplate } from "@lark.js/mvc";`,
-        `const template = jsxTemplate(() => <div class="x">hi</div>);`,
-        `export default defineView(() => ({ template }));`,
-      ].join("\n");
-      const result = injectViewHmrSnippet(src, "vite");
-      expect(result).toContain("const __lark_view__ = defineView(() => ({ template }))");
-      expect(result).toContain("hotSwapByView");
-    });
-
-    it("returns source unchanged when there is no defineView call", () => {
-      const src = "export default { not: 'a view' };";
-      expect(injectViewHmrSnippet(src, "vite")).toBe(src);
+    it("guards the snippet with typeof function checks (non-component exports no-op)", () => {
+      const src = "export default { just: 'config' };";
+      const result = injectComponentHmrSnippet(src, "vite");
+      // The transform applies (broad gate), but the runtime guard is present.
+      expect(result).toContain('typeof oldComponent === "function"');
+      expect(result).toContain('typeof newComponent === "function"');
     });
 
     it("returns source unchanged when there is no export default", () => {
-      const src = "export const v = defineView(() => ({}));";
-      expect(injectViewHmrSnippet(src, "vite")).toBe(src);
+      const src = "export const v = () => null;";
+      expect(injectComponentHmrSnippet(src, "vite")).toBe(src);
     });
 
     it("uses import.meta.webpackHot for webpack and rspack", () => {
-      const src = "export default defineView(() => ({}));";
-      const webpack = injectViewHmrSnippet(src, "webpack");
+      const src = "export default function V() { return null; }";
+      const webpack = injectComponentHmrSnippet(src, "webpack");
       expect(webpack).toContain("import.meta.webpackHot");
       expect(webpack).not.toContain("import.meta.hot.accept");
-      const rspack = injectViewHmrSnippet(src, "rspack");
+      const rspack = injectComponentHmrSnippet(src, "rspack");
       expect(rspack).toContain("import.meta.webpackHot");
     });
 
     it("keeps `as`-cast default exports syntactically intact", () => {
-      const src = "export default defineView(() => ({})) as unknown;";
-      const result = injectViewHmrSnippet(src, "vite");
-      expect(result).toContain("const __lark_view__ = defineView(() => ({})) as unknown;");
-      expect(result).toContain("export default __lark_view__;");
-      expect(result).not.toMatch(/__lark_view__;\s*as /);
+      const src = "export default ((() => null)) as unknown;";
+      const result = injectComponentHmrSnippet(src, "vite");
+      expect(result).toContain("const __lark_component__ = ((() => null)) as unknown;");
+      expect(result).toContain("export default __lark_component__;");
+      expect(result).not.toMatch(/__lark_component__;\s*as /);
     });
 
     it("injects despite apostrophes in JSX text", () => {
       const src = [
-        `const template = jsxTemplate(() => <p>It's here — don't worry</p>);`,
-        `export default defineView(() => ({ template }));`,
+        `export default function Note() {`,
+        `  return <p>It's here — don't worry</p>;`,
+        `}`,
       ].join("\n");
-      const result = injectViewHmrSnippet(src, "vite");
-      expect(result).toContain("const __lark_view__ = defineView(() => ({ template }));");
-      expect(result).toContain("hotSwapByView");
+      const result = injectComponentHmrSnippet(src, "vite");
+      expect(result).toContain("const __lark_component__ = function Note() {");
+      expect(result).toContain("hotSwapByComponent");
     });
 
     it("is idempotent — re-running the transform is a no-op", () => {
-      const src = "export default defineView(() => ({}));";
-      const once = injectViewHmrSnippet(src, "vite");
-      expect(injectViewHmrSnippet(once, "vite")).toBe(once);
+      const src = "export default function V() { return null; }";
+      const once = injectComponentHmrSnippet(src, "vite");
+      expect(injectComponentHmrSnippet(once, "vite")).toBe(once);
     });
 
     it("skips export default inside comments", () => {
-      const src = ["// export default defineView(old);", "const v = defineView(() => ({}));"].join(
-        "\n",
-      );
-      expect(injectViewHmrSnippet(src, "vite")).toBe(src);
+      const src = ["// export default oldStuff;", "const v = () => null;"].join("\n");
+      expect(injectComponentHmrSnippet(src, "vite")).toBe(src);
     });
   });
 });

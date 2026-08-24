@@ -21,35 +21,16 @@
  */
 
 /**
- * Lark framework shared constants and encoding helpers.
+ * Lark framework shared constants and helpers.
  *
  * This module is the single source of truth for:
- * - The `SPLITTER` namespace separator (U+001E) used across refData, event
- *   attributes, and internal data structures
  * - Router event name constants
- * - Regex patterns for URL parsing and tag-name extraction
- * - Encoding helpers (`strSafe`, `encodeHTML`, `refFn`) shared by `dom.ts`,
- *   `view.ts`, and the JSX serializer (`jsx/serialize.ts`)
- *
- * Keeping the canonical implementations here ensures all consumers share a
- * single copy rather than duplicating them per module.
+ * - Regex patterns for URL parsing
+ * - SVG/MathML namespaces and `strSafe`
  */
 
 /** Global counter for generating unique IDs */
 let globalCounter = 0;
-
-/**
- * Internal splitter character (U+001E Record Separator).
- *
- * Invisible control character used as a namespace separator throughout the
- * framework: refData keys, event attribute encoding, cache key composition,
- * and view-path delimiters. Chosen because it never appears in user data and
- * is safe in HTML attributes.
- *
- * Uses `String.fromCharCode` rather than a literal `"\x1e"` to survive
- * bundlers/minifiers that strip control-char literals.
- */
-export const SPLITTER = String.fromCharCode(0x1e);
 
 /**
  * Router event name constants.
@@ -63,16 +44,6 @@ export const RouterEvents = {
   CHANGED: "changed",
   PAGE_UNLOAD: "page_unload",
 };
-
-/** Attribute name marking a child-view host element (wire format): v-lark */
-export const LARK_VIEW = "v-lark";
-
-/**
- * Attribute name carrying the child-view props (wire format): p-lark.
- * Holds ONE refData token for the whole props object; omitted when the
- * component was used without props.
- */
-export const LARK_PROP = "p-lark";
 
 /** URL query/hash trim regexp */
 export const URL_TRIM_HASH_REGEXP = /(?:^.*\/\/[^/]+|#.*$)/gi;
@@ -95,76 +66,14 @@ export const SVG_NS = "http://www.w3.org/2000/svg";
 /** MathML namespace */
 export const MATH_NS = "http://www.w3.org/1998/Math/MathML";
 
-/** Tag name regexp for I_GetNode */
-export const TAG_NAME_REGEXP = /<([a-z][^/\0>\x20\t\r\n\f]+)/i;
-
 /** Increment global counter and return new value */
 export function nextCounter(): number {
   return ++globalCounter;
 }
 
-// ============================================================
-// Encoding helpers (shared by dom.ts, view.ts, and the JSX serializer)
-// ============================================================
-
-const HTML_ENT_MAP: Record<string, string> = {
-  "&": "amp",
-  "<": "lt",
-  ">": "gt",
-  '"': "#34",
-  "'": "#39",
-  "`": "#96",
-};
-
-const HTML_ENT_REGEXP = /[&<>"'`]/g;
-
 /**
  * Null-safe `String(v)` — `null` / `undefined` become `""`.
- *
- * Used by the JSX `raw()` output path and as the base for `encodeHTML`.
  */
 export function strSafe(v: unknown): string {
   return String(v == null ? "" : v);
-}
-
-/**
- * HTML-escape a value for safe embedding in markup.
- *
- * Encodes `& < > " ' \`` to HTML entities (`&amp;`, `&lt;`, etc.).
- * Applied to all JSX text children and attribute values.
- */
-export function encodeHTML(v: unknown): string {
-  return String(v == null ? "" : v).replace(
-    HTML_ENT_REGEXP,
-    (m: string) => "&" + HTML_ENT_MAP[m] + ";",
-  );
-}
-
-/**
- * Template reference function for creating stable keys for objects.
- * Stores objects in refData with SPLITTER-prefixed keys.
- */
-export function refFn(ref: Record<string, unknown>, value: unknown, key: string): string {
-  const counter = ref[SPLITTER] as number;
-  for (let i = counter; --i; ) {
-    key = SPLITTER + i;
-    if (ref[key] === value) return key;
-  }
-  key = SPLITTER + (ref[SPLITTER] as number)++;
-  ref[key] = value;
-  return key;
-}
-
-/**
- * Check if a string is a refData reference token: SPLITTER followed by
- * one or more ASCII decimal digits. Used by ctx.translate and the
- * JSX template layer's refData sweep.
- */
-export function isRefToken(s: string): boolean {
-  if (s.length < 2 || s[0] !== SPLITTER) return false;
-  for (let i = 1; i < s.length; i++) {
-    const c = s.charCodeAt(i);
-    if (c < "0".charCodeAt(0) || c > "9".charCodeAt(0)) return false;
-  }
-  return true;
 }

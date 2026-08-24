@@ -1,8 +1,8 @@
 # @lark.js/sentry
 
-`@swifty.js/sentry` integration for the [Lark Mvc](https://github.com/tianchenghang/lark.js) frontend framework (`@lark.js/mvc`).
+`@swifty.js/sentry` integration for the [Lark Mvc](https://github.com/tianchenghang/lark.js) frontend framework (`@lark.js/mvc`, v0.0.32+ signals-only).
 
-Lark Mvc routes every framework-internal error (delegated DOM event handlers, emitter listeners, dispatcher-triggered renders, `useEffect` cleanups, etc.) through `FrameworkConfig.error` via its `funcWithTry` utility. This package hooks that single seam and reports errors to `@swifty.js/sentry` as `OtherFrameworks` events — no monkey-patching, no per-view wrapping.
+Lark Mvc has no error sink and no try-catch wrappers: errors thrown in component bodies, effects, and event handlers **bubble** to `window.onerror` / `unhandledrejection`, which `@swifty.js/sentry` captures natively (`enableError` / `enableUnhandledRejection`, on by default). What the SDK cannot infer on its own is the **matched route pattern** (`/users/:id` instead of `/users/42`) — the key for grouping page views. This package subscribes to the Lark router's signals and reports one `PV` event per committed navigation, carrying the pattern and the decoded params.
 
 ## Installation
 
@@ -10,57 +10,57 @@ Lark Mvc routes every framework-internal error (delegated DOM event handlers, em
 npm install @lark.js/sentry @swifty.js/sentry @lark.js/mvc
 ```
 
-`@lark.js/mvc` (>= 0.0.24) and `@swifty.js/sentry` (>= 0.0.3) are peer dependencies.
+`@lark.js/mvc` (>= 0.0.32) and `@swifty.js/sentry` (>= 0.0.5) are peer dependencies.
 
 ## Quick Start
 
-Call `initLarkSentry` after `Framework.boot(...)`:
-
-```ts
-import { Framework } from "@lark.js/mvc";
+```tsx
+import { render, createRouter, RouterView } from "@lark.js/mvc";
 import { initLarkSentry } from "@lark.js/sentry";
 
-Framework.boot({
-  rootId: "app",
-  routeMode: "history",
-  defaultPath: "/home",
-  defaultView: "home",
-  routes: { "/home": "home" },
-  require: (names) => Promise.all(names.map((n) => import(`./views/${n}`).then((m) => m.default))),
-});
+const router = createRouter([
+  { path: "/", component: Home },
+  { path: "/users/:id", component: UserDetail },
+  { path: "*", component: NotFound },
+]);
 
-const uninstall = initLarkSentry({
-  dsn: "/api/log",
-  projectId: "lark-app",
-});
+const uninstall = initLarkSentry({ dsn: "/api/log", projectId: "lark-app" }, router);
+
+render(<RouterView router={router} />, document.getElementById("root")!);
 ```
 
-`initLarkSentry` accepts the full `@swifty.js/sentry` `init` options, initializes the SDK, and installs the framework error hook. It returns an uninstall function (the SDK itself is torn down separately via `destroy()` from `@swifty.js/sentry`).
+`initLarkSentry` accepts the full `@swifty.js/sentry` `init` options, initializes the SDK, and installs the route tracking. It returns an uninstall function for the tracking (the SDK itself is torn down separately via `destroy()` from `@swifty.js/sentry`).
 
 ## What Gets Captured
 
-Every error that passes through `funcWithTry` inside the framework is reported. This covers:
+### By the SDK core, automatically (no framework hook needed)
 
-- Delegated DOM event handlers (the events map in view descriptors)
-- Emitter listeners registered via `ctx.on` / `useEvent`
-- Dispatcher-triggered renders and template execution
-- `useEffect` cleanup functions at unmount
-- View `assign()` functions
-- Lazy view-loading failures (via module-loader)
+- Runtime errors and unhandled rejections — Lark errors bubble here by design
+- XHR/fetch requests, declarative clicks, hash/history navigation
+- PageLoad / dwell-time PV, white screen, performance plugins
 
-Each report carries `context: { framework: "lark-mvc" }` in the event's `extra` field.
+### By this package — `"LarkRoute"` page views
 
-Browser-level capture (runtime errors, unhandled rejections, XHR/fetch, PV and dwell time, white screen, performance plugins) is provided by the `@swifty.js/sentry` core and works with Lark Mvc out of the box.
+One `PV` event named `"LarkRoute"` per committed navigation (including the initial location), reported through a signals `effect` over `router.location` / `router.match`:
+
+| Field           | Value                                                               |
+| --------------- | ------------------------------------------------------------------- |
+| `message`       | `pathname + search` (logical, basename-stripped)                    |
+| `extra.pattern` | Matched `RouteObject.path` (`"/users/:id"`), or `null` if unmatched |
+| `extra.params`  | Decoded `:param` / `*` captures                                     |
+| `extra.href`    | Full `location.href`                                                |
+
+Reporting never disturbs rendering: the report runs inside `untracked()` and reporter exceptions are swallowed.
 
 ## API
 
-### `initLarkSentry(options: LarkSentryOptions): () => void`
+### `initLarkSentry(options: InitOptions, router?: RouterApi): () => void`
 
-One-call integration: `init(options)` from `@swifty.js/sentry` plus `installLarkSentry()`. `LarkSentryOptions` is a re-export of `InitOptions` from `@swifty.js/sentry`.
+One-call integration: `init(options)` from `@swifty.js/sentry` plus `installLarkSentry(router)`.
 
-### `installLarkSentry(): () => void`
+### `installLarkSentry(router?: RouterApi): () => void`
 
-Installs the `FrameworkConfig.error` hook only (use when the app initializes the SDK itself). Any previously configured `error` handler is preserved and still runs after the report. The returned function restores the previous handler.
+Installs the route tracking only (use when the app initializes the SDK itself). `router` defaults to the **active** router (the last `createRouter(...)` result) and throws when neither is available. The returned function disposes the tracking effect.
 
 ## License
 

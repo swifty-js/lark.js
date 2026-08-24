@@ -1,0 +1,7 @@
+{
+  "dependencies": {
+    "@swifty.js/docs": "file:../../../swifty.js/packages/swifty-docs",
+    "@swifty.js/anti-copy": "file:../../../swifty.js/packages/anti-copy",
+    "@swifty.js/sentry": "file:../../../swifty-sentry/sentry"
+  }
+}

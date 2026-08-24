@@ -21,79 +21,104 @@
  */
 
 /**
- * `@lark.js/sentry` — `@swifty.js/sentry` integration for Lark Mvc.
+ * `@lark.js/sentry` — `@swifty.js/sentry` integration for Lark Mvc
+ * (v0.0.32+, signals-only).
  *
- * Lark Mvc routes every framework-internal error (event handlers, emitter
- * listeners, render, cleanups, etc.) through `FrameworkConfig.error` via
- * `funcWithTry`. This package hooks that single seam to report errors as
- * `OtherFrameworks` events to `@swifty.js/sentry`.
+ * ## Error capture — automatic, no hook needed
+ *
+ * Lark Mvc has no error sink and no try-catch wrappers: errors thrown in
+ * component bodies, effects, and event handlers BUBBLE to
+ * `window.onerror` / `unhandledrejection`, which `@swifty.js/sentry`
+ * captures natively (`enableError` / `enableUnhandledRejection`, both on by
+ * default). Calling `init()` is all that error reporting requires.
+ *
+ * ## Route tracking — the Lark-specific seam
+ *
+ * What the SDK cannot infer on its own is the MATCHED ROUTE PATTERN
+ * (`/users/:id` instead of `/users/42`) — the key for grouping page views.
+ * `installLarkSentry(router)` subscribes a signals `effect` to the router's
+ * `location`/`match` signals and reports one `PV` event named `"LarkRoute"`
+ * per committed navigation, carrying the pattern and the decoded params.
  */
 
-import { Framework } from "@lark.js/mvc";
-import { EventType, init, reportFrameworkError } from "@swifty.js/sentry";
+import { effect, untracked, useRouter } from "@lark.js/mvc";
+import type { RouterApi } from "@lark.js/mvc";
+import { init, tracePageView } from "@swifty.js/sentry";
 import type { InitOptions } from "@swifty.js/sentry";
 
 export * from "@swifty.js/sentry";
 
 /**
- * Install the `FrameworkConfig.error` hook that reports framework errors to
- * `@swifty.js/sentry`.
+ * Subscribe route-pattern page views to `@swifty.js/sentry`.
  *
- * Call this after `Framework.boot(...)`. Any previously configured `error`
- * handler is preserved and still runs after the report.
+ * One `PV` event named `"LarkRoute"` is reported per committed navigation
+ * (including the initial location), with:
  *
- * @returns An uninstall function restoring the previous `error` handler.
+ * - `message` — `pathname + search` (logical, basename-stripped)
+ * - `extra.pattern` — the matched `RouteObject.path` (`"/users/:id"`), or
+ *   `null` when no route matched
+ * - `extra.params` — decoded `:param` / `*` captures
+ * - `extra.href` — the full `location.href`
+ *
+ * Reporting never disturbs rendering: the effect body runs the report
+ * inside `untracked()` and swallows reporter exceptions.
+ *
+ * @param router - The router to observe. Defaults to the ACTIVE router
+ *   (the last `createRouter(...)` result); throws when neither is available.
+ * @returns An uninstall function disposing the tracking effect.
  */
-export function installLarkSentry(): () => void {
-  const config = Framework.getConfig();
-  const oldError = config.error;
+export function installLarkSentry(router?: RouterApi): () => void {
+  const target = router ?? useRouter();
+  let lastKey: string | undefined;
 
-  Framework.setConfig({
-    error(error: Error): void {
+  return effect(() => {
+    const loc = target.location.value; // tracked — re-runs per navigation
+    const match = target.match.value; // tracked (same commit)
+    untracked(() => {
+      if (loc.key === lastKey) return; // same-entry re-commit → skip
+      lastKey = loc.key;
       try {
-        reportFrameworkError({
-          type: EventType.OtherFrameworks,
-          error,
-          context: { framework: "lark-mvc" },
+        tracePageView({
+          name: "LarkRoute",
+          message: `${loc.pathname}${loc.search}`,
+          extra: {
+            pattern: match?.route.path ?? null,
+            params: match?.params ?? {},
+            href: globalThis.location.href,
+          },
         });
       } catch {
         // Reporting must never disturb framework control flow.
       }
-      if (oldError) {
-        try {
-          oldError(error);
-        } catch {
-          // Suppress rethrows from the previous handler to avoid
-          // double-reporting via unhandledrejection.
-        }
-      }
-    },
+    });
   });
-
-  return (): void => {
-    Framework.setConfig({ error: oldError });
-  };
 }
 
 /**
- * One-call integration: initialize `@swifty.js/sentry` and install the Lark
- * Mvc error hook.
+ * One-call integration: initialize `@swifty.js/sentry` and install the
+ * Lark Mvc route-pattern tracking.
  *
  * @example
- * ```ts
- * import { Framework } from "@lark.js/mvc";
+ * ```tsx
+ * import { render, createRouter, RouterView } from "@lark.js/mvc";
  * import { initLarkSentry } from "@lark.js/sentry";
  *
- * Framework.boot({ rootId: "app", defaultPath: "/home", routes: { ... } });
+ * const router = createRouter([
+ *   { path: "/", component: Home },
+ *   { path: "/users/:id", component: UserDetail },
+ * ]);
  *
- * initLarkSentry({ dsn: "/api/log", projectId: "lark-app" });
+ * initLarkSentry({ dsn: "/api/log", projectId: "lark-app" }, router);
+ *
+ * render(<RouterView router={router} />, document.getElementById("root")!);
  * ```
  *
- * @param options - SDK init options (dsn, projectId, plugins, etc.).
- * @returns An uninstall function; the SDK itself is torn down via `destroy()`
- *   from `@swifty.js/sentry`.
+ * @param options - SDK init options (dsn, projectId, ...).
+ * @param router - The router to observe (defaults to the active router).
+ * @returns An uninstall function for the route tracking; the SDK itself is
+ *   torn down via `destroy()` from `@swifty.js/sentry`.
  */
-export function initLarkSentry(options: InitOptions): () => void {
+export function initLarkSentry(options: InitOptions, router?: RouterApi): () => void {
   init(options);
-  return installLarkSentry();
+  return installLarkSentry(router);
 }

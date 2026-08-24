@@ -20,112 +20,144 @@
  * SOFTWARE.
  */
 
-import { Framework } from "@lark.js/mvc";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { createRouter } from "@lark.js/mvc";
+import type { RouterApi } from "@lark.js/mvc";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { initLarkSentry, installLarkSentry } from "../src/index.js";
 
 vi.mock("@swifty.js/sentry", () => ({
-  EventType: { OtherFrameworks: "OtherFrameworks" },
-  reportFrameworkError: vi.fn(),
   init: vi.fn(),
+  tracePageView: vi.fn(),
 }));
 
-const { init, reportFrameworkError } = await import("@swifty.js/sentry");
+const { init, tracePageView } = await import("@swifty.js/sentry");
 const initMock = vi.mocked(init);
-const reportMock = vi.mocked(reportFrameworkError);
+const traceMock = vi.mocked(tracePageView);
 
+const Home = (): string => "home";
+const User = (): string => "user";
+
+let router: RouterApi | undefined;
 let uninstallers: Array<() => void> = [];
+
+beforeEach(() => {
+  globalThis.history.replaceState(null, "", "/");
+});
 
 afterEach(() => {
   for (const uninstall of uninstallers) uninstall();
   uninstallers = [];
+  router?.dispose();
+  router = undefined;
   initMock.mockClear();
-  reportMock.mockClear();
-  Framework.setConfig({ error: undefined });
+  traceMock.mockReset();
 });
 
+function makeRouter(): RouterApi {
+  router = createRouter([
+    { path: "/", component: Home },
+    { path: "/users/:id", component: User },
+  ]);
+  return router;
+}
+
 describe("installLarkSentry", () => {
-  it("patches FrameworkConfig.error to report via reportFrameworkError", () => {
-    uninstallers.push(installLarkSentry());
+  it("reports the initial location as a LarkRoute page view", () => {
+    const r = makeRouter();
+    uninstallers.push(installLarkSentry(r));
 
-    const boom = new Error("boom");
-    Framework.getConfig().error!(boom);
-
-    expect(reportMock).toHaveBeenCalledTimes(1);
-    expect(reportMock).toHaveBeenCalledWith({
-      type: "OtherFrameworks",
-      error: boom,
-      context: { framework: "lark-mvc" },
-    });
-  });
-
-  it("preserves and calls the previous error handler", () => {
-    const previous = vi.fn();
-    Framework.setConfig({ error: previous });
-
-    uninstallers.push(installLarkSentry());
-
-    const boom = new Error("boom");
-    Framework.getConfig().error!(boom);
-
-    expect(reportMock).toHaveBeenCalledTimes(1);
-    expect(previous).toHaveBeenCalledWith(boom);
-  });
-
-  it("suppresses rethrows from the previous handler", () => {
-    Framework.setConfig({
-      error: (e: Error) => {
-        throw e;
+    expect(traceMock).toHaveBeenCalledTimes(1);
+    expect(traceMock).toHaveBeenCalledWith({
+      name: "LarkRoute",
+      message: "/",
+      extra: {
+        pattern: "/",
+        params: {},
+        href: globalThis.location.href,
       },
     });
-
-    uninstallers.push(installLarkSentry());
-
-    expect(() => Framework.getConfig().error!(new Error("boom"))).not.toThrow();
-    expect(reportMock).toHaveBeenCalledTimes(1);
   });
 
-  it("swallows reportFrameworkError failures", () => {
-    reportMock.mockImplementation(() => {
+  it("reports the matched route PATTERN and decoded params per navigation", async () => {
+    const r = makeRouter();
+    uninstallers.push(installLarkSentry(r));
+    traceMock.mockClear();
+
+    await r.navigate("/users/42?tab=posts");
+
+    expect(traceMock).toHaveBeenCalledTimes(1);
+    expect(traceMock).toHaveBeenCalledWith({
+      name: "LarkRoute",
+      message: "/users/42?tab=posts",
+      extra: {
+        pattern: "/users/:id",
+        params: { id: "42" },
+        href: globalThis.location.href,
+      },
+    });
+  });
+
+  it("reports pattern null for unmatched locations", async () => {
+    const r = makeRouter();
+    uninstallers.push(installLarkSentry(r));
+    traceMock.mockClear();
+
+    await r.navigate("/nowhere");
+
+    expect(traceMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: "/nowhere",
+        extra: expect.objectContaining({ pattern: null, params: {} }),
+      }),
+    );
+  });
+
+  it("falls back to the ACTIVE router when none is passed", async () => {
+    const r = makeRouter(); // createRouter records the active router
+    uninstallers.push(installLarkSentry());
+    traceMock.mockClear();
+
+    await r.navigate("/users/7");
+    expect(traceMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("throws when no router exists at all", () => {
+    expect(() => installLarkSentry()).toThrow(/no active router/);
+  });
+
+  it("uninstall stops the tracking", async () => {
+    const r = makeRouter();
+    const uninstall = installLarkSentry(r);
+    traceMock.mockClear();
+
+    uninstall();
+    await r.navigate("/users/1");
+    expect(traceMock).not.toHaveBeenCalled();
+  });
+
+  it("swallows tracePageView failures (reporting never breaks navigation)", async () => {
+    traceMock.mockImplementation(() => {
       throw new Error("report exploded");
     });
+    const r = makeRouter();
+    uninstallers.push(installLarkSentry(r));
 
-    uninstallers.push(installLarkSentry());
-
-    expect(() => Framework.getConfig().error!(new Error("boom"))).not.toThrow();
-  });
-
-  it("restores the previous error handler on uninstall", () => {
-    const previous = vi.fn();
-    Framework.setConfig({ error: previous });
-
-    const uninstall = installLarkSentry();
-    expect(Framework.getConfig().error).not.toBe(previous);
-
-    uninstall();
-    expect(Framework.getConfig().error).toBe(previous);
-  });
-
-  it("restores undefined when no previous handler existed", () => {
-    Framework.setConfig({ error: undefined });
-
-    const uninstall = installLarkSentry();
-    expect(Framework.getConfig().error).toBeDefined();
-
-    uninstall();
-    expect(Framework.getConfig().error).toBeUndefined();
+    await expect(r.navigate("/users/1")).resolves.toBe(true);
+    expect(r.location.value.pathname).toBe("/users/1");
   });
 });
 
 describe("initLarkSentry", () => {
-  it("initializes the SDK and installs the error hook", () => {
-    const uninstall = initLarkSentry({ dsn: "/api/log", projectId: "app" });
+  it("initializes the SDK and installs route tracking", async () => {
+    const r = makeRouter();
+    const uninstall = initLarkSentry({ dsn: "/api/log", projectId: "app" }, r);
     uninstallers.push(uninstall);
 
     expect(initMock).toHaveBeenCalledTimes(1);
     expect(initMock).toHaveBeenCalledWith({ dsn: "/api/log", projectId: "app" });
 
-    Framework.getConfig().error!(new Error("boom"));
-    expect(reportMock).toHaveBeenCalledTimes(1);
+    traceMock.mockClear();
+    await r.navigate("/users/9");
+    expect(traceMock).toHaveBeenCalledTimes(1);
   });
 });

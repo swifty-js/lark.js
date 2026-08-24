@@ -55,8 +55,8 @@
  * when the module re-executes after an update.
  *
  * Access to the framework's swap function goes through
- * `globalThis.__lark_hmr__` (registered by ./hmr.ts and Framework.boot), NOT
- * via import/require of "@lark.js/mvc". Under Module Federation
+ * `globalThis.__lark_hmr__` (registered once at the package entry,
+ * src/index.ts top level), NOT via import/require of "@lark.js/mvc". Under Module Federation
  * (`@lark.js/mvc` shared singleton), ANY import of @lark.js/mvc inside an
  * HMR callback registers the module as a shared consumer, which causes
  * webpack to mark the main chunk as needing a hot-update it never emits →

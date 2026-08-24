@@ -43,7 +43,7 @@ fn(props) → VNode tree (plain jsx() calls — pure data)
   → patch attributes via a RESOLVED snapshot; swap per-node listeners
   → post-commit flush (untracked): mount child instances, batch-push
       changed props, call refs
-  → flushInstanceEffects: pending useEffect callbacks run
+  → flushInstanceEffects: pending mount useEffect callbacks run
 ```
 
 ## Children semantics

@@ -24,11 +24,12 @@ endRender(instance)           // hook-count stability check (dev warning)
 patchChildren(host, prev, out, ns, END_ANCHOR)   // slice diff
 untracked:
   flushOps                    // child instance mounts, batched prop pushes, refs
-  flushInstanceEffects        // pending useEffect callbacks (cleanup-first)
+  flushInstanceEffects        // pending mount useEffect callbacks (run once)
 ```
 
-Errors thrown during a pass route through `funcWithTry` to the global error
-sink (`config.error`) instead of propagating to the signal write site.
+Errors thrown during a pass BUBBLE to the signal write site (there is no
+try-catch wrapper and no global error sink) — catch at the source or let it
+crash loudly, React-style.
 
 The root (`render(vnode, container)`) works the same way: a root record
 holds a vnode signal + its own render effect, so repeat `render()` calls and
@@ -63,8 +64,8 @@ assertions.
 - A plain signal write outside `batch()` re-runs subscribed effects
   **synchronously** at the write site.
 - Writes inside `batch(fn)` coalesce — subscribers run once at batch end.
-  Auto-batched call sites: per-node DOM event listeners, `State.set`,
-  `store.setState`, prop pushes (`writeInstanceProps`), HMR swaps.
+  Auto-batched call sites: per-node DOM event listeners, `store.setState`,
+  prop pushes (`writeInstanceProps`), HMR swaps.
 - Same-value writes (`===`) are no-ops.
 - `computed` is lazy — it recomputes on read, only if a dependency changed.
 - Cycle guard: an effect writing a signal it also reads throws
@@ -83,9 +84,10 @@ Node kinds: **text**, **element**, **raw** (trusted HTML block),
 
 1. **Normalize** — flatten arrays/Fragments, unwrap Signal children (tracked
    read), drop `null/boolean/""`; function tags become component items
-   (never invoked inline).
+   (never invoked inline) with the HMR alias chain resolved HERE — once per
+   vnode (`canonicalComponent`), keeping the diff hot path alias-free.
 2. **Match** — explicit `key` → keyed map (first wins); unkeyed → positional
-   pool, first compatible (same kind + tag / canonical component fn)
+   pool, first compatible (same kind + tag / plain component-fn identity)
    unclaimed node. Incompatible matches are replaced, not patched.
 3. **Patch / create** — text: `nodeValue`; element: attribute snapshot diff +
    recurse into children; raw: keep nodes when the html string is identical,
@@ -144,7 +146,7 @@ nodes via `ref` + `useEffect`, or replay the enhancement in a
 - `Cycle detected`? A body/computed/effect writes a signal it also reads —
   derive with `useComputed` or move the write to a handler.
 - State resets every render? A bare `signal()`/object created in the body is
-  recreated per pass — use `useSignal`/`useRef`/`useMemo`.
+  recreated per pass — use `useSignal`/`useRef`.
 - "Hooks can only be called inside a component function"? A hook ran in a
   handler/async callback, or a component was CALLED instead of used as a tag.
 - Hook-count warning? A hook is inside a condition/loop — hoist it.

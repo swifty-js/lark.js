@@ -53,8 +53,8 @@ import type { Component } from "./jsx/vnode";
 // Hook slots
 // ============================================================
 
-export const VALUE_SLOT = 1;
-export const MOUNT_SLOT = 2;
+const VALUE_SLOT = 1;
+const MOUNT_SLOT = 2;
 
 /** A once-created value (signal, ref cell, computed, effect dispose). */
 export interface ValueSlot {
@@ -95,6 +95,8 @@ export interface Instance {
   propsTarget: Record<string, unknown>;
   /** One signal per prop key (created on first sight). */
   propsSignals: Map<string, Signal<unknown>>;
+  /** Bumped when the prop KEY SET changes — tracks `in`/spread/Object.keys. */
+  keysVersion: Signal<number>;
   /** Keys owned by parent pushes — removal candidates (React semantics). */
   propsKeys: Set<string>;
   /** Call-order-indexed hook slots. */
@@ -114,6 +116,7 @@ export interface Instance {
 export function createInstance(fn: Component): Instance {
   const propsSignals = new Map<string, Signal<unknown>>();
   const propsTarget: Record<string, unknown> = {};
+  const keysVersion = signal(0);
   const proxy = new Proxy(propsTarget, {
     get(target, prop, receiver) {
       if (typeof prop === "string") {
@@ -122,6 +125,14 @@ export function createInstance(fn: Component): Instance {
       }
       return Reflect.get(target, prop, receiver);
     },
+    has(target, prop) {
+      keysVersion.value; // tracked — `"x" in props` reacts to key changes
+      return Reflect.has(target, prop);
+    },
+    ownKeys(target) {
+      keysVersion.value; // tracked — spread / Object.keys react to key changes
+      return Reflect.ownKeys(target);
+    },
   });
   return {
     fn,
@@ -129,6 +140,7 @@ export function createInstance(fn: Component): Instance {
     proxy,
     propsTarget,
     propsSignals,
+    keysVersion,
     propsKeys: new Set(),
     hooks: [],
     hookIndex: 0,
@@ -148,17 +160,22 @@ export function createInstance(fn: Component): Instance {
 export function writeInstanceProps(inst: Instance, props: Record<string, unknown>): void {
   const { propsSignals, propsTarget, propsKeys } = inst;
   batch(() => {
+    let keysChanged = false;
     for (const key of propsKeys) {
       if (!hasOwnProperty(props, key)) {
         propsKeys.delete(key);
         Reflect.deleteProperty(propsTarget, key);
+        keysChanged = true;
         const sig = propsSignals.get(key);
         if (sig) sig.value = undefined;
       }
     }
     for (const key of Object.keys(props)) {
       if (key === "key") continue;
-      propsKeys.add(key);
+      if (!propsKeys.has(key)) {
+        propsKeys.add(key);
+        keysChanged = true;
+      }
       const value = props[key];
       propsTarget[key] = value;
       const sig = propsSignals.get(key);
@@ -168,6 +185,10 @@ export function writeInstanceProps(inst: Instance, props: Record<string, unknown
         propsSignals.set(key, signal(value));
       }
     }
+    // peek(): ++ would READ .value first, and the seed path runs inside the
+    // parent's tracked render effect — that read would subscribe the parent
+    // and the write would immediately re-render it (double mount render).
+    if (keysChanged) inst.keysVersion.value = inst.keysVersion.peek() + 1;
   });
 }
 
@@ -206,7 +227,10 @@ export function endRender(inst: Instance, prev: Instance | null): void {
         `than the previous render (${inst.hookIndex} vs ${inst.hookCount}). ` +
         `Hooks must run unconditionally in the same order every render.`,
     );
-    // Shrink: dispose the orphaned trailing slots before dropping them.
+  }
+  // Dispose orphaned trailing slots: hook-count shrink between renders, or
+  // leftover `keep` slots after an HMR swap to a version with fewer hooks.
+  if (inst.hooks.length > inst.hookIndex) {
     for (let i = inst.hooks.length - 1; i >= inst.hookIndex; i--) {
       const slot = inst.hooks[i];
       if (slot) disposeSlot(slot);
@@ -360,6 +384,11 @@ const EMPTY_INSTANCES: ReadonlySet<Instance> = new Set();
  * (effects, computeds, memos, queries) is disposed and recreated by the next
  * render so no stale closures linger. Caller triggers the re-render via
  * `inst.invalidate`.
+ *
+ * Known limit: keep slots pair by CALL ORDER (there is no Fast-Refresh-style
+ * signature hashing), so an edit that reorders `useSignal`/`useRef` calls can
+ * hand a slot's old state to a different hook. Trailing surplus slots are
+ * disposed by the post-swap render (`endRender`).
  */
 export function swapInstanceFn(inst: Instance, newFn: Component): void {
   unregisterInstance(inst);

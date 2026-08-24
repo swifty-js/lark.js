@@ -191,10 +191,13 @@ export function render(node: JSXNode, container: Element): void {
   const end = document.createComment("");
   container.appendChild(end);
   const rec: RootRecord = { vnode: signal(node), dispose: () => undefined, nodes: [], end };
-  roots.set(container, rec);
+  // Take ownership only after the first pass succeeds: on a throw,
+  // signals-core disposes the effect and rethrows, and the container stays
+  // unregistered so a later render() can retry cleanly.
   rec.dispose = effect(() => {
     renderRoot(container, rec, rec.vnode.value);
   });
+  roots.set(container, rec);
 }
 
 function renderRoot(container: Element, rec: RootRecord, content: JSXNode): void {
@@ -356,11 +359,17 @@ function patchChildren(
   };
 
   const result: RNode[] = new Array(items.length) as RNode[];
+  let seenKeys: Set<string> | undefined;
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
     let matched: RNode | undefined;
     const key = item.k === ELEMENT || item.k === COMPONENT ? item.key : undefined;
     if (key !== undefined) {
+      if (!seenKeys) seenKeys = new Set();
+      if (seenKeys.has(key)) {
+        devWarn(`Duplicate key "${key}" among siblings — keys must be unique within a list.`);
+      }
+      seenKeys.add(key);
       const candidate = keyed?.get(key);
       if (candidate && compatible(candidate, item)) {
         keyed?.delete(key);
@@ -619,6 +628,17 @@ const SKIP_PROPS = new Set(["children", "key", "class", "className", "style", "r
 /** Tags whose `value` is synced as a DOM property, not an attribute. */
 const FORM_VALUE_TAGS = new Set(["INPUT", "TEXTAREA", "SELECT"]);
 
+/**
+ * Enumerated attributes whose booleans serialize as "true"/"false" strings —
+ * removing them on `false` (or writing "" on `true`) would mean a DIFFERENT
+ * state (`aria-hidden="false"` ≠ absent; `draggable=""` is invalid).
+ */
+const ENUMERATED_BOOL_ATTRS = new Set(["contenteditable", "draggable", "spellcheck"]);
+
+function serializesBooleans(name: string): boolean {
+  return ENUMERATED_BOOL_ATTRS.has(name) || name.startsWith("aria-");
+}
+
 function unwrap(value: unknown): unknown {
   return value instanceof Signal ? value.value : value;
 }
@@ -728,7 +748,7 @@ function patchElementProps(r: RElement, newProps: Record<string, unknown>, pass:
       continue;
     }
 
-    if (value === false || value == null) continue; // absent from snapshot → removal path
+    if (value == null || (value === false && !serializesBooleans(name))) continue; // absent from snapshot → removal path
     next[name] = value;
   }
 
@@ -759,6 +779,18 @@ function applyEvent(r: RElement, name: string, value: unknown): string | undefin
     devWarn(
       `Skipped event "${name}" on <${r.type}> — events accept inline functions only ` +
         `(onClick={() => ...}), got ${typeof value}.`,
+    );
+    return undefined;
+  }
+  // React-style capture props would register a bogus "…capture" event type.
+  // (gotpointercapture / lostpointercapture are real DOM events.)
+  if (
+    name.endsWith("Capture") &&
+    name !== "onGotPointerCapture" &&
+    name !== "onLostPointerCapture"
+  ) {
+    devWarn(
+      `Skipped "${name}" on <${r.type}> — capture-phase listeners are not supported; use a ref with addEventListener(type, fn, true) instead.`,
     );
     return undefined;
   }
@@ -812,6 +844,10 @@ function applyAttr(r: RElement, name: string, value: unknown): void {
 
   if (value === undefined) {
     el.removeAttribute(name);
+    return;
+  }
+  if (typeof value === "boolean" && serializesBooleans(name)) {
+    el.setAttribute(name, value ? "true" : "false");
     return;
   }
   if (value === true) {

@@ -451,20 +451,20 @@ export interface SVGAttributes<
   xChannelSelector?: Signalish<string | undefined>;
   xHeight?: Signalish<number | string | undefined>;
   "x-height"?: Signalish<number | string | undefined>;
-  xlinkActuate?: Signalish<string | undefined>;
-  "xlink:actuate"?: Signalish<SVGAttributes["xlinkActuate"]>;
-  xlinkArcrole?: Signalish<string | undefined>;
-  "xlink:arcrole"?: Signalish<string | undefined>;
-  xlinkHref?: Signalish<string | undefined>;
-  "xlink:href"?: Signalish<string | undefined>;
-  xlinkRole?: Signalish<string | undefined>;
-  "xlink:role"?: Signalish<string | undefined>;
-  xlinkShow?: Signalish<string | undefined>;
-  "xlink:show"?: Signalish<string | undefined>;
-  xlinkTitle?: Signalish<string | undefined>;
-  "xlink:title"?: Signalish<string | undefined>;
-  xlinkType?: Signalish<string | undefined>;
-  "xlink:type"?: Signalish<string | undefined>;
+  // xlinkActuate?: Signalish<string | undefined>;
+  // "xlink:actuate"?: Signalish<SVGAttributes["xlinkActuate"]>;
+  // xlinkArcrole?: Signalish<string | undefined>;
+  // "xlink:arcrole"?: Signalish<string | undefined>;
+  // xlinkHref?: Signalish<string | undefined>;
+  // "xlink:href"?: Signalish<string | undefined>;
+  // xlinkRole?: Signalish<string | undefined>;
+  // "xlink:role"?: Signalish<string | undefined>;
+  // xlinkShow?: Signalish<string | undefined>;
+  // "xlink:show"?: Signalish<string | undefined>;
+  // xlinkTitle?: Signalish<string | undefined>;
+  // "xlink:title"?: Signalish<string | undefined>;
+  // xlinkType?: Signalish<string | undefined>;
+  // "xlink:type"?: Signalish<string | undefined>;
   xmlBase?: Signalish<string | undefined>;
   "xml:base"?: Signalish<string | undefined>;
   xmlLang?: Signalish<string | undefined>;
@@ -717,7 +717,7 @@ export interface DOMAttributes<Target extends EventTarget> {
   // PictureInPicture Events
   onEnterPictureInPicture?: PictureInPictureEventHandler<Target>;
   onLeavePictureInPicture?: PictureInPictureEventHandler<Target>;
-  onResize?: PictureInPictureEventHandler<Target>;
+  onResize?: UIEventHandler<Target>;
 
   onCommand?: CommandEventHandler<Target>;
 }
@@ -1105,12 +1105,14 @@ export type AriaRole = WAIAriaRole | DPubAriaRole;
 
 export interface AllHTMLAttributes<RefType extends EventTarget = EventTarget>
   extends ClassAttributes<RefType>, DOMAttributes<RefType>, AriaAttributes {
+  /** `data-*` attributes — serialized (escaped) like any other attribute. */
+  [key: `data-${string}`]: Signalish<string | number | boolean | null | undefined>;
   // Standard HTML Attributes
   accept?: Signalish<string | undefined>;
   acceptCharset?: Signalish<string | undefined>;
-  "accept-charset"?: Signalish<AllHTMLAttributes["acceptCharset"]>;
+  "accept-charset"?: Signalish<string | undefined>;
   accessKey?: Signalish<string | undefined>;
-  accesskey?: Signalish<AllHTMLAttributes["accessKey"]>;
+  accesskey?: Signalish<string | undefined>;
   action?: Signalish<string | undefined>;
   allow?: Signalish<string | undefined>;
   allowFullScreen?: Signalish<boolean | undefined>;
@@ -1143,7 +1145,7 @@ export interface AllHTMLAttributes<RefType extends EventTarget = EventTarget>
   colspan?: Signalish<number | undefined>;
   content?: Signalish<string | undefined>;
   contentEditable?: Signalish<Booleanish | "" | "plaintext-only" | "inherit" | undefined>;
-  contenteditable?: Signalish<AllHTMLAttributes["contentEditable"]>;
+  contenteditable?: Signalish<Booleanish | "" | "plaintext-only" | "inherit" | undefined>;
   /** @deprecated See https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/contextmenu */
   contextMenu?: Signalish<string | undefined>;
   /** @deprecated See https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/contextmenu */
@@ -1154,21 +1156,21 @@ export interface AllHTMLAttributes<RefType extends EventTarget = EventTarget>
   coords?: Signalish<string | undefined>;
   crossOrigin?: Signalish<string | undefined>;
   crossorigin?: Signalish<string | undefined>;
-  currentTime?: Signalish<number | undefined>;
+  // currentTime?: Signalish<number | undefined>;
   data?: Signalish<string | undefined>;
   dateTime?: Signalish<string | undefined>;
   datetime?: Signalish<string | undefined>;
   default?: Signalish<boolean | undefined>;
-  defaultChecked?: Signalish<boolean | undefined>;
-  defaultMuted?: Signalish<boolean | undefined>;
-  defaultPlaybackRate?: Signalish<number | undefined>;
-  defaultValue?: Signalish<string | undefined>;
+  // defaultChecked?: Signalish<boolean | undefined>;
+  // defaultMuted?: Signalish<boolean | undefined>;
+  // defaultPlaybackRate?: Signalish<number | undefined>;
+  // defaultValue?: Signalish<string | undefined>;
   defer?: Signalish<boolean | undefined>;
   dir?: Signalish<"auto" | "rtl" | "ltr" | undefined>;
   disabled?: Signalish<boolean | undefined>;
   disableremoteplayback?: Signalish<boolean | undefined>;
   disableRemotePlayback?: Signalish<boolean | undefined>;
-  download?: Signalish<any | undefined>;
+  download?: Signalish<string | boolean | undefined>;
   decoding?: Signalish<"sync" | "async" | "auto" | undefined>;
   draggable?: Signalish<boolean | undefined>;
   encType?: Signalish<string | undefined>;
@@ -1177,7 +1179,7 @@ export interface AllHTMLAttributes<RefType extends EventTarget = EventTarget>
     "enter" | "done" | "go" | "next" | "previous" | "search" | "send" | undefined
   >;
   elementTiming?: Signalish<string | undefined>;
-  elementtiming?: Signalish<AllHTMLAttributes["elementTiming"]>;
+  elementtiming?: Signalish<string | undefined>;
   exportparts?: Signalish<string | undefined>;
   for?: Signalish<string | undefined>;
   form?: Signalish<string | undefined>;
@@ -1205,7 +1207,7 @@ export interface AllHTMLAttributes<RefType extends EventTarget = EventTarget>
   "http-equiv"?: Signalish<string | undefined>;
   icon?: Signalish<string | undefined>;
   id?: Signalish<string | undefined>;
-  indeterminate?: Signalish<boolean | undefined>;
+  // indeterminate?: Signalish<boolean | undefined>;
   inert?: Signalish<boolean | undefined>;
   inputMode?: Signalish<string | undefined>;
   inputmode?: Signalish<string | undefined>;
@@ -1247,7 +1249,7 @@ export interface AllHTMLAttributes<RefType extends EventTarget = EventTarget>
   placeholder?: Signalish<string | undefined>;
   playsInline?: Signalish<boolean | undefined>;
   playsinline?: Signalish<boolean | undefined>;
-  playbackRate?: Signalish<number | undefined>;
+  // playbackRate?: Signalish<number | undefined>;
   popover?: Signalish<"auto" | "hint" | "manual" | boolean | undefined>;
   popovertarget?: Signalish<string | undefined>;
   popoverTarget?: Signalish<string | undefined>;
@@ -1255,7 +1257,7 @@ export interface AllHTMLAttributes<RefType extends EventTarget = EventTarget>
   popoverTargetAction?: Signalish<"hide" | "show" | "toggle" | undefined>;
   poster?: Signalish<string | undefined>;
   preload?: Signalish<"auto" | "metadata" | "none" | undefined>;
-  preservesPitch?: Signalish<boolean | undefined>;
+  // preservesPitch?: Signalish<boolean | undefined>;
   radioGroup?: Signalish<string | undefined>;
   readonly?: Signalish<boolean | undefined>;
   readOnly?: Signalish<boolean | undefined>;
@@ -1296,7 +1298,7 @@ export interface AllHTMLAttributes<RefType extends EventTarget = EventTarget>
   srclang?: Signalish<string | undefined>;
   srcSet?: Signalish<string | undefined>;
   srcset?: Signalish<string | undefined>;
-  srcObject?: Signalish<MediaStream | MediaSource | Blob | File | null>;
+  // srcObject?: Signalish<MediaStream | MediaSource | Blob | File | null>;
   start?: Signalish<number | undefined>;
   step?: Signalish<number | string | undefined>;
   /** Inline style: raw string or camelCase object (no implicit `px`; `--vars` kept). */
@@ -1309,8 +1311,8 @@ export interface AllHTMLAttributes<RefType extends EventTarget = EventTarget>
   type?: Signalish<string | undefined>;
   useMap?: Signalish<string | undefined>;
   usemap?: Signalish<string | undefined>;
-  value?: Signalish<string | string[] | number | undefined>;
-  volume?: Signalish<string | number | undefined>;
+  value?: Signalish<string | number | undefined>;
+  // volume?: Signalish<string | number | undefined>;
   width?: Signalish<number | string | undefined>;
   wmode?: Signalish<string | undefined>;
   wrap?: Signalish<string | undefined>;
@@ -1324,12 +1326,12 @@ export interface AllHTMLAttributes<RefType extends EventTarget = EventTarget>
   >;
   disablePictureInPicture?: Signalish<boolean | undefined>;
   results?: Signalish<number | undefined>;
-  translate?: Signalish<boolean | undefined>;
+  translate?: Signalish<"yes" | "no" | undefined>;
 
   // RDFa Attributes
   about?: Signalish<string | undefined>;
   datatype?: Signalish<string | undefined>;
-  inlist?: Signalish<any>;
+  inlist?: Signalish<boolean | undefined>;
   prefix?: Signalish<string | undefined>;
   property?: Signalish<string | undefined>;
   resource?: Signalish<string | undefined>;
@@ -1395,7 +1397,7 @@ export interface HTMLAttributes<RefType extends EventTarget = EventTarget>
   tabindex?: Signalish<number | undefined>;
   tabIndex?: Signalish<number | undefined>;
   title?: Signalish<string | undefined>;
-  translate?: Signalish<boolean | undefined>;
+  translate?: Signalish<"yes" | "no" | undefined>;
 
   // WAI-ARIA Attributes
   role?: Signalish<AriaRole | undefined>;
@@ -1409,7 +1411,7 @@ export interface HTMLAttributes<RefType extends EventTarget = EventTarget>
   // RDFa Attributes
   about?: Signalish<string | undefined>;
   datatype?: Signalish<string | undefined>;
-  inlist?: Signalish<any>;
+  inlist?: Signalish<boolean | undefined>;
   prefix?: Signalish<string | undefined>;
   property?: Signalish<string | undefined>;
   resource?: Signalish<string | undefined>;
@@ -1445,7 +1447,7 @@ export type HTMLAttributeAnchorTarget = "_self" | "_blank" | "_parent" | "_top" 
 export interface AnchorHTMLAttributes<
   T extends EventTarget = HTMLAnchorElement,
 > extends HTMLAttributes<T> {
-  download?: Signalish<any>;
+  download?: Signalish<string | boolean | undefined>;
   href?: Signalish<string | undefined>;
   hreflang?: Signalish<string | undefined>;
   hrefLang?: Signalish<string | undefined>;
@@ -1463,7 +1465,7 @@ export interface AreaHTMLAttributes<
 > extends HTMLAttributes<T> {
   alt?: Signalish<string | undefined>;
   coords?: Signalish<string | undefined>;
-  download?: Signalish<any>;
+  download?: Signalish<string | boolean | undefined>;
   href?: Signalish<string | undefined>;
   hreflang?: Signalish<string | undefined>;
   hrefLang?: Signalish<string | undefined>;
@@ -1692,8 +1694,8 @@ export interface InputHTMLAttributes<
   autoComplete?: Signalish<string | undefined>;
   capture?: Signalish<"user" | "environment" | undefined>; // https://www.w3.org/TR/html-media-capture/#the-capture-attribute
   checked?: Signalish<boolean | undefined>;
-  defaultChecked?: Signalish<boolean | undefined>;
-  defaultValue?: Signalish<string | number | undefined>;
+  // defaultChecked?: Signalish<boolean | undefined>;
+  // defaultValue?: Signalish<string | number | undefined>;
   disabled?: Signalish<boolean | undefined>;
   enterKeyHint?: Signalish<
     "enter" | "done" | "go" | "next" | "previous" | "search" | "send" | undefined
@@ -1710,7 +1712,7 @@ export interface InputHTMLAttributes<
   formtarget?: Signalish<string | undefined>;
   formTarget?: Signalish<string | undefined>;
   height?: Signalish<number | string | undefined>;
-  indeterminate?: Signalish<boolean | undefined>;
+  // indeterminate?: Signalish<boolean | undefined>;
   list?: Signalish<string | undefined>;
   max?: Signalish<number | string | undefined>;
   maxlength?: Signalish<number | undefined>;
@@ -1820,20 +1822,20 @@ export interface MediaHTMLAttributes<
   controlsList?: Signalish<string | undefined>;
   crossorigin?: Signalish<HTMLAttributeCrossOrigin>;
   crossOrigin?: Signalish<HTMLAttributeCrossOrigin>;
-  currentTime?: Signalish<number | undefined>;
-  defaultMuted?: Signalish<boolean | undefined>;
-  defaultPlaybackRate?: Signalish<number | undefined>;
+  // currentTime?: Signalish<number | undefined>;
+  // defaultMuted?: Signalish<boolean | undefined>;
+  // defaultPlaybackRate?: Signalish<number | undefined>;
   disableremoteplayback?: Signalish<boolean | undefined>;
   disableRemotePlayback?: Signalish<boolean | undefined>;
   loop?: Signalish<boolean | undefined>;
   mediaGroup?: Signalish<string | undefined>;
   muted?: Signalish<boolean | undefined>;
-  playbackRate?: Signalish<number | undefined>;
+  // playbackRate?: Signalish<number | undefined>;
   preload?: Signalish<"auto" | "metadata" | "none" | undefined>;
-  preservesPitch?: Signalish<boolean | undefined>;
+  // preservesPitch?: Signalish<boolean | undefined>;
   src?: Signalish<string | undefined>;
-  srcObject?: Signalish<MediaStream | MediaSource | Blob | File | null>;
-  volume?: Signalish<string | number | undefined>;
+  // srcObject?: Signalish<MediaStream | MediaSource | Blob | File | null>;
+  // volume?: Signalish<string | number | undefined>;
 }
 
 export interface MenuHTMLAttributes<
@@ -1959,7 +1961,7 @@ export interface SelectHTMLAttributes<
 > extends HTMLAttributes<T> {
   autocomplete?: Signalish<string | undefined>;
   autoComplete?: Signalish<string | undefined>;
-  defaultValue?: Signalish<string | number | undefined>;
+  // defaultValue?: Signalish<string | number | undefined>;
   disabled?: Signalish<boolean | undefined>;
   form?: Signalish<string | undefined>;
   multiple?: Signalish<boolean | undefined>;
@@ -2028,7 +2030,7 @@ export interface TextareaHTMLAttributes<
   autocomplete?: Signalish<string | undefined>;
   autoComplete?: Signalish<string | undefined>;
   cols?: Signalish<number | undefined>;
-  defaultValue?: Signalish<string | number | undefined>;
+  // defaultValue?: Signalish<string | number | undefined>;
   dirName?: Signalish<string | undefined>;
   disabled?: Signalish<boolean | undefined>;
   form?: Signalish<string | undefined>;
@@ -2068,10 +2070,11 @@ export interface TimeHTMLAttributes<
 
 export interface TrackHTMLAttributes<
   T extends EventTarget = HTMLTrackElement,
-> extends MediaHTMLAttributes<T> {
+> extends HTMLAttributes<T> {
   default?: Signalish<boolean | undefined>;
   kind?: Signalish<string | undefined>;
   label?: Signalish<string | undefined>;
+  src?: Signalish<string | undefined>;
   srclang?: Signalish<string | undefined>;
   srcLang?: Signalish<string | undefined>;
 }
@@ -2414,7 +2417,7 @@ export interface IntrinsicMathMLElements {
   mtext: MTextMathMLAttributes<MathMLElement>;
   mtr: MTrMathMLAttributes<MathMLElement>;
   munder: MUnderMathMLAttributes<MathMLElement>;
-  munderover: MUnderMathMLAttributes<MathMLElement>;
+  munderover: MUnderoverMathMLAttributes<MathMLElement>;
   semantics: SemanticsMathMLAttributes<MathMLElement>;
 }
 

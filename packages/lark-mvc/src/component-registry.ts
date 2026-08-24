@@ -40,7 +40,9 @@ const aliasMap = new WeakMap<Component, Component>();
 
 /**
  * Resolve a component reference through the HMR alias chain to its latest
- * version. Non-aliased components resolve to themselves.
+ * version. Non-aliased components resolve to themselves. (`aliasComponent`
+ * guarantees the latest version has no outgoing edge, so chains are acyclic;
+ * the bound is cheap insurance.)
  */
 export function canonicalComponent(fn: Component): Component {
   let current = fn;
@@ -53,9 +55,13 @@ export function canonicalComponent(fn: Component): Component {
 }
 
 /**
- * Record that `newFn` replaces `oldFn` (HMR).
+ * Record that `newFn` replaces `oldFn` (HMR). `newFn` is the LATEST version,
+ * so any stale forward edge from it (left by an edit-revert ping-pong like
+ * A→B then B→A) is dropped first — otherwise the chain would cycle and
+ * canonical resolution would depend on the starting point.
  */
 export function aliasComponent(oldFn: Component, newFn: Component): void {
   if (oldFn === newFn) return;
+  aliasMap.delete(newFn);
   aliasMap.set(oldFn, newFn);
 }

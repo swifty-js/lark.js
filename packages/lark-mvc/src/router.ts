@@ -57,6 +57,7 @@
  * History mode only — there is no hash routing.
  */
 import { signal, computed, untracked, type ReadonlySignal } from "./reactive";
+import { devWarn } from "./utils";
 import { useSignal, useSignalEffect } from "./hooks";
 import { createVNode, type Component, type JSXNode } from "./jsx/vnode";
 import { useValueSlot } from "./component";
@@ -180,6 +181,10 @@ export function matchPath(pattern: string, pathname: string): Record<string, str
   for (let i = 0; i < pSegs.length; i++) {
     const p = pSegs[i];
     if (p === "*") {
+      if (i !== pSegs.length - 1) {
+        devWarn(`Invalid route pattern "${pattern}" — "*" is only allowed as the last segment.`);
+        return null;
+      }
       params["*"] = uSegs.slice(i).map(decodeSegment).join("/");
       return params;
     }
@@ -332,7 +337,8 @@ export function createRouter(routes: RouteObject[], options: RouterOptions = {})
       try {
         const result = await blocker(next, current);
         if (result === false) return false;
-      } catch {
+      } catch (err) {
+        devWarn(`Navigation blocker threw (${String(err)}) — treated as a block.`);
         return false;
       }
     }

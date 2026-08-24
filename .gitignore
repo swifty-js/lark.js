@@ -215,9 +215,7 @@ dist-docs
 **/.swifty/
 .swiftx/
 **/.swiftx/
-.larky/
-**/.larky/
-packages/lark-docs/docs
-sentry
 
 .playwright-cli
+
+packages/preact

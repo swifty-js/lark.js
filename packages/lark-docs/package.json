@@ -1,6 +1,6 @@
 {
   "name": "@lark.js/docs",
-  "version": "0.0.22",
+  "version": "0.0.23",
   "description": "All-in-one documentation site generator (@swifty.js/docs + @swifty.js/sentry + @swifty.js/anti-copy)",
   "keywords": [
     "anti-copy",
@@ -77,6 +77,16 @@
       "require": {
         "types": "./dist/theme.d.cts",
         "default": "./dist/theme.cjs"
+      }
+    },
+    "./plugins": {
+      "import": {
+        "types": "./dist/plugins.d.ts",
+        "default": "./dist/plugins.js"
+      },
+      "require": {
+        "types": "./dist/plugins.d.cts",
+        "default": "./dist/plugins.cjs"
       }
     },
     "./client": {

@@ -6,7 +6,14 @@ import { fileURLToPath } from "node:url";
 const root = dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
-  entry: ["src/index.tsx", "src/vite.ts", "src/compiler.ts", "src/runtime.ts", "src/theme.ts"],
+  entry: [
+    "src/index.tsx",
+    "src/vite.ts",
+    "src/compiler.ts",
+    "src/runtime.ts",
+    "src/theme.ts",
+    "src/plugins.ts",
+  ],
   clean: true,
   dts: true,
   format: ["esm", "cjs"],

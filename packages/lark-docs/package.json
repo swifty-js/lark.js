@@ -1,6 +1,6 @@
 {
   "name": "@lark.js/docs",
-  "version": "0.0.23",
+  "version": "0.0.24",
   "description": "All-in-one documentation site generator (@swifty.js/docs + @swifty.js/sentry + @swifty.js/anti-copy)",
   "keywords": [
     "anti-copy",

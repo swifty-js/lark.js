@@ -31,10 +31,12 @@ export default defineConfig({
   tsconfig: "./tsconfig.build.json",
   onSuccess: async () => {
     const dist = join(root, "dist");
+    const swiftyDist = join(root, "node_modules/@swifty.js/docs/dist");
     mkdirSync(dist, { recursive: true });
-    copyFileSync(
-      join(root, "node_modules/@swifty.js/docs/dist/client.css"),
-      join(dist, "client.css"),
-    );
+    copyFileSync(join(swiftyDist, "client.css"), join(dist, "client.css"));
+    // Copy the real compiled theme + chunk so Tailwind v4 @source can scan
+    // the actual utility class strings (theme.js imports ./theme-chunk.js).
+    copyFileSync(join(swiftyDist, "theme.js"), join(dist, "theme.js"));
+    copyFileSync(join(swiftyDist, "theme-chunk.js"), join(dist, "theme-chunk.js"));
   },
 });

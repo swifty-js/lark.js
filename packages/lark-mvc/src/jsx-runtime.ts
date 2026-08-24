@@ -40,7 +40,7 @@
  * any module without pulling the framework in.
  */
 
-import type { LarkIntrinsicElements } from "./jsx/dom-types";
+import type { IntrinsicElements as IntrinsicElementsInternal } from "./jsx/dom-types";
 import { createVNode, Fragment, raw, type Component, type JSXNode, type VNode } from "./jsx/vnode";
 
 export { Fragment, raw };
@@ -109,6 +109,7 @@ export declare namespace JSX {
    * }
    * ```
    */
-  // eslint-disable-next-line @typescript-eslint/no-empty-object-type
-  interface IntrinsicElements extends LarkIntrinsicElements {}
+  interface IntrinsicElements extends IntrinsicElementsInternal {
+    /** noop */
+  }
 }

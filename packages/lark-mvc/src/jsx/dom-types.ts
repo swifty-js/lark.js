@@ -2423,7 +2423,7 @@ export interface IntrinsicMathMLElements {
  * `JSX.IntrinsicElements` — named distinctly so the flattened d.ts bundle
  * cannot collide with the `JSX.IntrinsicElements` declaration itself.
  */
-export interface LarkIntrinsicElements extends IntrinsicSVGElements, IntrinsicMathMLElements {
+export interface IntrinsicElements extends IntrinsicSVGElements, IntrinsicMathMLElements {
   a: AnchorHTMLAttributes<HTMLAnchorElement>;
   abbr: HTMLAttributes<HTMLElement>;
   address: HTMLAttributes<HTMLElement>;

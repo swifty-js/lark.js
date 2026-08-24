@@ -4,12 +4,6 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
-catalogs:
-  default:
-    '@swifty.js/sentry':
-      specifier: ^0.0.5
-      version: 0.0.5
-
 importers:
 
   .:
@@ -30,14 +24,42 @@ importers:
   packages/lark-docs:
     dependencies:
       '@swifty.js/anti-copy':
-        specifier: file:../../../swifty.js/packages/anti-copy
-        version: file:../swifty.js/packages/anti-copy(@swifty.js/docs@file:../swifty.js/packages/swifty-docs(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(supports-color@10.2.2)(tailwindcss@4.3.3)(vite@7.3.6(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.50.0)(yaml@2.9.0)))(react@19.2.8)
+        specifier: latest
+        version: 0.0.3(@swifty.js/docs@0.0.12(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(supports-color@10.2.2)(tailwindcss@4.3.3)(vite@7.3.6(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.50.0)(yaml@2.9.0)))(react@19.2.8)
       '@swifty.js/docs':
-        specifier: file:../../../swifty.js/packages/swifty-docs
-        version: file:../swifty.js/packages/swifty-docs(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(supports-color@10.2.2)(tailwindcss@4.3.3)(vite@7.3.6(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.50.0)(yaml@2.9.0))
+        specifier: latest
+        version: 0.0.12(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(supports-color@10.2.2)(tailwindcss@4.3.3)(vite@7.3.6(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.50.0)(yaml@2.9.0))
       '@swifty.js/sentry':
-        specifier: file:../../../swifty-sentry/sentry
-        version: file:../swifty-sentry/sentry(react@19.2.8)(vite@7.3.6(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.50.0)(yaml@2.9.0))(webpack@5.109.2(esbuild@0.28.2)(lightningcss@1.33.0)(postcss@8.5.26))
+        specifier: latest
+        version: 0.0.5(react@19.2.8)(vite@7.3.6(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.50.0)(yaml@2.9.0))(webpack@5.109.2(esbuild@0.27.7)(lightningcss@1.33.0)(postcss@8.5.26))
+      tailwindcss:
+        specifier: ^4.0.0
+        version: 4.3.3
+    devDependencies:
+      '@types/react':
+        specifier: ^19.2.18
+        version: 19.2.18
+      '@types/react-dom':
+        specifier: ^19.2.4
+        version: 19.2.4(@types/react@19.2.18)
+      oxfmt:
+        specifier: ^0.61.0
+        version: 0.61.0
+      react:
+        specifier: ^19.2.8
+        version: 19.2.8
+      react-dom:
+        specifier: ^19.2.8
+        version: 19.2.8(react@19.2.8)
+      tsup:
+        specifier: ^8.5.1
+        version: 8.5.1(jiti@2.7.0)(postcss@8.5.26)(supports-color@10.2.2)(typescript@5.9.3)(yaml@2.9.0)
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vite:
+        specifier: ^7.3.6
+        version: 7.3.6(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.50.0)(yaml@2.9.0)
 
   packages/lark-mvc:
     dependencies:
@@ -65,10 +87,10 @@ importers:
         version: 5.9.3
       vite:
         specifier: ^8.2.2
-        version: 8.2.2(@types/node@24.13.3)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.50.0)(yaml@2.9.0)
+        version: 8.2.2(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.50.0)(yaml@2.9.0)
       vitest:
         specifier: ^4.1.11
-        version: 4.1.11(@types/node@24.13.3)(@vitest/coverage-v8@4.1.6)(jsdom@29.1.1)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.50.0)(yaml@2.9.0))
+        version: 4.1.11(@types/node@24.13.3)(@vitest/coverage-v8@4.1.6)(jsdom@29.1.1)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.50.0)(yaml@2.9.0))
 
   packages/lark-sentry:
     dependencies:
@@ -83,7 +105,7 @@ importers:
         specifier: workspace:*
         version: link:../lark-mvc
       '@swifty.js/sentry':
-        specifier: 'catalog:'
+        specifier: latest
         version: 0.0.5(react@19.2.8)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.50.0)(yaml@2.9.0))(webpack@5.109.2(esbuild@0.28.2)(lightningcss@1.33.0)(postcss@8.5.26))
       jsdom:
         specifier: ^29.1.1
@@ -99,7 +121,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.1.11
-        version: 4.1.11(@types/node@24.13.3)(jsdom@29.1.1)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.50.0)(yaml@2.9.0))
+        version: 4.1.11(@types/node@24.13.3)(@vitest/coverage-v8@4.1.6)(jsdom@29.1.1)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.50.0)(yaml@2.9.0))
 
   packages/lark-storybook:
     dependencies:
@@ -1528,16 +1550,19 @@ packages:
     peerDependencies:
       react: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
 
-  '@swifty.js/anti-copy@file:../swifty.js/packages/anti-copy':
-    resolution: {directory: ../swifty.js/packages/anti-copy, type: directory}
+  '@swifty.js/anti-copy@0.0.3':
+    resolution: {integrity: sha512-HndOby557VCMEugQruhFO34TiWaUpW9Dre12MBEVQl/mekLMuoTxhI+cyVzfEBJP72Bv6513UHeRv2nvxAcXbA==}
     peerDependencies:
       '@lark.js/mvc': '>=0.0.26'
+      '@rspress/core': '>=2.0.0'
       '@swifty.js/docs': '>=0.0.11'
       react: ^18.0.0 || ^19.0.0
       vitepress: '>=1.0.0'
       vue: '>=3.0.0'
     peerDependenciesMeta:
       '@lark.js/mvc':
+        optional: true
+      '@rspress/core':
         optional: true
       '@swifty.js/docs':
         optional: true
@@ -1548,8 +1573,8 @@ packages:
       vue:
         optional: true
 
-  '@swifty.js/docs@file:../swifty.js/packages/swifty-docs':
-    resolution: {directory: ../swifty.js/packages/swifty-docs, type: directory}
+  '@swifty.js/docs@0.0.12':
+    resolution: {integrity: sha512-2LIacbdYALJr9SRYOp/66FTySzOo+5FJSMJqS10dQGmJHTZCSam82RYW/CtwDgJmy0Msz5JsNSj4g3mZycsOAg==}
     engines: {node: '>=20'}
     peerDependencies:
       react: ^18.0.0 || ^19.0.0
@@ -1558,26 +1583,6 @@ packages:
 
   '@swifty.js/sentry@0.0.5':
     resolution: {integrity: sha512-cXxRdb3RHoWjW3tUxMwxUKyRg0jDrUl3J2XnqHNZUfnLpT5z1kOwn9bkJJFrnNpvTGuO+mw4GORpGz++zMN0tA==}
-    peerDependencies:
-      react: ^16.0.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
-      vite: ^7.0.0 || ^8.0.0
-      vue: ^3.0.0
-      webpack: ^4.0.0 || ^5.0.0
-      webpack-dev-server: '*'
-    peerDependenciesMeta:
-      react:
-        optional: true
-      vite:
-        optional: true
-      vue:
-        optional: true
-      webpack:
-        optional: true
-      webpack-dev-server:
-        optional: true
-
-  '@swifty.js/sentry@file:../swifty-sentry/sentry':
-    resolution: {directory: ../swifty-sentry/sentry, type: directory}
     peerDependencies:
       react: ^16.0.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
       vite: ^7.0.0 || ^8.0.0
@@ -1846,6 +1851,11 @@ packages:
 
   '@types/node@24.13.3':
     resolution: {integrity: sha512-Dh8vAsV36ig5wa9OX4pXvMc9D3Veibfw2wix0CUwYODLD8nkj9UsLjASr49nPg+2eKzxhBV+v7L8pXvT4e639Q==}
+
+  '@types/react-dom@19.2.4':
+    resolution: {integrity: sha512-Bsc+QHgp+P/F02XDzNCY9jnZNCUuLki36KT7VKrTXXLdHf+vHMNZnW1rVu5DNW/rCK+fya3DATySbLM4yhtKUw==}
+    peerDependencies:
+      '@types/react': ^19.2.0
 
   '@types/react@19.2.18':
     resolution: {integrity: sha512-AnzbBERsrLKtk2XSfTbYRLjQPdy116Sty4q+T+Bp3IC4l6jNBvreVPAHmpq9qhXQM7CXZPjLVmGMw9sy+hxQ3w==}
@@ -4763,12 +4773,12 @@ snapshots:
     dependencies:
       react: 19.2.8
 
-  '@swifty.js/anti-copy@file:../swifty.js/packages/anti-copy(@swifty.js/docs@file:../swifty.js/packages/swifty-docs(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(supports-color@10.2.2)(tailwindcss@4.3.3)(vite@7.3.6(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.50.0)(yaml@2.9.0)))(react@19.2.8)':
+  '@swifty.js/anti-copy@0.0.3(@swifty.js/docs@0.0.12(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(supports-color@10.2.2)(tailwindcss@4.3.3)(vite@7.3.6(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.50.0)(yaml@2.9.0)))(react@19.2.8)':
     optionalDependencies:
-      '@swifty.js/docs': file:../swifty.js/packages/swifty-docs(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(supports-color@10.2.2)(tailwindcss@4.3.3)(vite@7.3.6(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.50.0)(yaml@2.9.0))
+      '@swifty.js/docs': 0.0.12(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(supports-color@10.2.2)(tailwindcss@4.3.3)(vite@7.3.6(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.50.0)(yaml@2.9.0))
       react: 19.2.8
 
-  '@swifty.js/docs@file:../swifty.js/packages/swifty-docs(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(supports-color@10.2.2)(tailwindcss@4.3.3)(vite@7.3.6(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.50.0)(yaml@2.9.0))':
+  '@swifty.js/docs@0.0.12(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(supports-color@10.2.2)(tailwindcss@4.3.3)(vite@7.3.6(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.50.0)(yaml@2.9.0))':
     dependencies:
       '@tailwindcss/typography': 0.5.20(tailwindcss@4.3.3)
       '@vitejs/plugin-react': 4.7.0(supports-color@10.2.2)(vite@7.3.6(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.50.0)(yaml@2.9.0))
@@ -4791,6 +4801,20 @@ snapshots:
       - supports-color
       - vite
 
+  '@swifty.js/sentry@0.0.5(react@19.2.8)(vite@7.3.6(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.50.0)(yaml@2.9.0))(webpack@5.109.2(esbuild@0.27.7)(lightningcss@1.33.0)(postcss@8.5.26))':
+    dependencies:
+      '@fingerprintjs/fingerprintjs': 5.2.0
+      '@rrweb/record': 2.1.0
+      pako: 2.2.0
+      source-map: 0.8.0
+      ua-parser-js: 2.0.10
+      web-vitals: 5.3.0
+      zod: 4.4.3
+    optionalDependencies:
+      react: 19.2.8
+      vite: 7.3.6(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.50.0)(yaml@2.9.0)
+      webpack: 5.109.2(esbuild@0.27.7)(lightningcss@1.33.0)(postcss@8.5.26)
+
   '@swifty.js/sentry@0.0.5(react@19.2.8)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.50.0)(yaml@2.9.0))(webpack@5.109.2(esbuild@0.28.2)(lightningcss@1.33.0)(postcss@8.5.26))':
     dependencies:
       '@fingerprintjs/fingerprintjs': 5.2.0
@@ -4803,20 +4827,6 @@ snapshots:
     optionalDependencies:
       react: 19.2.8
       vite: 8.2.2(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.50.0)(yaml@2.9.0)
-      webpack: 5.109.2(esbuild@0.28.2)(lightningcss@1.33.0)(postcss@8.5.26)
-
-  '@swifty.js/sentry@file:../swifty-sentry/sentry(react@19.2.8)(vite@7.3.6(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.50.0)(yaml@2.9.0))(webpack@5.109.2(esbuild@0.28.2)(lightningcss@1.33.0)(postcss@8.5.26))':
-    dependencies:
-      '@fingerprintjs/fingerprintjs': 5.2.0
-      '@rrweb/record': 2.1.0
-      pako: 2.2.0
-      source-map: 0.8.0
-      ua-parser-js: 2.0.10
-      web-vitals: 5.3.0
-      zod: 4.4.3
-    optionalDependencies:
-      react: 19.2.8
-      vite: 7.3.6(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.50.0)(yaml@2.9.0)
       webpack: 5.109.2(esbuild@0.28.2)(lightningcss@1.33.0)(postcss@8.5.26)
 
   '@tailwindcss/node@4.3.3':
@@ -5088,6 +5098,10 @@ snapshots:
     dependencies:
       undici-types: 7.18.2
 
+  '@types/react-dom@19.2.4(@types/react@19.2.18)':
+    dependencies:
+      '@types/react': 19.2.18
+
   '@types/react@19.2.18':
     dependencies:
       csstype: 3.2.3
@@ -5127,7 +5141,7 @@ snapshots:
       obug: 2.1.4
       std-env: 4.2.0
       tinyrainbow: 3.1.1
-      vitest: 4.1.11(@types/node@24.13.3)(@vitest/coverage-v8@4.1.6)(jsdom@29.1.1)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.50.0)(yaml@2.9.0))
+      vitest: 4.1.11(@types/node@24.13.3)(@vitest/coverage-v8@4.1.6)(jsdom@29.1.1)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.50.0)(yaml@2.9.0))
 
   '@vitest/expect@3.2.4':
     dependencies:
@@ -5145,14 +5159,6 @@ snapshots:
       '@vitest/utils': 4.1.11
       chai: 6.2.2
       tinyrainbow: 3.1.1
-
-  '@vitest/mocker@4.1.11(vite@8.2.2(@types/node@24.13.3)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.50.0)(yaml@2.9.0))':
-    dependencies:
-      '@vitest/spy': 4.1.11
-      estree-walker: 3.0.3
-      magic-string: 0.30.21
-    optionalDependencies:
-      vite: 8.2.2(@types/node@24.13.3)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.50.0)(yaml@2.9.0)
 
   '@vitest/mocker@4.1.11(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.50.0)(yaml@2.9.0))':
     dependencies:
@@ -6237,6 +6243,19 @@ snapshots:
     dependencies:
       brace-expansion: 2.1.4
 
+  minimizer-webpack-plugin@5.6.1(esbuild@0.27.7)(lightningcss@1.33.0)(postcss@8.5.26)(webpack@5.109.2(esbuild@0.27.7)(lightningcss@1.33.0)(postcss@8.5.26)):
+    dependencies:
+      '@jridgewell/trace-mapping': 0.3.31
+      jest-worker: 27.5.1
+      schema-utils: 4.3.3
+      terser: 5.50.0
+      webpack: 5.109.2(esbuild@0.27.7)(lightningcss@1.33.0)(postcss@8.5.26)
+    optionalDependencies:
+      esbuild: 0.27.7
+      lightningcss: 1.33.0
+      postcss: 8.5.26
+    optional: true
+
   minimizer-webpack-plugin@5.6.1(esbuild@0.28.2)(lightningcss@1.33.0)(postcss@8.5.26)(webpack@5.109.2(esbuild@0.28.2)(lightningcss@1.33.0)(postcss@8.5.26)):
     dependencies:
       '@jridgewell/trace-mapping': 0.3.31
@@ -6882,21 +6901,6 @@ snapshots:
       terser: 5.50.0
       yaml: 2.9.0
 
-  vite@8.2.2(@types/node@24.13.3)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.50.0)(yaml@2.9.0):
-    dependencies:
-      lightningcss: 1.33.0
-      picomatch: 4.0.5
-      postcss: 8.5.26
-      rolldown: 1.2.5
-      tinyglobby: 0.2.17
-    optionalDependencies:
-      '@types/node': 24.13.3
-      esbuild: 0.27.7
-      fsevents: 2.3.3
-      jiti: 2.7.0
-      terser: 5.50.0
-      yaml: 2.9.0
-
   vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.50.0)(yaml@2.9.0):
     dependencies:
       lightningcss: 1.33.0
@@ -6912,36 +6916,7 @@ snapshots:
       terser: 5.50.0
       yaml: 2.9.0
 
-  vitest@4.1.11(@types/node@24.13.3)(@vitest/coverage-v8@4.1.6)(jsdom@29.1.1)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.50.0)(yaml@2.9.0)):
-    dependencies:
-      '@vitest/expect': 4.1.11
-      '@vitest/mocker': 4.1.11(vite@8.2.2(@types/node@24.13.3)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.50.0)(yaml@2.9.0))
-      '@vitest/pretty-format': 4.1.11
-      '@vitest/runner': 4.1.11
-      '@vitest/snapshot': 4.1.11
-      '@vitest/spy': 4.1.11
-      '@vitest/utils': 4.1.11
-      es-module-lexer: 2.3.2
-      expect-type: 1.4.0
-      magic-string: 0.30.21
-      obug: 2.1.4
-      pathe: 2.0.3
-      picomatch: 4.0.5
-      std-env: 4.2.0
-      tinybench: 2.9.0
-      tinyexec: 1.3.0
-      tinyglobby: 0.2.17
-      tinyrainbow: 3.1.1
-      vite: 8.2.2(@types/node@24.13.3)(esbuild@0.27.7)(jiti@2.7.0)(terser@5.50.0)(yaml@2.9.0)
-      why-is-node-running: 2.3.0
-    optionalDependencies:
-      '@types/node': 24.13.3
-      '@vitest/coverage-v8': 4.1.6(vitest@4.1.11)
-      jsdom: 29.1.1
-    transitivePeerDependencies:
-      - msw
-
-  vitest@4.1.11(@types/node@24.13.3)(jsdom@29.1.1)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.50.0)(yaml@2.9.0)):
+  vitest@4.1.11(@types/node@24.13.3)(@vitest/coverage-v8@4.1.6)(jsdom@29.1.1)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.50.0)(yaml@2.9.0)):
     dependencies:
       '@vitest/expect': 4.1.11
       '@vitest/mocker': 4.1.11(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.50.0)(yaml@2.9.0))
@@ -6965,6 +6940,7 @@ snapshots:
       why-is-node-running: 2.3.0
     optionalDependencies:
       '@types/node': 24.13.3
+      '@vitest/coverage-v8': 4.1.6(vitest@4.1.11)
       jsdom: 29.1.1
     transitivePeerDependencies:
       - msw
@@ -6986,6 +6962,43 @@ snapshots:
   webpack-sources@3.5.1: {}
 
   webpack-virtual-modules@0.6.2: {}
+
+  webpack@5.109.2(esbuild@0.27.7)(lightningcss@1.33.0)(postcss@8.5.26):
+    dependencies:
+      '@types/estree': 1.0.9
+      '@types/json-schema': 7.0.15
+      '@webassemblyjs/ast': 1.14.1
+      '@webassemblyjs/wasm-edit': 1.14.1
+      '@webassemblyjs/wasm-parser': 1.14.1
+      acorn: 8.18.0
+      browserslist: 4.28.7
+      chrome-trace-event: 1.0.4
+      enhanced-resolve: 5.24.5
+      es-module-lexer: 2.3.2
+      eslint-scope: 5.1.1
+      events: 3.3.0
+      graceful-fs: 4.2.11
+      mime-db: 1.54.0
+      minimizer-webpack-plugin: 5.6.1(esbuild@0.27.7)(lightningcss@1.33.0)(postcss@8.5.26)(webpack@5.109.2(esbuild@0.27.7)(lightningcss@1.33.0)(postcss@8.5.26))
+      neo-async: 2.6.2
+      schema-utils: 4.3.3
+      tapable: 2.3.3
+      watchpack: 2.5.2
+      webpack-sources: 3.5.1
+    transitivePeerDependencies:
+      - '@minify-html/node'
+      - '@swc/core'
+      - '@swc/css'
+      - '@swc/html'
+      - clean-css
+      - cssnano
+      - csso
+      - esbuild
+      - html-minifier-terser
+      - lightningcss
+      - postcss
+      - uglify-js
+    optional: true
 
   webpack@5.109.2(esbuild@0.28.2)(lightningcss@1.33.0)(postcss@8.5.26):
     dependencies:

@@ -75,7 +75,7 @@
   },
   "devDependencies": {
     "@lark.js/mvc": "workspace:*",
-    "@swifty.js/sentry": "catalog:",
+    "@swifty.js/sentry": "latest",
     "jsdom": "^29.1.1",
     "oxfmt": "^0.61.0",
     "tsup": "^8.5.1",
@@ -83,7 +83,7 @@
     "vitest": "^4.1.11"
   },
   "peerDependencies": {
-    "@lark.js/mvc": ">=0.0.32",
+    "@lark.js/mvc": "workspace:*",
     "@swifty.js/sentry": ">=0.0.5",
     "vite": "^7.0.0 || ^8.0.0",
     "webpack": "^4.0.0 || ^5.0.0"

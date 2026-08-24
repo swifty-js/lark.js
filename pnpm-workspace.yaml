@@ -26,10 +26,3 @@ allowBuilds:
   esbuild: true
   keytar: true
   playwright-chromium: true
-
-catalog:
-  '@swifty.js/sentry': "^0.0.5"
-  '@swifty.js/mvc': '^0.0.24'
-
-minimumReleaseAgeExclude:
-  - '@swifty.js/sentry@0.0.5'

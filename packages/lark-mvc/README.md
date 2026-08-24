@@ -104,11 +104,13 @@ Add `"@lark.js/mvc/client"` to `types` (or a triple-slash reference) for
 
 ### Bundler plugin
 
-Install the bundler plugin matching your build tool. The Vite plugin also
-defaults `oxc.jsx = { runtime: "automatic", importSource: "@lark.js/mvc" }`
-for you; with Webpack/Rspack the JSX transform comes from your existing
-TS/SWC/Babel loader reading the tsconfig above. All three plugins auto-inject
-state-preserving component HMR (no `import.meta.hot` boilerplate needed).
+Install the bundler plugin matching your build tool. The Vite and Rsbuild
+plugins also default the JSX transform to
+`{ runtime: "automatic", importSource: "@lark.js/mvc" }` for you; with
+Webpack/Rspack the JSX transform comes from your existing TS/SWC/Babel loader
+reading the tsconfig above. All four plugins auto-inject state-preserving
+component HMR (no `import.meta.hot` boilerplate needed) and skip the
+injection in production builds.
 
 > Linking this package via the `file:` protocol? Vite's dependency
 > pre-bundle cache is keyed by the lockfile, not by dep contents — after
@@ -140,6 +142,16 @@ import { LarkMvcPlugin } from "@lark.js/mvc/rspack";
 export default {
   plugins: [new LarkMvcPlugin()],
 };
+```
+
+```ts
+// rsbuild.config.ts (Rsbuild ≥ 1.0)
+import { defineConfig } from "@rsbuild/core";
+import { larkMvcPlugin } from "@lark.js/mvc/rsbuild";
+
+export default defineConfig({
+  plugins: [larkMvcPlugin()],
+});
 ```
 
 ## Quick Start
@@ -799,6 +811,7 @@ singleton.
 | `@lark.js/mvc/vite`            | Vite plugin (`larkMvcPlugin`)                                       |
 | `@lark.js/mvc/webpack`         | Webpack integration (`LarkMvcPlugin`, `larkMvcLoader`)              |
 | `@lark.js/mvc/rspack`          | Rspack integration (`LarkMvcPlugin`, `larkMvcLoader`)               |
+| `@lark.js/mvc/rsbuild`         | Rsbuild plugin (`larkMvcPlugin`)                                    |
 | `@lark.js/mvc/client`          | Ambient types (`*.css` modules, HMR globals)                        |
 
 ## Configuration
@@ -873,6 +886,7 @@ packages/lark-mvc/
     vite.ts               -- Vite plugin
     webpack.ts            -- Webpack loader/plugin
     rspack.ts             -- Rspack loader/plugin
+    rsbuild.ts            -- Rsbuild plugin
     jsx-runtime.ts        -- JSX automatic runtime entry (jsx/jsxs + JSX types)
     jsx-dev-runtime.ts    -- JSX automatic dev runtime entry (jsxDEV)
     jsx/

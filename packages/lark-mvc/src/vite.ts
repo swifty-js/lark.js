@@ -60,6 +60,7 @@ const COMPONENT_MODULE_ID_REGEXP = /\.[jt]sx$/;
  * @returns Vite plugin instance
  */
 export function larkMvcPlugin(): Plugin {
+  let isBuild = false;
   return {
     name: "lark-mvc",
     enforce: "pre",
@@ -81,9 +82,14 @@ export function larkMvcPlugin(): Plugin {
       return { oxc: { jsx: patch } };
     },
 
+    configResolved(config): void {
+      isBuild = config.command === "build";
+    },
+
     /**
      * Transform hook: inject component HMR into `.tsx`/`.jsx` modules with a
-     * default export.
+     * default export. Dev-server only — the snippet is dead code in
+     * production, so builds skip the rewrite entirely.
      *
      * When a component file changes, the auto-injected snippet captures the
      * old default export (via dispose) and the new one (via accept), then
@@ -91,6 +97,7 @@ export function larkMvcPlugin(): Plugin {
      * `useSignal`/`useRef` state survives.
      */
     transform(code, id) {
+      if (isBuild) return undefined;
       // Only process JSX modules (query-suffixed ids excluded)
       if (!COMPONENT_MODULE_ID_REGEXP.test(id.split("?")[0])) return undefined;
       if (id.includes("node_modules")) return undefined;

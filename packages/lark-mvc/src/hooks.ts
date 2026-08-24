@@ -138,13 +138,15 @@ export function useEffect(fn: () => void | (() => void)): void {
 }
 
 /**
- * Register a cleanup to run on unmount. Registered once per slot (safe under
- * per-render re-runs — the first render's `fn` wins).
+ * Register a cleanup to run when the instance tears down. Registered once
+ * per slot (safe under per-render re-runs — the first render's `fn` wins).
+ * The callback runs when its slot is disposed: on unmount, and on an HMR
+ * swap (the next render registers the new version's callback).
  */
 export function onCleanup(fn: () => void): void {
-  const inst = requireInstance("onCleanup");
-  useValueSlot(() => {
-    inst.cleanups.push(fn);
-    return fn;
-  });
+  requireInstance("onCleanup");
+  useValueSlot(
+    () => fn,
+    (value) => (value as () => void)(),
+  );
 }

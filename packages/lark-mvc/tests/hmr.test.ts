@@ -172,7 +172,9 @@ describe("HMR", () => {
         `}`,
       ].join("\n");
       const result = injectComponentHmrSnippet(src, "vite");
-      expect(result).toContain("const __lark_component__ = function Note() {");
+      // Named declarations keep their module-scope binding.
+      expect(result).toContain("function Note() {");
+      expect(result).toContain("const __lark_component__ = Note;");
       expect(result).toContain("hotSwapByComponent");
     });
 

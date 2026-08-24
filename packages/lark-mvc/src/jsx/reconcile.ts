@@ -149,7 +149,7 @@ type RNode = RText | RElement | RRaw | RComponent;
 type PendingOp =
   | { t: 1; r: RComponent }
   | { t: 2; inst: Instance; props: Record<string, unknown> }
-  | { t: 4; prev: RefValue | undefined; ref: RefValue | undefined; el: Element | null };
+  | { t: 3; prev: RefValue | undefined; ref: RefValue | undefined; el: Element | null };
 
 interface Pass {
   ops: PendingOp[];
@@ -695,7 +695,7 @@ function patchElementProps(r: RElement, newProps: Record<string, unknown>, pass:
 
   const newRef = newProps["ref"] as RefValue | undefined;
   if (r.ref !== newRef) {
-    pass.ops.push({ t: 4, prev: r.ref, ref: newRef, el });
+    pass.ops.push({ t: 3, prev: r.ref, ref: newRef, el });
     r.ref = newRef;
   }
 
@@ -842,27 +842,25 @@ function callRef(ref: RefValue, el: Element | null): void {
 }
 
 /**
- * Flush deferred ops after the DOM commit. Runs inside `untracked()` so
- * child renders and prop writes never subscribe the parent's render effect.
- * Prop writes are batched (inside `writeInstanceProps`), so invalidated
- * children render after the current effect completes.
+ * Flush deferred ops after the DOM commit. Both call sites run it inside
+ * `untracked()` so child renders and prop writes never subscribe the
+ * parent's render effect. Prop writes are batched (inside
+ * `writeInstanceProps`), so invalidated children render after the current
+ * effect completes.
  */
 function flushOps(ops: PendingOp[]): void {
-  if (ops.length === 0) return;
-  untracked(() => {
-    for (const op of ops) {
-      switch (op.t) {
-        case 1:
-          mountComponent(op.r);
-          break;
-        case 2:
-          writeInstanceProps(op.inst, op.props);
-          break;
-        case 4:
-          if (op.prev) callRef(op.prev, null);
-          if (op.ref) callRef(op.ref, op.el);
-          break;
-      }
+  for (const op of ops) {
+    switch (op.t) {
+      case 1:
+        mountComponent(op.r);
+        break;
+      case 2:
+        writeInstanceProps(op.inst, op.props);
+        break;
+      case 3:
+        if (op.prev) callRef(op.prev, null);
+        if (op.ref) callRef(op.ref, op.el);
+        break;
     }
-  });
+  }
 }

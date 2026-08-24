@@ -36,7 +36,7 @@
  * - store.subscribe(listener) / store.subscribe(selector, listener): manual
  *   subscriptions; the selector form only fires when the selected slice
  *   changes (`Object.is`)
- * - store.destroy(): clear listeners and freeze the store
+ * - store.destroy(): clear listeners; further `setState` calls are no-ops
  * - `computed(fn)` (from the reactive core) declares derived state — its
  *   dependencies are tracked automatically, no deps array
  *
@@ -130,6 +130,20 @@ export function createStore<T extends object>(creator: StateCreator<T>): StoreAp
       }
       return Reflect.get(target, prop, receiver); // actions / unknown keys
     },
+    // Direct writes would land on the mirror without updating the key
+    // signal — reads would keep returning the signal value while a later
+    // legitimate `setState` with the same value would be treated as a
+    // no-change (mirror comparison) and never notify. Fail loudly instead.
+    set(_target, prop) {
+      throw new Error(
+        `store state is read-only — use setState() (attempted to write "${String(prop)}")`,
+      );
+    },
+    deleteProperty(_target, prop) {
+      throw new Error(
+        `store state is read-only — use setState() (attempted to delete "${String(prop)}")`,
+      );
+    },
   }) as T;
 
   /** Read the stable tracked state proxy. */
@@ -154,7 +168,9 @@ export function createStore<T extends object>(creator: StateCreator<T>): StoreAp
    */
   const setState = (partial: Partial<T> | ((prev: T) => Partial<T>), replace?: boolean): void => {
     if (destroyed) return;
-    const resolved = typeof partial === "function" ? partial(proxy) : partial;
+    // untracked: updater reads must never subscribe an enclosing tracked
+    // region (zustand `set(prev => ...)` semantics).
+    const resolved = typeof partial === "function" ? untracked(() => partial(proxy)) : partial;
 
     const prevState = { ...mirror } as T;
     let changed = false;
@@ -240,7 +256,7 @@ export function createStore<T extends object>(creator: StateCreator<T>): StoreAp
   }
 
   /**
-   * Tear down the store: clear listeners. Further `setState` calls are
+   * Tear down the store: clear listeners; further `setState` calls are
    * no-ops.
    */
   const destroy = (): void => {

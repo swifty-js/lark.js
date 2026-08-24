@@ -50,7 +50,7 @@ export default defineConfig([
     // resolve to its own file (not a shared chunk) for the LarkMvcPlugin to
     // locate the loader at runtime. splitting: false ensures each ESM entry
     // is a single self-contained file with no shared chunk extraction.
-    entry: ["src/rspack.ts", "src/webpack.ts", "src/vite.ts"],
+    entry: ["src/webpack.ts", "src/vite.ts"],
     dts: true,
     format: ["esm", "cjs"],
     minify: false,

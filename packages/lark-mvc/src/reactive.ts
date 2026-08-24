@@ -25,15 +25,16 @@
  * `@preact/signals-core`.
  *
  * Every data source in Lark Mvc is signal-based:
- * - view-local state: `signal()` / `useSignal()` closures read by templates
- * - cross-view `State`: per-key signals (read = subscribe)
+ * - component state: `useSignal()` hook slots read by component bodies
+ * - props: per-key signals behind each instance's props proxy
  * - stores: per-key signals behind a tracked `getState()` proxy
- * - router: the location signal behind `Router.location`
- * - props: per-frame per-key signals behind the `params` proxy
+ * - router: `location` / `match` / `params` / `searchParams` signals on the
+ *   `createRouter` instance
  *
- * Each mounted view runs its template inside one `effect()` — any signal read
- * during template evaluation subscribes the view, and writes re-render it
- * synchronously (writes inside `batch()` coalesce into a single re-render).
+ * Each mounted component re-runs its function inside one `effect()` — any
+ * signal read during the body subscribes the instance, and writes re-render
+ * it synchronously (writes inside `batch()` coalesce into a single
+ * re-render).
  *
  * ## Shallow reactivity
  *

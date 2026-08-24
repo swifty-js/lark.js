@@ -36,7 +36,8 @@
  *   THAT key only (finer-grained than React's whole-props identity model)
  * - the **hook slot array** + `currentInstance` tracking (rules of hooks)
  * - **mount flushing** — `onMount` callbacks run after the DOM commit
- * - **teardown** — slot disposal + `onCleanup` callbacks in reverse order
+ * - **teardown** — hook slots disposed in reverse order (`onCleanup`
+ *   callbacks are slots too)
  * - the **live-instance registry** used by HMR to hot-swap component code
  *   while preserving state slots
  *
@@ -99,12 +100,12 @@ export interface Instance {
   /** Call-order-indexed hook slots. */
   hooks: Array<HookSlot | undefined>;
   hookIndex: number;
-  /** Completed render passes (0 = mounting). */
+  /** Hook count of the last completed render (rules-of-hooks check). */
+  hookCount: number;
+  /** Completed render passes (0 = mounting; reset by HMR swaps). */
   renderCount: number;
   /** Manual/HMR re-render channel — the render effect reads it. */
   invalidate: Signal<number>;
-  /** `onCleanup` callbacks (and other unmount-time disposers). */
-  cleanups: Array<() => void>;
   /** Dispose of the instance's render effect (set by the reconciler). */
   renderDispose: (() => void) | undefined;
 }
@@ -131,9 +132,9 @@ export function createInstance(fn: Component): Instance {
     propsKeys: new Set(),
     hooks: [],
     hookIndex: 0,
+    hookCount: 0,
     renderCount: 0,
     invalidate: signal(0),
-    cleanups: [],
     renderDispose: undefined,
   };
 }
@@ -199,14 +200,20 @@ export function beginRender(inst: Instance): Instance | null {
 /** Leave a render pass: verify hook-count stability, bump the pass counter. */
 export function endRender(inst: Instance, prev: Instance | null): void {
   currentInstance = prev;
-  if (inst.renderCount > 0 && inst.hookIndex !== inst.hooks.length) {
+  if (inst.renderCount > 0 && inst.hookIndex !== inst.hookCount) {
     devWarn(
       `Component "${inst.fn.name || "anonymous"}" called a different number of hooks ` +
-        `than the previous render (${inst.hookIndex} vs ${inst.hooks.length}). ` +
+        `than the previous render (${inst.hookIndex} vs ${inst.hookCount}). ` +
         `Hooks must run unconditionally in the same order every render.`,
     );
+    // Shrink: dispose the orphaned trailing slots before dropping them.
+    for (let i = inst.hooks.length - 1; i >= inst.hookIndex; i--) {
+      const slot = inst.hooks[i];
+      if (slot) disposeSlot(slot);
+    }
     inst.hooks.length = inst.hookIndex;
   }
+  inst.hookCount = inst.hookIndex;
   inst.renderCount++;
 }
 
@@ -296,10 +303,11 @@ function disposeSlot(slot: HookSlot): void {
 }
 
 /**
- * Destroy the instance's logical state: dispose hook slots (reverse order),
- * run `onCleanup` callbacks (reverse order), unregister from the HMR
- * registry. The reconciler disposes the render effect and removes the DOM
- * range separately (child instances are destroyed before this runs — React's
+ * Destroy the instance's logical state: dispose hook slots in reverse order
+ * (`useSignalEffect` disposers, `useEffect` cleanups, and `onCleanup`
+ * callbacks are all slots), unregister from the HMR registry. The reconciler
+ * disposes the render effect and removes the DOM range separately (child
+ * instances are destroyed before this runs — React's
  * child-cleanups-before-parent order).
  */
 export function destroyInstanceState(inst: Instance): void {
@@ -311,10 +319,6 @@ export function destroyInstanceState(inst: Instance): void {
     if (slot) disposeSlot(slot);
   }
   inst.hooks.length = 0;
-  for (let i = inst.cleanups.length - 1; i >= 0; i--) {
-    inst.cleanups[i]();
-  }
-  inst.cleanups.length = 0;
 }
 
 // ============================================================
@@ -368,4 +372,7 @@ export function swapInstanceFn(inst: Instance, newFn: Component): void {
     disposeSlot(slot);
     inst.hooks[i] = undefined;
   }
+  // The new version may legitimately use a different hook layout — treat the
+  // next render as a mount for the hook-count check.
+  inst.renderCount = 0;
 }

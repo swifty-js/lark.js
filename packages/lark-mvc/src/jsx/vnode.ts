@@ -78,7 +78,7 @@ export interface VNode {
   type: string | Component | symbol;
   /** Props object including `children`. */
   props: Record<string, unknown>;
-  /** Normalized `key` (from the jsx() third argument), used as `id` fallback. */
+  /** Normalized `key` (from the jsx() third argument) — sibling compare key for the keyed diff. */
   key: string | undefined;
 }
 

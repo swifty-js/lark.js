@@ -62,8 +62,8 @@ export type JsxEventValue = (e: LarkEvent) => unknown;
  * Create a JSX element (automatic runtime entry, static children).
  *
  * `key` arrives as the third argument (NOT inside props) per the React 17+
- * automatic-runtime convention. It is used by the serializer as an `id`
- * fallback for keyed DOM diffing.
+ * automatic-runtime convention. It is the sibling compare key for the
+ * reconciler's keyed diff (never written to the DOM).
  */
 export function jsx(
   type: string | Component | symbol,

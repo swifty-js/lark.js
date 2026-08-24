@@ -37,7 +37,6 @@ declare global {
     hot?: {
       accept(cb?: (mod: { default?: unknown } | undefined) => void): void;
       dispose(cb: (data: Record<string, unknown>) => void): void;
-      invalidate(): void;
       data?: Record<string, unknown>;
     };
   }

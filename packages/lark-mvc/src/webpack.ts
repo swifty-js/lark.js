@@ -86,6 +86,8 @@ export interface LarkMvcWebpackPluginOptions {
  * valid in both TS and TSX. Other modules pass through untouched.
  */
 function larkMvcLoader(this: unknown, source: string): string {
+  // Production builds get no HMR runtime — skip the rewrite entirely.
+  if ((this as { mode?: string } | null | undefined)?.mode === "production") return source;
   try {
     return injectComponentHmrSnippet(source, "webpack");
   } catch (err) {
@@ -118,11 +120,15 @@ class LarkMvcPlugin {
    */
   apply(compiler: {
     options: {
+      mode?: unknown;
       module: {
         rules: unknown[];
       };
     };
   }): void {
+    // Explicit production builds ship no HMR runtime — skip the rule.
+    if (compiler.options.mode === "production") return;
+
     const { test, exclude } = this.options;
 
     compiler.options.module = compiler.options.module || {};

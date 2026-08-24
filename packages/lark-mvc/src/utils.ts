@@ -23,8 +23,7 @@
 /**
  * Lark framework internal utility functions.
  *
- * Deliberately tiny: errors are never swallowed (no try-catch wrappers) and
- * object merging is plain `Object.assign`.
+ * Deliberately tiny: errors are never swallowed (no try-catch wrappers).
  */
 
 /** Safe hasOwnProperty check */

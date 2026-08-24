@@ -147,6 +147,15 @@ if (import.meta.webpackHot) {
 const EXPORT_DEFAULT_REGEXP = /^[ \t]*export\s+default\s+/m;
 
 /**
+ * Named function/class declaration following `export default `. These must
+ * KEEP their declaration form: const-wrapping them into expressions would
+ * remove the module-scope name binding, breaking any other module-scope
+ * reference (`component: App`, `App.displayName = ...`).
+ */
+const NAMED_DECLARATION_REGEXP =
+  /^(?:(?:async\s+)?function(?:\s*\*)?|(?:abstract\s+)?class)\s+([A-Za-z_$][A-Za-z0-9_$]*)/;
+
+/**
  * Quick check: is this source eligible for component HMR injection?
  *
  * Any module with a line-leading `export default` qualifies — components
@@ -165,17 +174,19 @@ export function isLarkComponentSource(source: string): boolean {
  * Strategy (no expression scanning — works for any legal statement,
  * including `as` casts, ternaries, and JSX text containing apostrophes):
  *
- * 1. Replace the `export default ` keywords (at a line start, top level by
- *    convention) with `const __lark_component__ = ` — the rest of the
- *    original statement, whatever it is, now initializes the const.
- * 2. Append `export default __lark_component__;` and the HMR snippet at the
- *    end of the file (the const is initialized by then; nothing else in a
- *    module can reference its own default export, so moving the export is
- *    safe).
- *
- * `export default function Name() {}` also works: the rewrite turns it into
- * `const __lark_component__ = function Name() {}` — a named function
- * expression, still hoist-free but initialized before the appended export.
+ * 1. **Named function/class declarations** (`export default function App()`)
+ *    keep their declaration: the `export default ` keywords are dropped so
+ *    the declaration stays in module scope (other module code may reference
+ *    the name), and `const __lark_component__ = App;` + the default export
+ *    are appended at the end of the file (function declarations hoist;
+ *    classes are declared before the EOF alias runs either way).
+ * 2. **Everything else**: the `export default ` keywords (at a line start,
+ *    top level by convention) are replaced with
+ *    `const __lark_component__ = ` — the rest of the original statement,
+ *    whatever it is, now initializes the const — and
+ *    `export default __lark_component__;` is appended at the end of the
+ *    file (nothing else in a module can reference its own default export,
+ *    so moving the export is safe).
  *
  * Idempotent: sources already containing `__lark_component__` are returned
  * unchanged, so double-registration (plugin + manual loader rule) cannot
@@ -196,10 +207,21 @@ export function injectComponentHmrSnippet(source: string, bundler: Bundler): str
   const match = EXPORT_DEFAULT_REGEXP.exec(source);
   if (!match) return source;
 
+  const bodyStart = match.index + match[0].length;
+  const named = NAMED_DECLARATION_REGEXP.exec(source.slice(bodyStart));
+  if (named) {
+    return (
+      source.slice(0, match.index) +
+      source.slice(bodyStart) +
+      `\nconst __lark_component__ = ${named[1]};\nexport default __lark_component__;\n` +
+      getComponentHmrSnippet(bundler)
+    );
+  }
+
   return (
     source.slice(0, match.index) +
     "const __lark_component__ = " +
-    source.slice(match.index + match[0].length) +
+    source.slice(bodyStart) +
     "\nexport default __lark_component__;\n" +
     getComponentHmrSnippet(bundler)
   );

@@ -1,7 +1,7 @@
-# Signals, State, Store, Router & useUrlState
+# Signals, Store, Router & useUrlState
 
-Source of truth: `src/reactive.ts`, `src/state.ts`, `src/store.ts`,
-`src/router.ts`, `src/url-state.ts`.
+Source of truth: `src/reactive.ts`, `src/store.ts`, `src/router.ts`,
+`src/url-state.ts`.
 
 ## The reactive core (re-exported @preact/signals-core)
 
@@ -26,42 +26,12 @@ handlers, async callbacks) reads snapshots.
 (`sig.value = [...sig.value, x]`). Same-value writes are no-ops. Writing a
 signal that the same tracked region reads throws `Cycle detected`.
 
-Two state layers, choose deliberately:
+**Signals are the ONLY reactive mechanism** — no event emitters, no deps
+arrays, no error-swallowing wrappers. Cross-component state has ONE answer:
+`createStore` (the State singleton is removed — simple shared values are
+small stores or plain module-level `signal()`s).
 
-- **`State`** — singleton for SIMPLE cross-view values (page title, session
-  info, toggles, injected app config). No actions, no computed.
-- **`createStore`** — zustand-aligned stores for COMPLEX reactive state:
-  actions, `computed`, manual subscriptions, multiple instances.
-
-## State (singleton, per-key signals)
-
-```ts
-import { State } from "@lark.js/mvc";
-
-State.set({ count: 1, title: "Hello" }); // batched per-key signal writes — DONE.
-State.get("count");                       // tracked read (subscribes to "count")
-State.get<Record<string, unknown>>();     // snapshot; subscribes to EVERY change
-State.on / State.off / State.fire;        // general-purpose pub/sub (non-reactive)
-```
-
-There is **no `State.digest()` and no `State.diff()`** — writes notify
-tracked readers directly. Components react by reading in the body:
-
-```tsx
-export default function Header() {
-  // ref-counted: keys dropped when the last observer unmounts
-  useEffect(() => State.clean("count,title"), []);
-  return (
-    <p>{String(State.get("title"))}: {Number(State.get("count"))}</p>
-  );
-}
-```
-
-`State.clean(keys)` increments the per-key observer count immediately and
-returns a dispose function — pair it with `useEffect(..., [])` so the
-returned dispose doubles as the effect cleanup.
-
-## createStore / computed
+## createStore / computed (anonymous, zustand-aligned)
 
 ```ts
 import { createStore, computed } from "@lark.js/mvc";
@@ -71,7 +41,7 @@ interface CountStore {
   increment: () => void;
 }
 
-const useCountStore = createStore<CountStore>("count", (set, get) => ({
+const useCountStore = createStore<CountStore>((set, get) => ({
   count: 0,
   step: 1,
   doubled: computed(() => get().count * 2), // deps AUTO-tracked — no deps array
@@ -81,125 +51,148 @@ const useCountStore = createStore<CountStore>("count", (set, get) => ({
 useCountStore.getState();              // STABLE tracked proxy (see below)
 useCountStore.setState({ count: 5 });  // batched; Object.is-equal values skipped
 useCountStore.setState((prev) => ({ count: prev.count + 1 }));
-const off = useCountStore.subscribe((state, prevState) => { /* manual */ });
-useCountStore.destroy();               // clears listeners, removes from registry
+useCountStore.setState({ count: 0 }, true); // replace: missing plain keys → undefined
+const off = useCountStore.subscribe((state, prevState) => { /* every change */ });
+const offSel = useCountStore.subscribe(
+  (s) => s.count,                      // selector — fires only when slice changes
+  (count, prevCount) => { /* ... */ },
+);
+useCountStore.destroy();               // clears listeners; setState becomes no-op
 ```
 
 Semantics (from `src/store.ts`):
 
+- **Anonymous** — `createStore(creator)`, no name argument, no global
+  registry (zustand `create` semantics). Module scope is the identity.
 - Creator runs once. Functions become **actions** (immune to setState);
   `computed(fn)` return values (ReadonlySignals) become derived slots —
   dependencies are tracked automatically through `get()` proxy reads.
-- `getState()` returns ONE stable proxy: reading a key inside a template
-  subscribes that view to THAT key only. Spreading it
+- `getState()` returns ONE stable proxy: reading a key inside a component
+  body subscribes that instance to THAT key only. Spreading it
   (`{ ...getState() }`) yields a plain snapshot including actions.
 - Writes to computed/action keys via `setState` are silently ignored;
   unknown keys create new state slots (zustand semantics).
-- Store names must be unique (global registry).
 
 In components: **no hook needed** — read `getState()` in the body:
 
 ```tsx
-function CounterButton() {
+export default function CounterButton() {
   const { count, doubled, increment } = useCountStore.getState();
   return <button onClick={increment}>{count} ×2={doubled}</button>;
 }
 ```
 
-Removed: `bindStore`, `useStore`, and the `computed(deps[], fn)` deps-array
-form.
+## Router (factory, history-only, react-router data model)
 
-## Router
-
-Configured via `Framework.boot({ routeMode, routes, defaultPath, defaultView,
-unmatchedView, rewrite, hashbang })`. Two modes:
-
-- `"history"` (default): `pushState`/`popstate`, clean URLs.
-- `"hash"`: `location.hash` with `#!` prefix (configurable via `hashbang`).
+`createRouter(routes, { basename? })` is a plain factory — **all navigation
+state lives on the instance** (no module-level singleton; MF-safe). The
+instance is also recorded as the ACTIVE router, resolved by `useRouter()`
+and used by `<RouterView/>` / `useUrlState` when no router is passed.
 
 ```ts
-import { Router } from "@lark.js/mvc";
+import { createRouter, useRouter } from "@lark.js/mvc";
+import type { Location, RouteMatch, RouterApi } from "@lark.js/mvc";
 
-Router.to("/list", { page: 2 }); // navigate with params
-Router.to({ page: 3 }); // params only — keeps current path, merges params
-Router.to("/detail", { id: "1" }, true); // replace history entry
-Router.to("/x", undefined, false, true); // silent (no changed event, no reactive bump)
+const router = createRouter([
+  { path: "/", component: Home },
+  { path: "/users/:id", component: UserDetail },
+  { path: "/admin", lazy: () => import("./views/admin") },
+  { path: "*", component: NotFound },
+]);
 
-const loc = Router.parse(); // TRACKED read — location-version signal
-loc.path;                   // resolved route path
-loc.params;                 // merged query+hash params (hash wins)
-loc.get("page", "1");       // param with default
-loc.view;                   // resolved view path (after boot)
+// FOUR signals — all tracked reads:
+router.location.value;     // { pathname, search, hash, state, key } (basename-stripped)
+router.match.value;        // RouteMatch | null — { route, params, pathname }
+router.params.value;       // { id: "42" } from "/users/:id" ("*" for splats)
+router.searchParams.value; // URLSearchParams
 
-Router.diff(); // LocationDiff | undefined
-Router.join("/a", "b", "../c"); // path normalization (dot segments, doubles)
+// Navigation (react-router `navigate` semantics) — Promise<boolean>:
+await router.navigate("/users/42?tab=posts#bio");
+await router.navigate({ pathname: "/users/42", search: "?tab=posts" });
+await router.navigate("/login", { replace: true, state: { from: "/admin" } });
+await router.navigate(-1);   // history traversal
+
+// Blockers:
+const unblock = router.block(async (next, current) => {
+  if (next.pathname.startsWith("/admin")) return await checkAuth();
+  return true; // false / throw → blocked
+});
+
+router.dispose(); // detach popstate listener (tests / teardown)
 ```
 
-### Reactive navigation (replaces observeLocation)
+Semantics (from `src/router.ts`):
 
-`Router.parse()` reads an internal location-version signal, bumped on every
-non-silent route change. Components that read the URL in a tracked region
-re-render automatically:
+- ONE `location` signal per instance is the source of truth; `match` /
+  `params` / `searchParams` are computeds. A committed navigation is
+  exactly one signal write — subscribed instances re-render.
+- **Matching** is ranked react-router style: static segments (+10) >
+  dynamic `:param` (+3) > splat `*` (−2); ties resolve in registration
+  order. Static compare is case-insensitive; param values are decoded.
+  `matchPath(pattern, pathname)` / `matchRoutes(routes, pathname)` are
+  exported pure functions.
+- **navigate** to the current href converts push → replace (no duplicate
+  entries). Resolves `false` when a blocker rejected.
+- **Blockers on back/forward**: popstate fires AFTER the browser moved, so
+  blockers are consulted at the target; on rejection the traversal is
+  reverted via `history.go(delta)` (the echo popstate is swallowed) and the
+  location signal never moves. `location.state` rides on `history.state`
+  (wrapper `{ usr, key, idx }`); `location.key` is unique per entry.
+- **basename**: stripped from `location.pathname` (react-router semantics —
+  components see logical paths) and prepended to written hrefs; URLs
+  outside the basename yield `match === null`.
+
+### RouterView (the outlet component)
 
 ```tsx
-function Pager() {
-  return <p>page {Router.parse().get("page", "1")}</p>;
-}
+import { render, createRouter, RouterView } from "@lark.js/mvc";
 
-// Async work driven by navigation:
-useSignalEffect(() => {
-  const path = Router.parse().path;          // subscribe
-  untracked(() => void loadContent(path));   // async body untracked
-});
+const router = createRouter(routes);
+render(<RouterView router={router} />, document.getElementById("root")!);
+// or, using the active router: render(<RouterView />, el)
 ```
 
-Route dispatch: every confirmed navigation `render()`s the matched component
-into the root container. Route-VIEW changes swap the component (old instance
-unmounted); param-only changes diff into the SAME instance with fresh URL
-params as props (state survives). Reactive `Router.parse()` reads work
-independently of this dispatch.
+`RouterView`'s body reads `router.match.value` (tracked) and returns the
+matched component as a vnode — route dispatch IS the component diff:
 
-### Two-phase navigation + guards
+- Route change → the matched component swaps (old instance unmounted).
+- Param-only change → SAME instance (hook state survives); the component
+  re-renders only if it read `router.params`/`location` (tracked).
+- `lazy` routes: loads are deduped in flight and cached on the route
+  object; a stale load can never overwrite a newer route (the body re-reads
+  the CURRENT match). Load failures propagate as unhandled rejections.
 
-Phase 1 `change` (preventable) → beforeEach guards → Phase 2 `changed`
-(location signal bump + route dispatch).
+### useRouter / useBlocker
 
-```ts
-Router.on("change", (e) => {
-  // e.prevent() = suspend; e.reject() = revert URL; e.resolve() = commit
-});
-Router.on("changed", (e) => {
-  /* LocationDiff fields */
-});
-
-const unGuard = Router.beforeEach(async (to, from) => {
-  if (to.path === "/admin") return await checkAuth(); // false/throw aborts + reverts
-  return true;
-});
-unGuard(); // remove
+```tsx
+const router = useRouter();       // ACTIVE router (throws if none created)
+useBlocker(() => !dirty.value);   // registered on mount, unregistered on unmount
 ```
 
-Guards run sequentially in registration order; the first `false`
-short-circuits. `Router.on("page_unload", (data) => { data.msg = "..." })`
-hooks `beforeunload`.
+`useRouter` is a plain resolver (no hook slot — callable anywhere);
+`useBlocker` is a real hook (slot-registered, component-only).
 
-## useUrlState
+## useUrlState (component hook, stable setter)
 
 ```tsx
 import { useUrlState } from "@lark.js/mvc";
 
 export default function Pager() {
-  const [readPage, writePage] = useUrlState({ page: "1", size: "20" });
-  // readPage(): URL params merged over defaults (all strings) — a TRACKED
-  //   read via Router.parse(); call it in the body each render.
-  // writePage(patch | prevFn): Router.to(patch) — other URL params preserved.
+  const [params, setParams] = useUrlState({ page: "1", size: "20" });
+  // params: URL search params merged over defaults (all strings) — a TRACKED
+  //   read; the component re-renders on URL changes.
+  // setParams: STABLE across renders (one slot per instance).
+  //   setParams(patch | prevFn, { replace? }) navigates via the active
+  //   router — other search params, pathname, and hash preserved;
+  //   undefined/null values delete the key.
   return (
-    <button onClick={() => writePage((p) => ({ page: String(Number(p.page) + 1) }))}>
-      Page {readPage().page}
+    <button onClick={() => setParams((p) => ({ page: String(Number(p.page) + 1) }))}>
+      Page {params.page}
     </button>
   );
 }
 ```
 
-The old signature `useUrlState(ctx, defaults)` → `[state, setState]` is
-removed (no ctx arg; returns a tracked getter, not a snapshot).
+Component-only (a real hook — throws outside a component body). `defaults`
+and the router are captured on the FIRST render. Omitting `defaults`
+returns every current search param.

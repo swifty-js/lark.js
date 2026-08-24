@@ -24,7 +24,7 @@
  * Lark Framework — public API barrel export.
  *
  * Re-exports the complete public surface of `@lark.js/mvc` from a single
- * entry point. Consumers can `import { render, useSignal, State, ... }`
+ * entry point. Consumers can `import { render, useSignal, createRouter, ... }`
  * from `"@lark.js/mvc"` without knowing the internal module layout.
  *
  * ## API surface
@@ -33,20 +33,27 @@
  * | -------- | ------- |
  * | Reactive | `signal`, `computed`, `effect`, `batch`, `untracked`, `Signal` |
  * | Rendering | `render`, `unmount`, `raw`, `Fragment` |
- * | Components | `FC` type, `registerComponent`, `invalidateComponent` |
- * | Hooks | `useSignal`, `useRef`, `useComputed`, `useMemo`, `useEffect`, `useSignalEffect`, `onCleanup` |
- * | State | `State`, `createStore`, `useUrlState` |
- * | Query | `createQuery`, `useQuery`, `createMutation`, `invalidateQueries` |
- * | Router | `Router` |
- * | Service | `createService`, `ServiceApi`, `PayloadApi` |
- * | Framework | `Framework` (boot/config/utilities) |
+ * | Hooks | `useSignal`, `useRef`, `useComputed`, `useSignalEffect`, `useEffect` (mount-only), `onCleanup` |
+ * | Router | `createRouter`, `RouterView`, `useRouter`, `useBlocker`, `matchPath`, `matchRoutes` |
+ * | State | `createStore`, `useUrlState` |
+ * | HMR | `hotSwapByComponent` |
  * | Types | All types from `./types` via `export *` |
  *
- * Internal-only utilities (`createCache`, `createEmitter`, HMR swap
- * functions, etc.) are accessible via the `Framework` object or `globalThis`
- * rather than re-exported here — they are implementation details that bloat
- * the public API surface without serving external consumers.
+ * There is no Framework/boot object — an app boots with:
+ * `render(<RouterView router={createRouter(routes)}/>, container)`.
+ * Async server state (SWR-style queries) is intentionally NOT part of this
+ * package — it belongs to a dedicated data-fetching package built on the
+ * same signals.
  */
+import { hotSwapByComponent } from "./hmr";
+
+// Global HMR handle — THE single registration point. Auto-injected HMR
+// snippets (see ./hmr-inject.ts) call it via `globalThis.__lark_hmr__`
+// instead of importing "@lark.js/mvc" (an import inside an HMR callback
+// would register the module as an MF shared consumer → ChunkLoadError).
+if (typeof globalThis !== "undefined" && !globalThis.__lark_hmr__) {
+  globalThis.__lark_hmr__ = { hotSwapByComponent };
+}
 
 // Reactive core (@preact/signals-core) — the framework's single reactivity
 // primitive set. Reads inside component bodies/computed/effects subscribe;
@@ -60,44 +67,23 @@ export { raw, Fragment } from "./jsx/vnode";
 export type { JSXNode, VNode, RawHTML, Component } from "./jsx/vnode";
 export type { LarkEvent, JsxEventValue, LarkAttributes } from "./jsx-runtime";
 
-// Component registry (string routes / lazy loading only — JSX tags never
-// need registration)
-export { registerComponent, invalidateComponent } from "./component-registry";
+// Hooks (call-order-indexed slots — React rules of hooks; signals-only,
+// no deps arrays)
+export { useSignal, useRef, useComputed, useSignalEffect, useEffect, onCleanup } from "./hooks";
 
-// Hooks (call-order-indexed slots — React rules of hooks)
-export {
-  useSignal,
-  useRef,
-  useComputed,
-  useMemo,
-  useEffect,
-  useSignalEffect,
-  onCleanup,
-} from "./hooks";
-
-// State (cross-view observable data — per-key signals)
-export { State } from "./state";
-
-// Router (history/hash with two-phase change; `parse()` is a tracked read)
-export { Router } from "./router";
+// Router (factory-based, history-only, react-router data model on signals)
+export { createRouter, RouterView, useRouter, useBlocker, matchPath, matchRoutes } from "./router";
+export type { RouterOptions } from "./router";
 
 // Store (zustand-aligned state management — per-key signals)
 export { createStore } from "./store";
 export type { StoreApi } from "./store";
 
-// Query (TanStack-style async state on signals)
-export { createQuery, useQuery, createMutation, invalidateQueries, clearQueryCache } from "./query";
-export type { QueryOptions, QueryResult, MutationResult } from "./query";
-
-// URL state hook (sync component state with URL params — tracked reads)
+// URL state hook (sync component state with URL search params)
 export { useUrlState } from "./url-state";
 
-// Service (API request management)
-export { createService } from "./service";
-export type { ServiceApi, ServiceInstance } from "./service";
-
-// Framework (boot / config / routing dispatch / utilities)
-export { Framework } from "./framework";
+// HMR (called by auto-injected snippets through globalThis.__lark_hmr__)
+export { hotSwapByComponent };
 
 // Types (re-exported for consumer convenience)
 export * from "./types";

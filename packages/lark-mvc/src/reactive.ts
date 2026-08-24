@@ -28,7 +28,7 @@
  * - view-local state: `signal()` / `useSignal()` closures read by templates
  * - cross-view `State`: per-key signals (read = subscribe)
  * - stores: per-key signals behind a tracked `getState()` proxy
- * - router: a location version signal read by `Router.parse()`
+ * - router: the location signal behind `Router.location`
  * - props: per-frame per-key signals behind the `params` proxy
  *
  * Each mounted view runs its template inside one `effect()` — any signal read

@@ -20,93 +20,22 @@
  * SOFTWARE.
  */
 
-import { describe, it, expect, beforeEach } from "vitest";
-import {
-  getComponent,
-  registerComponent,
-  invalidateComponent,
-  getComponentRegistry,
-  ensureComponentName,
-  aliasComponent,
-  canonicalComponent,
-} from "../src/component-registry";
+import { describe, it, expect } from "vitest";
+import { aliasComponent, canonicalComponent } from "../src/component-registry";
 import type { Component } from "../src/jsx/vnode";
 
 const makeComponent = (): Component => () => null;
 
-describe("component-registry", () => {
-  beforeEach(() => {
-    // Wipe registry between tests
-    const reg = getComponentRegistry();
-    for (const key of Object.keys(reg)) {
-      invalidateComponent(key);
-    }
-  });
-
-  it("registers a function component under a path", () => {
+describe("component-registry (HMR alias map)", () => {
+  it("canonicalComponent resolves non-aliased components to themselves", () => {
     const A = makeComponent();
-    registerComponent("foo/a", A);
-    expect(getComponent("foo/a")).toBe(A);
-  });
-
-  it("strips query parameters from the path", () => {
-    const B = makeComponent();
-    registerComponent("bar/b?x=1", B);
-    // Lookup uses path only — the query was stripped on register.
-    expect(getComponent("bar/b")).toBe(B);
-    expect(getComponent("bar/b?x=1")).toBeUndefined();
-  });
-
-  it("ignores empty path and non-function registrations", () => {
-    registerComponent("", makeComponent());
-    expect(getComponent("")).toBeUndefined();
-    registerComponent("weird/value", "not-a-fn" as unknown as Component);
-    expect(getComponent("weird/value")).toBeUndefined();
-  });
-
-  it("invalidate removes a previously registered component", () => {
-    const D = makeComponent();
-    registerComponent("baz/d", D);
-    invalidateComponent("baz/d");
-    expect(getComponent("baz/d")).toBeUndefined();
-  });
-
-  it("getComponentRegistry returns the live registry map", () => {
-    const E = makeComponent();
-    registerComponent("zzz/e", E);
-    const reg = getComponentRegistry();
-    expect(reg["zzz/e"]).toBe(E);
-  });
-
-  it("ensureComponentName assigns a stable auto name and registers the fn", () => {
-    function Fancy(): null {
-      return null;
-    }
-    const name = ensureComponentName(Fancy);
-    expect(name).toMatch(/^__c\d+_Fancy$/);
-    expect(ensureComponentName(Fancy)).toBe(name);
-    expect(getComponent(name)).toBe(Fancy);
-  });
-
-  it("ensureComponentName reuses an explicit registerComponent name", () => {
-    const V = makeComponent();
-    registerComponent("named/view", V);
-    expect(ensureComponentName(V)).toBe("named/view");
-  });
-
-  it("aliasComponent maps a replacement to the original name (HMR)", () => {
-    const Old = makeComponent();
-    const name = ensureComponentName(Old);
-    const New = makeComponent();
-    aliasComponent(Old, New);
-    expect(ensureComponentName(New)).toBe(name);
+    expect(canonicalComponent(A)).toBe(A);
   });
 
   it("canonicalComponent resolves stale references through alias chains", () => {
     const v1 = makeComponent();
     const v2 = makeComponent();
     const v3 = makeComponent();
-    expect(canonicalComponent(v1)).toBe(v1);
     aliasComponent(v1, v2);
     aliasComponent(v2, v3);
     expect(canonicalComponent(v1)).toBe(v3); // chain: v1 → v2 → v3
@@ -114,11 +43,19 @@ describe("component-registry", () => {
     expect(canonicalComponent(v3)).toBe(v3);
   });
 
-  it("getComponent resolves registry entries through the alias map", () => {
-    const Old = makeComponent();
-    const New = makeComponent();
-    registerComponent("app/home", Old);
-    aliasComponent(Old, New);
-    expect(getComponent("app/home")).toBe(New);
+  it("self-aliasing is a no-op", () => {
+    const A = makeComponent();
+    aliasComponent(A, A);
+    expect(canonicalComponent(A)).toBe(A);
+  });
+
+  it("alias cycles terminate", () => {
+    const a = makeComponent();
+    const b = makeComponent();
+    aliasComponent(a, b);
+    aliasComponent(b, a);
+    // Cycle a → b → a: resolution terminates and returns one of the pair.
+    const resolved = canonicalComponent(a);
+    expect(resolved === a || resolved === b).toBe(true);
   });
 });

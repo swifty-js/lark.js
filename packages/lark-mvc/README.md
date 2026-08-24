@@ -29,20 +29,24 @@ Design principles:
 - React FC authoring model: plain functions, call-order hooks, callback
   props, `children`, `key`, `ref`
 - Signals-based reactivity — read = subscribe, write = re-render; **shallow**
-  (reference) comparison, like React/Preact
+  (reference) comparison, like React/Preact. Signals are the ONLY
+  notification mechanism — there are no event emitters.
 - Hostless reconciliation — component output splices directly into the
   parent element (output DOM identical to React's)
 - Fine-grained updates — one render effect per component instance; props are
   per-key signals, so a child re-renders only when a prop it READ changed
-- Module Federation support for micro-frontends
+- History-only router aligned with react-router's data model (`location`
+  signal, ranked `:param`/`*` matching, `navigate`, blockers)
+- Async server state (SWR-style queries) is intentionally **out of scope** —
+  it belongs to a dedicated data-fetching package built on the same signals
 - One runtime dependency: `@preact/signals-core` (~1.5 kB gzip)
 
 ## Architecture
 
 ```
-                render(<App/>, container)        Framework.boot(config)
+         render(<App/>, container)     render(<RouterView router={r}/>, container)
                           |                             |
-                          |                    Router CHANGED → render
+                          |               router.match signal → matched component
                           +-------------+---------------+
                                         |
                         component INSTANCE (per function tag)
@@ -55,7 +59,7 @@ Design principles:
                                         |
          post-commit flush (untracked) -- child mounts, prop pushes, refs
                                         |
-         flushInstanceEffects -- pending useEffect callbacks run
+         flushInstanceEffects -- pending useEffect (mount) callbacks run
                                         |
 signal / prop write --> only SUBSCRIBED instances re-render (batched)
 ```
@@ -175,28 +179,33 @@ render(<Home />, document.getElementById("root")!);
 
 ### 2b. Or boot with routing
 
-```ts
-// src/main.ts
-import { Framework } from "@lark.js/mvc";
-import HomeView from "./views/home";
-import AboutView from "./views/about";
+There is no framework boot object — a routed app is `createRouter` (a plain
+factory, react-router data model) plus a `<RouterView/>` outlet:
 
-Framework.boot({
-  rootId: "root",
-  routeMode: "history",
-  defaultView: HomeView,
-  routes: {
-    "/": HomeView,
-    "/about": AboutView,
-  },
-});
+```tsx
+// src/main.ts
+import { render, createRouter, RouterView } from "@lark.js/mvc";
+import Home from "./views/home";
+import UserDetail from "./views/user-detail";
+import NotFound from "./views/not-found";
+
+const router = createRouter([
+  { path: "/", component: Home },
+  { path: "/users/:id", component: UserDetail },
+  { path: "/admin", lazy: () => import("./views/admin") },
+  { path: "*", component: NotFound },
+]);
+
+render(<RouterView router={router} />, document.getElementById("root")!);
 ```
 
-Routes accept imported components directly, or registered path strings for
-lazy loading / Module Federation (see `registerComponent`). Every confirmed
-navigation renders the matched component into the root container — the same
-component keeps its instance (state survives param-only changes) and
-receives the fresh URL params as props.
+Routes hold component references (or per-route `lazy()` loaders — code
+splitting / Module Federation). Matching is react-router style: `:id`
+dynamic segments, `*` splats, ranked (static > dynamic > splat). Every
+navigation re-renders `<RouterView/>` — the same component keeps its
+instance across param-only changes (state survives), and components read URL
+data through the router's tracked signals (`useRouter().params.value`,
+`useUrlState`).
 
 ### 3. HTML entry point
 
@@ -245,14 +254,12 @@ A signal read subscribes the reader **only inside a tracked region**:
 Every reactive data source in the framework is signal-backed, so reading it
 in a tracked region subscribes automatically:
 
-| Source               | Tracked read                 | Write                           |
-| -------------------- | ---------------------------- | ------------------------------- |
-| instance-local state | `sig.value` (`useSignal`)    | `sig.value = next`              |
-| props                | `props.key`                  | parent re-render (per-key push) |
-| cross-view State     | `State.get("key")`           | `State.set({ key: next })`      |
-| stores               | `store.getState().key`       | `store.setState({...})`         |
-| router               | `Router.parse()` (any field) | `Router.to(...)`                |
-| queries              | `q.data.value` (`useQuery`)  | fetch lifecycle                 |
+| Source               | Tracked read                     | Write                           |
+| -------------------- | -------------------------------- | ------------------------------- |
+| instance-local state | `sig.value` (`useSignal`)        | `sig.value = next`              |
+| props                | `props.key`                      | parent re-render (per-key push) |
+| stores               | `store.getState().key`           | `store.setState({...})`         |
+| router               | `router.location.value` (et al.) | `router.navigate(...)`          |
 
 Reads outside a tracked region (event handlers, async callbacks) return the
 current value without subscribing — use `.peek()` / `untracked()` when you
@@ -273,7 +280,7 @@ user.value.name = "b"; // ✗ invisible
 user.value = { ...user.value, name: "b" }; // ✓
 ```
 
-The same rule applies to `State.set`, `store.setState`, and props: pushing
+The same rule applies to `store.setState` and props: pushing
 the **same object reference** again is a no-op; deriving new data requires a
 new reference. There is no deep proxy and no dependency on property paths —
 one signal per key, compared by identity.
@@ -314,7 +321,7 @@ export default function Picker(props: Props) {
   useEffect(() => {
     const timer = setInterval(() => console.log("tick"), 1000);
     return () => clearInterval(timer);
-  }, []);
+  });
 
   return (
     <div>
@@ -343,33 +350,37 @@ Hooks are call-order-indexed slots on the current instance (React rules of
 hooks). All state survives re-renders; `useSignal`/`useRef` also survive HMR
 swaps.
 
-| Hook                        | Semantics                                                                                           |
-| --------------------------- | --------------------------------------------------------------------------------------------------- |
-| `useSignal(initial)`        | Stable `Signal` per slot — read in JSX (subscribe), write from handlers (re-render)                 |
-| `useRef(initial?)`          | Stable `{ current }` cell — element refs (`ref={r}`) or mutable non-reactive storage                |
-| `useComputed(fn)`           | `computed(fn)` created once — signal-derived data, no deps array                                    |
-| `useMemo(fn, deps?)`        | Recompute when deps change (`Object.is`); no deps → every render                                    |
-| `useEffect(fn, deps?)`      | Runs AFTER the DOM commit; no deps → every render, `[]` → mount only; cleanup before re-run/unmount |
-| `useSignalEffect(fn)`       | Reactive effect created once — re-runs when signals it read change; disposed on unmount             |
-| `onCleanup(fn)`             | Register an unmount cleanup (once per slot)                                                         |
-| `useUrlState(defaults)`     | `[read, write]` — URL params as tracked state                                                       |
-| `useQuery(key, fetcher, o)` | TanStack-style async state — slot-cached, disposed on unmount                                       |
+Signals are the SINGLE dependency-tracking mechanism — there are **no deps
+arrays** (no `useMemo`, no `useEffect(fn, deps)`): derive with `useComputed`,
+react with `useSignalEffect`, and use `useEffect` only for one-time
+mount/unmount setup.
+
+| Hook                    | Semantics                                                                               |
+| ----------------------- | --------------------------------------------------------------------------------------- |
+| `useSignal(initial)`    | Stable `Signal` per slot — read in JSX (subscribe), write from handlers (re-render)     |
+| `useRef(initial?)`      | Stable `{ current }` cell — element refs (`ref={r}`) or mutable non-reactive storage    |
+| `useComputed(fn)`       | `computed(fn)` created once — derived data, dependencies auto-tracked                   |
+| `useSignalEffect(fn)`   | Reactive effect created once — re-runs when signals it read change; disposed on unmount |
+| `useEffect(fn)`         | MOUNT-ONLY: runs once after the first DOM commit; returned fn = unmount cleanup         |
+| `onCleanup(fn)`         | Register an unmount cleanup (once per slot)                                             |
+| `useBlocker(fn)`        | Register a navigation blocker for the component's lifetime                              |
+| `useUrlState(defaults)` | `[value, setValue]` — URL search params as tracked state (setter is stable)             |
 
 ```tsx
 // DOM access: ref + mount effect
 const input = useRef<HTMLInputElement>();
-useEffect(() => input.current?.focus(), []);
+useEffect(() => input.current?.focus());
 return <input ref={input} />;
 ```
 
 ```tsx
-// Window listeners: useEffect; reactive side effects: useSignalEffect
+// Window listeners: useEffect (mount/unmount); reactive side effects: useSignalEffect
 const width = useSignal(window.innerWidth);
 useEffect(() => {
   const onResize = () => (width.value = window.innerWidth);
   window.addEventListener("resize", onResize);
   return () => window.removeEventListener("resize", onResize);
-}, []);
+});
 useSignalEffect(() => {
   document.title = `width: ${width.value}`;
 });
@@ -456,167 +467,145 @@ Notes:
 
 ### Routing
 
-The Router supports two modes with a two-phase change confirmation protocol.
-`Router.parse()` is a **tracked read** — calling it inside a component body,
-`computed`, or `useSignalEffect` subscribes the caller to navigation.
+The router is a **factory** (`createRouter` — no module-level singleton
+state, MF-friendly), **history-only**, and aligned with react-router's data
+model. Everything derives from ONE `location` signal — reading any router
+signal inside a component body, `computed`, or `useSignalEffect` subscribes
+the reader to navigation. There are no router events.
 
 ```ts
-import { Router } from "@lark.js/mvc";
+import { createRouter } from "@lark.js/mvc";
 
-// Navigate
-Router.to("/list", { page: 2 });
-Router.to({ page: 3 }); // update params only, keep current path
-Router.to("/detail", { id: "123" }, true); // replace history entry
+const router = createRouter(routes, { basename: "/app" }); // options optional
 
-// Parse current URL (tracked when called in a tracked region)
-const loc = Router.parse();
-loc.path; // "/list"
-loc.params; // { page: "2" }
-loc.get("page"); // "2"
-loc.get("missing", "default"); // "default"
+// The current location (react-router shape) — a tracked read:
+const { pathname, search, hash, state, key } = router.location.value;
 
-// Compute diff
-Router.diff();
-// { params: { page: { from: "1", to: "2" } }, path: {...}, changed: true }
+// Derived signals:
+router.match.value; // RouteMatch | null   ({ route, params, pathname })
+router.params.value; // { id: "42" }        (from "/users/:id")
+router.searchParams.value; // URLSearchParams
 
-// Join path segments
-Router.join("/api", "v1", "users"); // "/api/v1/users"
+// Navigate (react-router `navigate` semantics):
+await router.navigate("/users/42?tab=posts#bio");
+await router.navigate({ pathname: "/users/42", search: "?tab=posts" });
+await router.navigate("/login", { replace: true, state: { from: "/admin" } });
+await router.navigate(-1); // history traversal
+
+router.dispose(); // detach the popstate listener (tests / teardown)
 ```
 
-A component that reacts to the URL simply reads it in the body:
+`navigate` resolves `false` when a blocker rejected the navigation.
+Navigating to the current href converts the push into a replace (no
+duplicate history entries).
+
+`createRouter` records the instance as the **active router**, resolved by
+`useRouter()` (and by `<RouterView/>` / `useUrlState` when no router is
+passed). Components read the signals directly — there are no
+useLocation/useParams-style alias hooks:
 
 ```tsx
-function Pager() {
-  return <p>page = {Router.parse().get("page", "1")}</p>;
-}
+import { useRouter } from "@lark.js/mvc";
 
-// Or drive async work from navigation:
-useSignalEffect(() => {
-  const path = Router.parse().path; // subscribe
-  untracked(() => void loadContent(path)); // async body untracked
-});
-```
-
-#### Two-Phase Change Confirmation
-
-```
-User action (Router.to, back/forward, link click)
-       |
-   CHANGE event (preventable)
-       |
-   +---+---+
-   |       |
- reject  resolve  prevent
- (revert) (commit) (suspend)
-   |       |
-   |   beforeEach guards (async)
-   |       |
-   |   +---+---+
-   |   |       |
-   | false   true/undefined
-   |   |       |
-   | reject  resolve
-   |           |
-   CHANGED event (final)
-       |
-   location signal bump  -->  tracked Router.parse() readers re-render
-       |
-   route dispatch: render(matched component, rootContainer)
-```
-
-```ts
-Router.on("change", (e) => {
-  // e.reject() -- revert URL
-  // e.prevent() -- pause navigation
-  // e.resolve() -- commit navigation
-});
-
-Router.on("changed", (e) => {
-  // e.params / e.path / e.view / e.changed
-});
-
-// Async navigation guard
-const unGuard = Router.beforeEach(async (to, from) => {
-  if (to.path === "/admin") {
-    return await checkAuth(); // false aborts navigation
-  }
-  return true;
-});
-// Later: unGuard()
-```
-
-#### Route dispatch
-
-Every confirmed navigation renders the matched component into the root
-container via the same `render()` diff:
-
-- Route-view change → the component swaps (old instance unmounted).
-- Param-only change → SAME instance, fresh URL params pushed as props
-  (state survives).
-- Async loads (string routes via `config.require`) are guarded by a
-  navigation token — a stale load never overwrites a newer route.
-
-```ts
-Framework.boot({
-  rootId: "root",
-  routes: {
-    "/home": HomeView, // imported component
-    "/detail": { view: DetailView, title: "Detail" },
-    "/admin": "app/views/admin", // lazy-loaded via config.require
-  },
-  defaultView: HomeView,
-  unmatchedView: NotFoundView,
-  defaultPath: "/home",
-  rewrite(path, params, routes) {
-    if (path === "/" && !routes[path]) return "/home";
-    return path;
-  },
-});
-```
-
-### State Management
-
-lark-mvc provides two state management layers, both signal-backed.
-
-#### State (Simple Cross-View Data)
-
-`State` is a singleton for lightweight shared values (counters, toggles,
-session info). Every key is its own signal:
-
-```tsx
-import { State, useEffect } from "@lark.js/mvc";
-
-// Write — batched per-key signal writes; subscribed components re-render.
-State.set({ count: 1, title: "Hello" });
-
-// Read — tracked when called inside a body/computed/useSignalEffect
-State.get("count"); // subscribes to "count" only
-State.get(); // snapshot; subscribes to EVERY State change
-
-// In a component:
-export default function Header() {
-  // Ref-counted cleanup: key data dropped when the last observer unmounts
-  useEffect(() => State.clean("count,title"), []);
+function UserDetail() {
+  const router = useRouter();
+  const { id } = router.params.value; // tracked — re-renders on navigation
   return (
-    <p>
-      {String(State.get("title"))}: {Number(State.get("count"))}
-    </p>
+    <div>
+      <p>user {id}</p>
+      <button onClick={() => router.navigate("/")}>Home</button>
+    </div>
   );
 }
 ```
 
-Shallow semantics apply: `State.set({ list: sameArrayRef })` is a no-op —
-replace the reference. `State.on/off/fire` remain as a general-purpose
-pub/sub channel (unrelated to reactivity).
+#### Route matching
 
-#### createStore (Complex Reactive State)
+Flat route tables with react-router path syntax and ranking:
 
-For complex state with actions, derived data, and fine-grained subscriptions:
+| Pattern      | Matches          | `params`             |
+| ------------ | ---------------- | -------------------- |
+| `/`          | `/` only         | `{}`                 |
+| `/users/:id` | `/users/42`      | `{ id: "42" }`       |
+| `/files/*`   | `/files/a/b.txt` | `{ "*": "a/b.txt" }` |
+| `*`          | anything         | `{ "*": "..." }`     |
+
+All candidates are ranked — static segments outrank dynamic ones, splats
+rank last — so `/users/new` beats `/users/:id` regardless of registration
+order. Static comparison is case-insensitive; `:param` values are decoded.
+
+#### Blockers
+
+`router.block(blocker)` replaces guard events. Blockers may be async;
+`false` (or a throw) blocks. Blocked history traversals (back/forward) are
+reverted via `history.go(delta)`. `useBlocker(fn)` is the component-scoped
+form (registered on mount, unregistered on unmount — react-router
+`useBlocker`):
+
+```tsx
+const unblock = router.block(async (next, current) => {
+  if (next.pathname.startsWith("/admin")) return await checkAuth();
+  return true;
+});
+// Later: unblock()
+
+// Or for a component's lifetime:
+function EditForm() {
+  useBlocker(() => !isDirty.value || confirm("Discard changes?"));
+  return <form>…</form>;
+}
+```
+
+#### RouterView (route dispatch)
+
+`<RouterView router={router}/>` is the outlet component — its body reads
+`router.match.value` (tracked), so every committed navigation re-renders it
+through the normal component diff:
+
+- Route change → the matched component swaps (old instance unmounted).
+- Param-only change → SAME instance; the component re-renders only if it
+  read `router.params` / `router.location` (tracked reads).
+- `lazy` routes resolve once (in-flight dedup, cached on the route); a stale
+  load can never overwrite a newer route because the body always re-reads
+  the CURRENT match. Load failures propagate (unhandled rejection) — no
+  swallowing.
+
+#### useUrlState
+
+`useUrlState(defaults)` syncs component state with URL search params —
+`[value, setValue]`, react `useState` shape:
+
+```tsx
+import { useUrlState } from "@lark.js/mvc";
+
+export default function Pager() {
+  const [params, setParams] = useUrlState({ page: "1", size: "20" });
+  return (
+    <button onClick={() => setParams((p) => ({ page: String(Number(p.page) + 1) }))}>
+      Page {params.page}
+    </button>
+  );
+}
+```
+
+A real hook (component-only): the value is a tracked read (the component
+re-renders on URL changes) and `setValue` is a STABLE function (one slot per
+instance). `setValue(patch, { replace? })` navigates via the active router,
+preserving the pathname, hash, and unrelated search params;
+`undefined`/`null` values delete the key. Defaults are captured on the
+first render.
+
+### State Management
+
+Cross-component state has ONE answer: `createStore` (zustand-aligned,
+per-key signals). There is no separate global "State" singleton — a store is
+just a module-scoped object, and simple values are simply small stores (or
+plain module-level `signal()`s).
 
 ```tsx
 import { createStore, computed } from "@lark.js/mvc";
 
-const counterStore = createStore("counter", (set, get) => ({
+const counterStore = createStore((set, get) => ({
   count: 0,
   step: 1,
 
@@ -638,9 +627,14 @@ counterStore.getState().count;
 
 // Update state — batched; Object.is-equal values are skipped
 counterStore.setState({ count: 5 });
+counterStore.setState({ count: 0 }, true); // replace: missing plain keys → undefined
 
-// Manual subscription (zustand semantics)
+// Manual subscriptions (zustand semantics)
 const unSub = counterStore.subscribe((state, prevState) => {});
+const unSel = counterStore.subscribe(
+  (s) => s.count, // selector — fires only when the slice changes
+  (count, prevCount) => {},
+);
 
 // In a component — no hook needed, just read in the body:
 export default function CounterButton() {
@@ -655,6 +649,8 @@ export default function CounterButton() {
 
 Notes:
 
+- Stores are **anonymous** (zustand `create` semantics) — no name argument,
+  no global registry; module scope is the store's identity.
 - `getState()` is one stable proxy — spreading it (`{ ...getState() }`)
   produces a plain snapshot (and subscribes to all keys read).
 - Writes to computed/action keys via `setState` are silently ignored;
@@ -664,103 +660,11 @@ Notes:
 
 ### Data Fetching
 
-#### useQuery / createQuery (TanStack-style, recommended)
-
-```tsx
-import { useQuery, Router } from "@lark.js/mvc";
-
-export default function UserCard() {
-  const user = useQuery(
-    () => `user/${Router.parse().get("id")}`, // reactive key (tracked)
-    (key) => fetch(`/api/${key}`).then((r) => r.json()),
-    { staleTime: 30_000 },
-  );
-  return (
-    <div>
-      {user.isLoading.value && <p>Loading…</p>}
-      {user.error.value != null && <p>Failed to load.</p>}
-      {user.data.value && <p>{user.data.value.name}</p>}
-      <button onClick={() => user.refetch()}>Reload</button>
-    </div>
-  );
-}
-```
-
-- Results are signals (`data`/`error`/`isLoading`/`isFetching`) — reads
-  subscribe the component.
-- In-flight dedup, `staleTime` freshness, reactive keys, and
-  `invalidateQueries(prefix?)` for cache invalidation.
-- `useQuery` is the hook form (slot-cached, auto-disposed on unmount);
-  `createQuery` is the standalone form — the caller owns `dispose()`.
-- `createMutation(fn)` is the write-side counterpart:
-  `{ mutate, data, error, isPending, reset }`.
-
-#### createService (callback-based request layer)
-
-The Service system manages API requests with LFU caching, deduplication,
-serial queuing, and lifecycle events:
-
-```tsx
-import { createService, useSignal, onCleanup } from "@lark.js/mvc";
-
-const apiService = createService(
-  (payload, callback) => {
-    fetch(payload.get("url"), { method: payload.get("method") || "GET" })
-      .then((res) => res.json())
-      .then((result) => {
-        payload.set("result", result);
-        callback();
-      })
-      .catch((err) => {
-        payload.set("error", err);
-        callback();
-      });
-  },
-  20, // cacheMax
-  5, // cacheBuffer
-);
-
-apiService.add({
-  name: "getUser",
-  url: "/api/user",
-  cache: 30000, // 30s TTL
-  before(payload) {
-    payload.set("url", `/api/user/${payload.get("id")}`);
-  },
-});
-
-// In a component — create the instance in a slot, results land in signals
-export default function UserButton() {
-  const svc = useMemo(() => apiService.instance(), []);
-  onCleanup(() => svc.destroy());
-  const userName = useSignal("");
-
-  const loadUser = (): void => {
-    svc.all([{ name: "getUser", id: "123" }], (errors, payload) => {
-      userName.value = String(payload.get("userName") ?? "");
-    });
-  };
-
-  return <button onClick={loadUser}>{userName.value || "Load user"}</button>;
-}
-```
-
-| Instance method              | Description                                                              |
-| ---------------------------- | ------------------------------------------------------------------------ |
-| `instance.all(attrs, done)`  | Fetch all, callback with `(errors, p1, p2, ...)`                         |
-| `instance.one(attrs, done)`  | Fetch all, callback per-attribute with `(error, payload, isLast, index)` |
-| `instance.save(attrs, done)` | Fetch all, skip cache (always request)                                   |
-| `instance.enqueue(callback)` | Add to serial task queue (self-drains once idle)                         |
-| `instance.destroy()`         | Cancel pending requests                                                  |
-
-| Type method         | Description                                |
-| ------------------- | ------------------------------------------ |
-| `api.add(meta)`     | Register endpoint metadata                 |
-| `api.meta(name)`    | Look up endpoint metadata                  |
-| `api.cached(attrs)` | Read from cache without fetching           |
-| `api.clear(names)`  | Clear cached responses for endpoints       |
-| `api.on/off/fire`   | Type-level events (begin, done, fail, end) |
-| `api.instance()`    | Create a new service instance              |
+Async server state (SWR/TanStack-style queries) is deliberately **not part
+of this package**. Build it on the same signal primitives — a query result
+is just `{ data, error, isFetching }` signals that any component body can
+read — or wait for the dedicated data-fetching package. Nothing in the
+framework core assumes a particular fetching layer.
 
 ## JSX Semantics
 
@@ -835,14 +739,13 @@ state.
 
 On module update, `hotSwapByComponent(old, new)`:
 
-1. Aliases the new function to the old one — parents holding the stale
-   import keep matching live instances (canonical identity), and string
-   routes keep resolving.
-2. Swaps registry entries.
-3. Swaps every live instance in place: **`useSignal`/`useRef` slots
-   survive**; closure-bound slots (effects, computeds, memos, queries) are
-   disposed and recreated by the next render so no stale closures linger.
-   The instance re-renders with the new code.
+1. Aliases the new function to the old one — parents (or route tables)
+   holding the stale import keep matching live instances (canonical
+   identity).
+2. Swaps every live instance in place: **`useSignal`/`useRef` slots
+   survive**; closure-bound slots (effects, computeds, memos) are disposed
+   and recreated by the next render so no stale closures linger. The
+   instance re-renders with the new code.
 
 The bundler plugins auto-inject the HMR boilerplate at compile time into
 every `.tsx`/`.jsx` module with a default export (runtime guards make
@@ -851,50 +754,40 @@ non-component exports a no-op). Users never write `import.meta.hot` /
 
 ## Micro-Frontend Support
 
-lark-mvc supports Module Federation and cross-project component loading via
-`FrameworkConfig.require`:
+Micro-frontend and code-splitting scenarios go through per-route `lazy()`
+loaders — the react-router data-mode pattern:
 
 ```ts
-Framework.boot({
-  rootId: "root",
-  require(names, params) {
-    return Promise.all(
-      names.map((name) => {
-        if (name.startsWith("remote-app/")) {
-          return import("remote_app/" + name.slice("remote-app/".length));
-        }
-        return import("./src/" + name);
-      }),
-    );
-  },
-  routes: {
-    "/": "host-app/views/home",
-    "/remote": "remote-app/views/detail",
-  },
-});
+const router = createRouter([
+  { path: "/", component: Home },
+  // Code splitting: a plain dynamic import
+  { path: "/admin", lazy: () => import("./views/admin") },
+  // Module Federation: import from the remote
+  { path: "/remote/*", lazy: () => import("remote_app/views/detail") },
+]);
+render(<RouterView router={router} />, container);
 ```
 
-String routes resolve through the component registry
-(`registerComponent(path, fn)`); unregistered paths load through
-`config.require` and register on arrival. Share `@lark.js/mvc` as a
-singleton in the MF `shared` config.
+`lazy()` resolves a component (or a `{ default }` module); loads are
+deduped in flight and the result is cached on the route, so subsequent
+matches render synchronously. Share `@lark.js/mvc` as a singleton in the MF
+`shared` config — the router factory keeps navigation state per instance,
+and the "active router" pointer (used by `useRouter`) lives in the shared
+singleton.
 
 ## API Reference
 
 ### Exports
 
-| Category   | Exports                                                                                         |
-| ---------- | ----------------------------------------------------------------------------------------------- |
-| Reactive   | `signal`, `computed`, `effect`, `batch`, `untracked`, `Signal`, `ReadonlySignal` (type)         |
-| Rendering  | `render`, `unmount`, `raw`, `Fragment`                                                          |
-| Components | `registerComponent`, `invalidateComponent`; `FC` / `Component` / `JSXNode` / `VNode` (types)    |
-| Hooks      | `useSignal`, `useRef`, `useComputed`, `useMemo`, `useEffect`, `useSignalEffect`, `onCleanup`    |
-| State      | `State`, `createStore`, `useUrlState`                                                           |
-| Query      | `createQuery`, `useQuery`, `createMutation`, `invalidateQueries`, `clearQueryCache`             |
-| Router     | `Router`                                                                                        |
-| Service    | `createService`; `ServiceApi`, `ServiceInstance` (types)                                        |
-| Framework  | `Framework` (boot / config / toUri / parseUri / delay / createCache / createEmitter / ...)      |
-| Types      | All types from `./types` via `export *` (`LarkEvent`, `LarkAttributes`, `FrameworkConfig`, ...) |
+| Category  | Exports                                                                                        |
+| --------- | ---------------------------------------------------------------------------------------------- |
+| Reactive  | `signal`, `computed`, `effect`, `batch`, `untracked`, `Signal`, `ReadonlySignal` (type)        |
+| Rendering | `render`, `unmount`, `raw`, `Fragment`                                                         |
+| Hooks     | `useSignal`, `useRef`, `useComputed`, `useSignalEffect`, `useEffect` (mount-only), `onCleanup` |
+| Router    | `createRouter`, `RouterView`, `useRouter`, `useBlocker`, `matchPath`, `matchRoutes`            |
+| State     | `createStore`, `useUrlState`                                                                   |
+| HMR       | `hotSwapByComponent` (also on `globalThis.__lark_hmr__`)                                       |
+| Types     | All types from `./types` via `export *` (`FC`, `Location`, `RouteObject`, `RouterApi`, ...)    |
 
 ### Package Entry Points
 
@@ -910,30 +803,23 @@ singleton in the MF `shared` config.
 
 ## Configuration
 
-### FrameworkConfig
+### createRouter(routes, options?)
 
-| Key             | Type                                                     | Default     | Description                                        |
-| --------------- | -------------------------------------------------------- | ----------- | -------------------------------------------------- |
-| `rootId`        | `string`                                                 | `"root"`    | DOM root element ID (route components render here) |
-| `routeMode`     | `"history" or "hash"`                                    | `"history"` | Routing mode                                       |
-| `defaultView`   | `string or Component`                                    | -           | Default view when URL matches no route             |
-| `defaultPath`   | `string`                                                 | `"/"`       | Default path when URL hash/query is empty          |
-| `routes`        | `Record<string, string or Component or RouteViewConfig>` | -           | Path-to-component mapping                          |
-| `hashbang`      | `string`                                                 | `"#!"`      | Hash prefix (hash mode only)                       |
-| `error`         | `(error: Error) => void`                                 | -           | Global error sink (render errors included)         |
-| `rewrite`       | `(path, params, routes) => string`                       | -           | Route rewriting function                           |
-| `unmatchedView` | `string or Component`                                    | -           | View for 404 pages                                 |
-| `require`       | `(names, params?) => Promise<unknown[]>`                 | -           | Async module loader (Module Federation)            |
+| Option     | Type     | Default | Description                                               |
+| ---------- | -------- | ------- | --------------------------------------------------------- |
+| `basename` | `string` | -       | Base path prepended to hrefs and stripped before matching |
 
-`boot()` normalizes function-component entries to internal registry-name
-strings (`ensureComponentName`), so Router internals stay string-based.
+There is no error-handler config: errors thrown in component bodies,
+effects, and event handlers BUBBLE (React model — crash loudly or catch at
+the source). Lazy-route failures surface as unhandled rejections.
 
-### RouteViewConfig
+### RouteObject
 
 ```ts
-interface RouteViewConfig {
-  view: string | Component; // Path or imported component
-  [k: string]: unknown; // Additional properties merged into location
+interface RouteObject {
+  path: string; // "/users/:id", "/files/*", "*"
+  component?: Component; // eager component reference
+  lazy?: () => Promise<Component | { default: Component }>; // code splitting / MF
 }
 ```
 
@@ -973,21 +859,14 @@ packages/lark-mvc/
     index.ts              -- public API barrel export
     types.ts              -- all shared type definitions
     reactive.ts           -- @preact/signals-core facade (signal/computed/...)
-    common.ts             -- constants, shared helpers
-    utils.ts              -- utility functions
-    framework.ts          -- Framework.boot, route dispatch (render into root)
+    common.ts             -- rendering constants (namespaces, strSafe)
+    utils.ts              -- internal utilities (hasOwnProperty, devWarn)
     component.ts          -- instance model, hook slots, props store, HMR registry
-    component-registry.ts -- path-string registry + HMR alias map
-    router.ts             -- Router with two-phase change + location signal
-    state.ts              -- State singleton (per-key signals)
+    component-registry.ts -- HMR alias map (canonical component identity)
+    router.ts             -- createRouter factory, RouterView, matching, blockers
     store.ts              -- createStore (per-key signals, tracked proxy)
-    query.ts              -- createQuery/useQuery/createMutation
-    service.ts            -- createService, API management
-    hooks.ts              -- useSignal, useEffect, useComputed, etc.
-    event-emitter.ts      -- multi-cast event system
-    cache.ts              -- LFU-style bounded cache
+    hooks.ts              -- useSignal, useComputed, useSignalEffect, useEffect
     url-state.ts          -- useUrlState hook
-    module-loader.ts      -- async module loading
     hmr.ts                -- hotSwapByComponent
     hmr-inject.ts         -- HMR code generation for bundlers
     client.d.ts           -- ambient type declarations
@@ -1022,18 +901,27 @@ packages/lark-mvc/
    with reference comparison — finer-grained than React's whole-props
    identity model, no `memo()` needed.
 
-5. **Two-phase routing**: the Router fires a `change` event before
-   navigation (allowing rejection) and a `changed` event after; a location
-   version signal makes `Router.parse()` a tracked read. Route dispatch is
-   just `render()` into the root container.
+5. **Signals are the ONLY dependency-tracking mechanism**: no deps arrays
+   (no useMemo/useEffect-with-deps), no event emitters, no second
+   subscription system. Derive with `computed`, react with `effect`;
+   cross-component communication is callback props down, signal writes up.
 
-6. **Per-node event listeners**: one native listener per (node, type) with a
+6. **React-router data model, factory-based**: `createRouter(routes)` owns
+   all navigation state per instance (no module singleton — MF-safe); one
+   `location` signal, ranked `:param`/`*` matching,
+   `navigate(to, { replace, state })`, async blockers with reverted history
+   traversals. History mode only — no hash routing. Route dispatch is the
+   `<RouterView/>` component reading `router.match`.
+
+7. **Errors bubble**: no try-catch wrappers, no global error sink. A throw
+   in a body/effect/handler propagates to the write site (React model) —
+   catch at the source or crash loudly.
+
+8. **Per-node event listeners**: one native listener per (node, type) with a
    stable proxy; renders swap `.current`. Dispatch runs inside `batch()`.
 
-7. **State-preserving HMR**: live instances swap their component function in
+9. **State-preserving HMR**: live instances swap their component function in
    place — plain state slots survive, closure-bound slots are recreated —
-   via a broad compile-time injection with runtime guards.
-
-8. **LFU cache with frequency eviction**: the bounded cache uses single-pass
-   partial selection instead of full sorting, keeping eviction cheap for the
-   typical buffer size of 5.
+   via a broad compile-time injection with runtime guards. HMR alias
+   resolution happens ONCE at vnode-normalize time, never in the diff
+   comparison hot path.

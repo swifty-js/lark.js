@@ -32,13 +32,8 @@ interface CountState {
   increment: () => void;
 }
 
-let storeCounter = 0;
-function nextName(): string {
-  return `computed-test-${++storeCounter}`;
-}
-
-function makeCountStore(name: string): StoreApi<CountState> {
-  return createStore<CountState>(name, (set, get) => ({
+function makeCountStore(): StoreApi<CountState> {
+  return createStore<CountState>((set, get) => ({
     count: 1,
     // Dependencies are tracked automatically — get().count is a signal read.
     doubled: computed(() => get().count * 2),
@@ -51,7 +46,7 @@ function makeCountStore(name: string): StoreApi<CountState> {
 
 describe("createStore - computed", () => {
   it("computes an initial value from its deps", () => {
-    const store = makeCountStore(nextName());
+    const store = makeCountStore();
     const state = store.getState();
     expect(state.count).toBe(1);
     expect(state.doubled).toBe(2);
@@ -60,7 +55,7 @@ describe("createStore - computed", () => {
   });
 
   it("recomputes when a dep changes via setState", () => {
-    const store = makeCountStore(nextName());
+    const store = makeCountStore();
     store.setState({ count: 5 });
     expect(store.getState().doubled).toBe(10);
     expect(store.getState().countPlusTen).toBe(15);
@@ -68,7 +63,7 @@ describe("createStore - computed", () => {
   });
 
   it("recomputes when a dep changes via action", () => {
-    const store = makeCountStore(nextName());
+    const store = makeCountStore();
     store.getState().increment();
     expect(store.getState().count).toBe(2);
     expect(store.getState().doubled).toBe(4);
@@ -77,14 +72,14 @@ describe("createStore - computed", () => {
   });
 
   it("writes to a computed key via setState are ignored", () => {
-    const store = makeCountStore(nextName());
+    const store = makeCountStore();
     store.setState({ doubled: 999 } as Partial<CountState>);
     expect(store.getState().doubled).toBe(2);
     store.destroy();
   });
 
   it("multiple computeds with the same dep all update together", () => {
-    const store = makeCountStore(nextName());
+    const store = makeCountStore();
     store.getState().increment();
     store.getState().increment();
     expect(store.getState().count).toBe(3);
@@ -94,7 +89,7 @@ describe("createStore - computed", () => {
   });
 
   it("computed store reads are tracked — effects re-run on dep changes", () => {
-    const store = makeCountStore(nextName());
+    const store = makeCountStore();
     const seen: number[] = [];
     const dispose = effect(() => {
       seen.push(store.getState().doubled);
@@ -115,7 +110,7 @@ describe("createStore - computed", () => {
       derived: number;
     }
     let computes = 0;
-    const store = createStore<S2>(nextName(), (_set, get) => ({
+    const store = createStore<S2>((_set, get) => ({
       a: 1,
       b: 100,
       derived: computed(() => {

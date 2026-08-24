@@ -23,8 +23,10 @@
 /**
  * JSX VNode model — the pure data layer of Lark's JSX support.
  *
- * This module has ZERO framework imports so it can be bundled into the
- * `jsx-runtime` / `jsx-dev-runtime` entries without dragging the framework in.
+ * This module has ZERO runtime framework imports so it can be bundled into
+ * the `jsx-runtime` / `jsx-dev-runtime` entries without dragging the
+ * framework in (the `ReadonlySignal` import below is type-only — erased at
+ * compile time).
  *
  * tsup bundles this module into more than one dist entry (the runtime
  * entries may share a chunk, while `index` carries its own copy), so module
@@ -33,6 +35,7 @@
  * bundle instance are recognized by another — plain module-level symbols or
  * `instanceof` checks would fail across copies.
  */
+import type { ReadonlySignal } from "../reactive";
 
 // NOTE: marker types are `symbol`, NOT `unique symbol` — tsup emits an
 // independent .d.ts per package entry, and two `unique symbol` declarations
@@ -88,26 +91,16 @@ export interface RawHTML {
 }
 
 /**
- * Structural shape of a readable signal (`@preact/signals-core` `Signal` /
- * `ReadonlySignal`). Signals used as children or attribute values are
- * auto-unwrapped by the serializer — the `.value` read happens inside the
- * view's render effect and subscribes the view.
- */
-export interface SignalNode {
-  readonly value: JSXNode;
-  peek(): JSXNode;
-}
-
-/**
  * Anything renderable as JSX content: elements, raw HTML, text-ish primitives
- * (`string` / `number`), readable signals (auto-unwrapped), skipped values
- * (`boolean` / `null` / `undefined` — enables `{cond && <div/>}`), or arrays
- * thereof.
+ * (`string` / `number`), readable signals (auto-unwrapped via a tracked
+ * `.value` read — detected with `instanceof Signal` by the reconciler),
+ * skipped values (`boolean` / `null` / `undefined` — enables
+ * `{cond && <div/>}`), or arrays thereof.
  */
 export type JSXNode =
   | VNode
   | RawHTML
-  | SignalNode
+  | ReadonlySignal<unknown>
   | string
   | number
   | boolean

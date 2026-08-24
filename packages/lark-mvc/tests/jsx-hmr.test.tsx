@@ -123,7 +123,7 @@ describe("JSX HMR", () => {
       useEffect(() => {
         log.push("v1-run");
         return () => log.push("v1-clean");
-      }, []);
+      });
       return <p>v1</p>;
     };
     render(<V1 />, host);
@@ -133,7 +133,7 @@ describe("JSX HMR", () => {
       useEffect(() => {
         log.push("v2-run");
         return () => log.push("v2-clean");
-      }, []);
+      });
       return <p>v2</p>;
     };
     hotSwapByComponent(V1, V2);

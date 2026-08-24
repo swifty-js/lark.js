@@ -20,226 +20,303 @@
  * SOFTWARE.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { Router } from "../src/router";
-import type { FrameworkConfig } from "../src/types";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { effect } from "../src/reactive";
+import { createRouter, useRouter, matchPath, matchRoutes } from "../src/router";
+import type { RouteObject, RouterApi } from "../src/types";
 
-describe("Router", () => {
-  describe("parse", () => {
-    beforeEach(() => {
-      Router._setConfig({
-        rootId: "app",
-        routeMode: "hash",
-      } as FrameworkConfig);
-    });
+const Home = (): string => "home";
+const User = (): string => "user";
+const Files = (): string => "files";
+const NotFound = (): string => "404";
 
-    it("parses plain domain URL", () => {
-      const result = Router.parse("https://a.b.c.com");
+function poll(predicate: () => boolean, timeout = 1000): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const started = Date.now();
+    const tick = (): void => {
+      if (predicate()) return resolve();
+      if (Date.now() - started > timeout) return reject(new Error("poll timeout"));
+      setTimeout(tick, 5);
+    };
+    tick();
+  });
+}
 
-      expect(result.href).toBe("https://a.b.c.com");
-      expect(result.srcQuery).toBe("");
-      expect(result.srcHash).toBe("");
-      expect(result.query.path).toBe("");
-      expect(result.query.params).toEqual({});
-      expect(result.hash.path).toBe("");
-      expect(result.hash.params).toEqual({});
-      expect(result.params).toEqual({});
-    });
+let router: RouterApi | undefined;
 
-    it("parses URL with query", () => {
-      const result = Router.parse("https://a.b.c.com/?p0=000");
+beforeEach(() => {
+  globalThis.history.replaceState(null, "", "/");
+});
 
-      expect(result.href).toBe("https://a.b.c.com/?p0=000");
-      expect(result.srcQuery).toBe("/?p0=000");
-      expect(result.srcHash).toBe("");
-      expect(result.query.path).toBe("/");
-      expect(result.query.params).toEqual({ p0: "000" });
-      expect(result.hash.path).toBe("");
-      expect(result.hash.params).toEqual({});
-      expect(result.params).toEqual({ p0: "000" });
-    });
+afterEach(() => {
+  router?.dispose();
+  router = undefined;
+});
 
-    it("parses URL with hash", () => {
-      const result = Router.parse("https://a.b.c.com/#!/d/e?p1=111&p2=aaa");
-
-      expect(result.href).toBe("https://a.b.c.com/#!/d/e?p1=111&p2=aaa");
-      expect(result.srcQuery).toBe("/");
-      expect(result.srcHash).toBe("/d/e?p1=111&p2=aaa");
-      expect(result.query.path).toBe("/");
-      expect(result.query.params).toEqual({});
-      expect(result.hash.path).toBe("/d/e");
-      expect(result.hash.params).toEqual({ p1: "111", p2: "aaa" });
-      expect(result.params).toEqual({ p1: "111", p2: "aaa" });
-    });
-
-    it("parses URL with both query and hash", () => {
-      const result = Router.parse("https://a.b.c.com/?p0=000#!/d/e?p1=111&p2=aaa");
-
-      expect(result.href).toBe("https://a.b.c.com/?p0=000#!/d/e?p1=111&p2=aaa");
-      expect(result.srcQuery).toBe("/?p0=000");
-      expect(result.srcHash).toBe("/d/e?p1=111&p2=aaa");
-      expect(result.query.path).toBe("/");
-      expect(result.query.params).toEqual({ p0: "000" });
-      expect(result.hash.path).toBe("/d/e");
-      expect(result.hash.params).toEqual({ p1: "111", p2: "aaa" });
-      expect(result.params).toEqual({
-        p0: "000",
-        p1: "111",
-        p2: "aaa",
-      });
-    });
-
-    it("Location.get retrieves parameters", () => {
-      const result = Router.parse("https://a.b.c.com/#!/d/e?p1=111&p2=aaa");
-
-      expect(result.get("p1")).toBe("111");
-      expect(result.get("p2")).toBe("aaa");
-      expect(result.get("nonexistent", "default")).toBe("default");
-      expect(result.get("nonexistent")).toBe("");
-    });
-
-    it("parsing the same href twice yields equal Locations (deterministic)", () => {
-      // NOTE: href→Location caching only activates after Framework.boot();
-      // pre-boot parses are recomputed. This asserts determinism, not caching.
-      const result1 = Router.parse("https://a.b.c.com");
-      const result2 = Router.parse("https://a.b.c.com");
-      expect(result1).toStrictEqual(result2);
-    });
+describe("matchPath", () => {
+  it("matches static paths exactly", () => {
+    expect(matchPath("/home", "/home")).toEqual({});
+    expect(matchPath("/home", "/about")).toBeNull();
+    expect(matchPath("/a/b", "/a")).toBeNull();
+    expect(matchPath("/a", "/a/b")).toBeNull();
   });
 
-  describe("join", () => {
-    it("joins path segments", () => {
-      expect(Router.join("a", "b", "c")).toBe("a/b/c");
-    });
-
-    it("handles ./ relative paths", () => {
-      expect(Router.join("/a/b/./c/./d")).toBe("/a/b/c/d");
-    });
-
-    it("handles ../ parent directories", () => {
-      expect(Router.join("a/b/c/../../d")).toBe("a/d");
-    });
-
-    it("handles excess slashes", () => {
-      expect(Router.join("a//b/c")).toBe("a/b/c");
-    });
-
-    it("complex path joining", () => {
-      expect(Router.join("/a/b/../c/./d//e")).toBe("/a/c/d/e");
-    });
+  it("matches the root path", () => {
+    expect(matchPath("/", "/")).toEqual({});
+    expect(matchPath("/", "/home")).toBeNull();
   });
 
-  describe("on / off / fire", () => {
-    it("binds and triggers events", () => {
-      const handler = vi.fn();
-
-      Router.on("testEvent", handler);
-      Router.fire("testEvent", { data: 1 });
-
-      expect(handler).toHaveBeenCalledTimes(1);
-
-      Router.off("testEvent", handler);
-    });
-
-    it("does not trigger after unbinding", () => {
-      const handler = vi.fn();
-
-      Router.on("testEvent2", handler);
-      Router.off("testEvent2", handler);
-      Router.fire("testEvent2");
-
-      expect(handler).not.toHaveBeenCalled();
-    });
-
-    it("fire returns Router for method chaining", () => {
-      const result = Router.fire("testEvent3");
-      expect(result).toBe(Router);
-    });
+  it("is case-insensitive on static segments (react-router default)", () => {
+    expect(matchPath("/Home", "/home")).toEqual({});
   });
 
-  describe("beforeEach (D3)", () => {
-    it("registers and unregisters a guard", () => {
-      const guard = vi.fn(() => true);
-      const off = Router.beforeEach(guard);
-      expect(typeof off).toBe("function");
-      off();
-      // No throw on duplicate unsubscribe
-      expect(() => off()).not.toThrow();
-    });
-
-    it("multiple guards register independently", () => {
-      const g1 = vi.fn();
-      const g2 = vi.fn();
-      const off1 = Router.beforeEach(g1);
-      const off2 = Router.beforeEach(g2);
-      off1();
-      off2();
-      expect(g1).not.toHaveBeenCalled();
-      expect(g2).not.toHaveBeenCalled();
-    });
+  it("ignores trailing slashes", () => {
+    expect(matchPath("/home/", "/home")).toEqual({});
+    expect(matchPath("/home", "/home/")).toEqual({});
   });
 
-  describe("history mode", () => {
-    beforeEach(() => {
-      Router._setConfig({
-        rootId: "app",
-        routeMode: "history",
-      } as FrameworkConfig);
+  it("captures :param segments (decoded)", () => {
+    expect(matchPath("/users/:id", "/users/42")).toEqual({ id: "42" });
+    expect(matchPath("/users/:id/posts/:postId", "/users/7/posts/9")).toEqual({
+      id: "7",
+      postId: "9",
     });
-
-    it("parses history mode URL with pathname and search", () => {
-      const result = Router.parse("https://example.com/home?page=1&size=20");
-
-      expect(result.href).toBe("https://example.com/home?page=1&size=20");
-      expect(result.srcQuery).toBe("/home?page=1&size=20");
-      expect(result.srcHash).toBe("");
-      expect(result.query.path).toBe("/home");
-      expect(result.query.params).toEqual({ page: "1", size: "20" });
-      expect(result.hash.path).toBe("");
-      expect(result.hash.params).toEqual({});
-      expect(result.params).toEqual({ page: "1", size: "20" });
-    });
-
-    it("parses history mode URL with only pathname", () => {
-      const result = Router.parse("https://example.com/about");
-
-      expect(result.srcQuery).toBe("/about");
-      expect(result.query.path).toBe("/about");
-      expect(result.query.params).toEqual({});
-      expect(result.params).toEqual({});
-    });
-
-    it("parses history mode URL at root", () => {
-      const result = Router.parse("https://example.com/");
-
-      expect(result.srcQuery).toBe("/");
-      expect(result.query.path).toBe("/");
-    });
-
-    it("Location.get works in history mode", () => {
-      const result = Router.parse("https://example.com/list?page=2&sort=name");
-
-      expect(result.get("page")).toBe("2");
-      expect(result.get("sort")).toBe("name");
-      expect(result.get("missing", "default")).toBe("default");
-    });
+    expect(matchPath("/tags/:name", "/tags/a%20b")).toEqual({ name: "a b" });
+    expect(matchPath("/users/:id", "/users")).toBeNull();
   });
 
-  describe("hash mode (backward compatibility)", () => {
-    beforeEach(() => {
-      Router._setConfig({
-        rootId: "app",
-        routeMode: "hash",
-      } as FrameworkConfig);
-    });
+  it("captures splats", () => {
+    expect(matchPath("*", "/anything/at/all")).toEqual({ "*": "anything/at/all" });
+    expect(matchPath("*", "/")).toEqual({ "*": "" });
+    expect(matchPath("/files/*", "/files/a/b.txt")).toEqual({ "*": "a/b.txt" });
+    expect(matchPath("/files/*", "/other/a")).toBeNull();
+  });
+});
 
-    it("parses hash mode URL same as before", () => {
-      const result = Router.parse("https://example.com/#!/home?page=1");
+describe("matchRoutes ranking", () => {
+  const routes: RouteObject[] = [
+    { path: "*", component: NotFound },
+    { path: "/users/:id", component: User },
+    { path: "/users/new", component: Home },
+    { path: "/files/*", component: Files },
+  ];
 
-      expect(result.srcHash).toBe("/home?page=1");
-      expect(result.hash.path).toBe("/home");
-      expect(result.hash.params).toEqual({ page: "1" });
-      expect(result.params).toEqual({ page: "1" });
+  it("prefers static segments over dynamic ones", () => {
+    expect(matchRoutes(routes, "/users/new")?.route.component).toBe(Home);
+    expect(matchRoutes(routes, "/users/42")?.route.component).toBe(User);
+  });
+
+  it("prefers dynamic segments over splats", () => {
+    expect(matchRoutes(routes, "/files/a/b")?.route.component).toBe(Files);
+    expect(matchRoutes(routes, "/nowhere")?.route.component).toBe(NotFound);
+  });
+
+  it("returns null when nothing matches", () => {
+    expect(matchRoutes([{ path: "/a", component: Home }], "/b")).toBeNull();
+  });
+
+  it("resolves ties in registration order", () => {
+    const first = { path: "/dup", component: Home };
+    const second = { path: "/dup", component: User };
+    expect(matchRoutes([first, second], "/dup")?.route).toBe(first);
+  });
+});
+
+describe("createRouter — location signal", () => {
+  it("commits the initial window location on creation", () => {
+    globalThis.history.replaceState(null, "", "/start?a=1#top");
+    router = createRouter([]);
+    const loc = router.location.value;
+    expect(loc.pathname).toBe("/start");
+    expect(loc.search).toBe("?a=1");
+    expect(loc.hash).toBe("#top");
+  });
+
+  it("navigate(href) pushes and updates the signal", async () => {
+    router = createRouter([]);
+    const ok = await router.navigate("/users/42?tab=posts#bio");
+    expect(ok).toBe(true);
+    const loc = router.location.value;
+    expect(loc.pathname).toBe("/users/42");
+    expect(loc.search).toBe("?tab=posts");
+    expect(loc.hash).toBe("#bio");
+    expect(globalThis.location.pathname).toBe("/users/42");
+    expect(globalThis.location.search).toBe("?tab=posts");
+  });
+
+  it("navigate(partial path) keeps the current pathname", async () => {
+    router = createRouter([]);
+    await router.navigate("/list");
+    await router.navigate({ search: "?page=2" });
+    expect(router.location.value.pathname).toBe("/list");
+    expect(router.location.value.search).toBe("?page=2");
+  });
+
+  it("carries state and a per-entry key", async () => {
+    router = createRouter([]);
+    const before = router.location.value.key;
+    await router.navigate("/next", { state: { from: "test" } });
+    const loc = router.location.value;
+    expect(loc.state).toEqual({ from: "test" });
+    expect(loc.key).not.toBe(before);
+  });
+
+  it("navigating to the current href replaces instead of pushing", async () => {
+    router = createRouter([]);
+    await router.navigate("/same");
+    const lenAfterFirst = globalThis.history.length;
+    await router.navigate("/same");
+    expect(globalThis.history.length).toBe(lenAfterFirst);
+  });
+
+  it("is a tracked read: effects re-run per navigation", async () => {
+    router = createRouter([]);
+    const seen: string[] = [];
+    const dispose = effect(() => {
+      seen.push(router!.location.value.pathname);
     });
+    await router.navigate("/a");
+    await router.navigate("/b");
+    dispose();
+    await router.navigate("/c");
+    expect(seen).toEqual(["/", "/a", "/b"]);
+  });
+
+  it("commits popstate traversals (back)", async () => {
+    router = createRouter([]);
+    await router.navigate("/first");
+    await router.navigate("/second");
+    globalThis.history.back();
+    await poll(() => router!.location.value.pathname === "/first");
+    expect(router.location.value.pathname).toBe("/first");
+  });
+
+  it("dispose() detaches the popstate listener", async () => {
+    router = createRouter([]);
+    await router.navigate("/x");
+    await router.navigate("/y");
+    router.dispose();
+    globalThis.history.back();
+    await new Promise((r) => setTimeout(r, 30));
+    expect(router.location.value.pathname).toBe("/y"); // no commit after dispose
+    router = undefined;
+  });
+});
+
+describe("match / params / searchParams signals", () => {
+  it("derives the ranked match and its params from the location", async () => {
+    router = createRouter([
+      { path: "/", component: Home },
+      { path: "/users/:id", component: User },
+      { path: "*", component: NotFound },
+    ]);
+    expect(router.match.value?.route.component).toBe(Home);
+    await router.navigate("/users/42");
+    expect(router.match.value?.route.component).toBe(User);
+    expect(router.params.value).toEqual({ id: "42" });
+    await router.navigate("/nope");
+    expect(router.match.value?.route.component).toBe(NotFound);
+    expect(router.params.value).toEqual({ "*": "nope" });
+  });
+
+  it("parses searchParams from the location", async () => {
+    router = createRouter([]);
+    await router.navigate("/list?page=2&size=10");
+    expect(router.searchParams.value.get("page")).toBe("2");
+    expect(router.searchParams.value.get("size")).toBe("10");
+  });
+});
+
+describe("useRouter (active router)", () => {
+  it("returns the last created router; throws after dispose", () => {
+    router = createRouter([]);
+    expect(useRouter()).toBe(router);
+    router.dispose();
+    expect(() => useRouter()).toThrow(/no active router/);
+    router = undefined;
+  });
+});
+
+describe("basename", () => {
+  it("strips the basename before matching and prefixes hrefs", async () => {
+    globalThis.history.replaceState(null, "", "/app/home");
+    router = createRouter([{ path: "/home", component: Home }], { basename: "/app" });
+    expect(router.match.value?.route.component).toBe(Home);
+    expect(router.match.value?.pathname).toBe("/home");
+    expect(router.location.value.pathname).toBe("/home"); // logical (RR semantics)
+    await router.navigate("/users");
+    expect(globalThis.location.pathname).toBe("/app/users");
+    expect(router.location.value.pathname).toBe("/users");
+  });
+
+  it("yields no match outside the basename", () => {
+    globalThis.history.replaceState(null, "", "/other/home");
+    router = createRouter([{ path: "*", component: NotFound }], { basename: "/app" });
+    expect(router.match.value).toBeNull();
+  });
+});
+
+describe("blockers", () => {
+  it("a false blocker aborts navigate() without touching the URL", async () => {
+    router = createRouter([]);
+    await router.navigate("/stay");
+    const unblock = router.block(() => false);
+    const ok = await router.navigate("/away");
+    expect(ok).toBe(false);
+    expect(router.location.value.pathname).toBe("/stay");
+    expect(globalThis.location.pathname).toBe("/stay");
+    unblock();
+    expect(await router.navigate("/away")).toBe(true);
+    expect(router.location.value.pathname).toBe("/away");
+  });
+
+  it("supports async blockers and passes (next, current)", async () => {
+    router = createRouter([]);
+    await router.navigate("/from");
+    const calls: Array<[string, string]> = [];
+    router.block(async (next, current) => {
+      calls.push([next.pathname, current.pathname]);
+      return next.pathname !== "/forbidden";
+    });
+    expect(await router.navigate("/forbidden")).toBe(false);
+    expect(await router.navigate("/allowed")).toBe(true);
+    expect(calls).toEqual([
+      ["/forbidden", "/from"],
+      ["/allowed", "/from"],
+    ]);
+  });
+
+  it("a throwing blocker blocks", async () => {
+    router = createRouter([]);
+    router.block(() => {
+      throw new Error("nope");
+    });
+    expect(await router.navigate("/x")).toBe(false);
+  });
+
+  it("blockers run in order and short-circuit on the first false", async () => {
+    router = createRouter([]);
+    const order: number[] = [];
+    router.block(() => {
+      order.push(1);
+      return false;
+    });
+    router.block(() => {
+      order.push(2);
+      return true;
+    });
+    expect(await router.navigate("/x")).toBe(false);
+    expect(order).toEqual([1]);
+  });
+
+  it("a rejected popstate traversal is reverted", async () => {
+    router = createRouter([]);
+    await router.navigate("/keep");
+    await router.navigate("/leave");
+    router.block((next) => next.pathname !== "/keep"); // block going back to /keep
+    globalThis.history.back();
+    await new Promise((r) => setTimeout(r, 50));
+    await poll(() => globalThis.location.pathname === "/leave");
+    expect(router.location.value.pathname).toBe("/leave"); // signal never moved
   });
 });

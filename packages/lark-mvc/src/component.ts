@@ -26,7 +26,7 @@
  * A component is a plain function `(props) => JSXNode`. The function re-runs
  * on every render pass inside a per-instance signals effect — the body IS the
  * tracked template. State lives in call-order-indexed hook slots (`useSignal`,
- * `useEffect`, ... — see ./hooks.ts), which are preserved across re-runs.
+ * `onMount`, ... — see ./hooks.ts), which are preserved across re-runs.
  *
  * This module owns everything about an instance EXCEPT its rendered DOM
  * slice (nodes/anchor live on the reconciler's `RComponent` bookkeeping):
@@ -35,13 +35,17 @@
  *   reading `props.x` inside the component body subscribes the instance to
  *   THAT key only (finer-grained than React's whole-props identity model)
  * - the **hook slot array** + `currentInstance` tracking (rules of hooks)
- * - **effect flushing** — `useEffect` callbacks run after the DOM commit
+ * - **mount flushing** — `onMount` callbacks run after the DOM commit
  * - **teardown** — slot disposal + `onCleanup` callbacks in reverse order
  * - the **live-instance registry** used by HMR to hot-swap component code
  *   while preserving state slots
+ *
+ * There is deliberately NO deps-array machinery (no useMemo/useEffect):
+ * signals are the single dependency-tracking mechanism — derive with
+ * `useComputed`, react with `useSignalEffect`.
  */
 import { signal, batch, type Signal } from "./reactive";
-import { funcWithTry, noop, hasOwnProperty, devWarn } from "./utils";
+import { hasOwnProperty, devWarn } from "./utils";
 import type { Component } from "./jsx/vnode";
 
 // ============================================================
@@ -49,10 +53,9 @@ import type { Component } from "./jsx/vnode";
 // ============================================================
 
 export const VALUE_SLOT = 1;
-export const MEMO_SLOT = 2;
-export const EFFECT_SLOT = 3;
+export const MOUNT_SLOT = 2;
 
-/** A once-created value (signal, ref cell, computed, effect dispose, query). */
+/** A once-created value (signal, ref cell, computed, effect dispose). */
 export interface ValueSlot {
   t: typeof VALUE_SLOT;
   value: unknown;
@@ -62,24 +65,16 @@ export interface ValueSlot {
   keep?: boolean;
 }
 
-/** `useMemo` slot — recomputed when deps change. */
-export interface MemoSlot {
-  t: typeof MEMO_SLOT;
-  value: unknown;
-  deps: unknown[] | undefined;
-}
-
-/** `useEffect` slot — run post-commit when deps change. */
-export interface EffectSlot {
-  t: typeof EFFECT_SLOT;
+/** `onMount` slot — run once post-commit; cleanup on unmount. */
+export interface MountSlot {
+  t: typeof MOUNT_SLOT;
   fn: () => void | (() => void);
-  deps: unknown[] | undefined;
   cleanup: (() => void) | undefined;
-  /** Set when deps changed this render; cleared by `flushInstanceEffects`. */
+  /** Set on creation; cleared by `flushInstanceEffects`. */
   pending: boolean;
 }
 
-export type HookSlot = ValueSlot | MemoSlot | EffectSlot;
+export type HookSlot = ValueSlot | MountSlot;
 
 // ============================================================
 // Instance
@@ -181,11 +176,6 @@ export function writeInstanceProps(inst: Instance, props: Record<string, unknown
 
 let currentInstance: Instance | null = null;
 
-/** The instance currently rendering, or `null` outside a component body. */
-export function getCurrentInstance(): Instance | null {
-  return currentInstance;
-}
-
 /** Get the current instance or throw (hooks outside a component body). */
 export function requireInstance(hook: string): Instance {
   if (!currentInstance) {
@@ -224,15 +214,6 @@ export function endRender(inst: Instance, prev: Instance | null): void {
 // Slot primitives (consumed by ./hooks.ts)
 // ============================================================
 
-/** Shallow deps comparison (React semantics — `Object.is` per entry). */
-export function depsDiffer(a: unknown[], b: unknown[]): boolean {
-  if (a.length !== b.length) return true;
-  for (let i = 0; i < a.length; i++) {
-    if (!Object.is(a[i], b[i])) return true;
-  }
-  return false;
-}
-
 function replaceSlotWarn(inst: Instance, prev: HookSlot): void {
   devWarn(
     `Component "${inst.fn.name || "anonymous"}" changed the type of a hook between ` +
@@ -264,79 +245,53 @@ export function useValueSlot<T>(create: () => T, dispose?: (value: T) => void, k
   return value;
 }
 
-/** `useMemo` slot: recompute when deps change (no deps → every render). */
-export function useMemoSlot<T>(compute: () => T, deps: unknown[] | undefined): T {
-  const inst = requireInstance("useMemo");
-  const i = inst.hookIndex++;
-  const prev = inst.hooks[i];
-  if (prev) {
-    if (prev.t === MEMO_SLOT) {
-      if (deps && prev.deps && !depsDiffer(prev.deps, deps)) return prev.value as T;
-    } else {
-      replaceSlotWarn(inst, prev);
-    }
-  }
-  const value = compute();
-  inst.hooks[i] = { t: MEMO_SLOT, value, deps };
-  return value;
-}
-
 /**
- * `useEffect` slot: marks the effect pending when deps changed (no deps →
- * every render; `[]` → mount only). Pending effects run post-commit via
- * `flushInstanceEffects`; the previous cleanup runs first.
+ * `useEffect` slot (mount-only): registered on the first render, run once
+ * post-commit via `flushInstanceEffects` (the DOM exists). A returned
+ * function is the unmount cleanup. Later renders are no-ops (the first
+ * render's `fn` wins).
  */
-export function useEffectSlot(fn: () => void | (() => void), deps: unknown[] | undefined): void {
+export function useMountSlot(fn: () => void | (() => void)): void {
   const inst = requireInstance("useEffect");
   const i = inst.hookIndex++;
   const prev = inst.hooks[i];
   if (prev) {
-    if (prev.t === EFFECT_SLOT) {
-      prev.fn = fn;
-      if (!deps || !prev.deps || depsDiffer(prev.deps, deps)) prev.pending = true;
-      prev.deps = deps;
-      return;
-    }
+    if (prev.t === MOUNT_SLOT) return;
     replaceSlotWarn(inst, prev);
   }
-  inst.hooks[i] = { t: EFFECT_SLOT, fn, deps, cleanup: undefined, pending: true };
+  inst.hooks[i] = { t: MOUNT_SLOT, fn, cleanup: undefined, pending: true };
 }
 
 // ============================================================
-// Post-commit effects / teardown
+// Post-commit mounts / teardown
 // ============================================================
 
 /**
- * Run pending `useEffect` callbacks (slot order). The previous cleanup runs
- * before its effect re-runs. Called by the reconciler after the DOM commit,
- * inside `untracked()`.
+ * Run pending `onMount` callbacks (slot order). Called by the reconciler
+ * after the DOM commit, inside `untracked()`. Errors bubble to the caller
+ * (the render effect / signal write site) — there is no swallowing.
  */
 export function flushInstanceEffects(inst: Instance): void {
   for (const slot of inst.hooks) {
-    if (slot && slot.t === EFFECT_SLOT && slot.pending && !inst.destroyed) {
+    if (slot && slot.t === MOUNT_SLOT && slot.pending && !inst.destroyed) {
       slot.pending = false;
-      if (slot.cleanup) {
-        const cleanup = slot.cleanup;
-        slot.cleanup = undefined;
-        funcWithTry(cleanup, [], null, noop);
-      }
-      const result = funcWithTry(slot.fn, [], null, noop);
+      const result = slot.fn();
       if (typeof result === "function") {
-        slot.cleanup = result as () => void;
+        slot.cleanup = result;
       }
     }
   }
 }
 
 function disposeSlot(slot: HookSlot): void {
-  if (slot.t === EFFECT_SLOT) {
+  if (slot.t === MOUNT_SLOT) {
     if (slot.cleanup) {
       const cleanup = slot.cleanup;
       slot.cleanup = undefined;
-      funcWithTry(cleanup, [], null, noop);
+      cleanup();
     }
-  } else if (slot.t === VALUE_SLOT && slot.dispose) {
-    funcWithTry(slot.dispose, [slot.value], null, noop);
+  } else if (slot.dispose) {
+    slot.dispose(slot.value);
   }
 }
 
@@ -357,7 +312,7 @@ export function destroyInstanceState(inst: Instance): void {
   }
   inst.hooks.length = 0;
   for (let i = inst.cleanups.length - 1; i >= 0; i--) {
-    funcWithTry(inst.cleanups[i], [], null, noop);
+    inst.cleanups[i]();
   }
   inst.cleanups.length = 0;
 }

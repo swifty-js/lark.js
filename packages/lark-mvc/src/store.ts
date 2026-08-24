@@ -25,14 +25,18 @@
  *
  * Zustand-aligned state management, backed by per-key signals.
  *
- * Core API:
- * - createStore(name, creator): define a store with (set, get) => initialState
+ * Core API (zustand semantics — stores are anonymous, no global registry):
+ * - createStore(creator): define a store with (set, get) => initialState
  * - store.getState(): stable tracked proxy — reading a key inside a tracked
- *   region (template / computed / useSignalEffect) subscribes the reader to
- *   THAT key only
- * - store.setState(partial | updater): batch-write keys and notify listeners
- * - store.subscribe(listener): manual (state, prevState) listener
- * - store.destroy(): tear down the store
+ *   region (component body / computed / useSignalEffect) subscribes the
+ *   reader to THAT key only
+ * - store.setState(partial | updater, replace?): batch-write keys and notify
+ *   listeners; `replace: true` resets plain state keys missing from the
+ *   partial to `undefined` (actions and computed slots are untouched)
+ * - store.subscribe(listener) / store.subscribe(selector, listener): manual
+ *   subscriptions; the selector form only fires when the selected slice
+ *   changes (`Object.is`)
+ * - store.destroy(): clear listeners and freeze the store
  * - `computed(fn)` (from the reactive core) declares derived state — its
  *   dependencies are tracked automatically, no deps array
  *
@@ -51,8 +55,9 @@ type Listener<T> = (state: T, prevState: T) => void;
 
 export interface StoreApi<T = object> {
   getState(): T;
-  setState(partial: Partial<T> | ((prev: T) => Partial<T>)): void;
+  setState(partial: Partial<T> | ((prev: T) => Partial<T>), replace?: boolean): void;
   subscribe(listener: Listener<T>): () => void;
+  subscribe<S>(selector: (state: T) => S, listener: (slice: S, prevSlice: S) => void): () => void;
   destroy(): void;
 }
 
@@ -63,13 +68,9 @@ export interface StoreApi<T = object> {
 type StateInit<T> = { [K in keyof T]: T[K] | ReadonlySignal<T[K]> };
 
 type StateCreator<T> = (
-  set: (partial: Partial<T> | ((prev: T) => Partial<T>)) => void,
+  set: (partial: Partial<T> | ((prev: T) => Partial<T>), replace?: boolean) => void,
   get: () => T,
 ) => StateInit<T>;
-
-// ---- Store registry --------------------------------------------------------
-
-const storeRegistry = new Map<string, StoreApi>();
 
 // ---- create ----------------------------------------------------------------
 
@@ -85,24 +86,23 @@ const storeRegistry = new Map<string, StoreApi>();
  * - **All other fields** become signal-backed state keys
  *
  * `getState()` returns a stable proxy: property reads go through the key
- * signals, so reads inside a view template subscribe that view to exactly
- * the keys it uses. Writes to computed/action keys via `setState` are
- * silently ignored.
+ * signals, so reads inside a component body subscribe that component to
+ * exactly the keys it uses. Writes to computed/action keys via `setState`
+ * are silently ignored.
  *
- * @param name - Unique store name for the global registry
  * @param creator - Factory function `(set, get) => initialState`
  * @returns A `StoreApi` with `getState` / `setState` / `subscribe` / `destroy`
  *
  * @example
  * ```ts
- * const store = createStore("counter", (set, get) => ({
+ * const store = createStore((set, get) => ({
  *   count: 0,
  *   doubled: computed(() => get().count * 2),
  *   increment: () => set({ count: get().count + 1 }),
  * }));
  * ```
  */
-export function createStore<T extends object>(name: string, creator: StateCreator<T>): StoreApi<T> {
+export function createStore<T extends object>(creator: StateCreator<T>): StoreApi<T> {
   /** Listeners notified on every state change. */
   const listeners = new Set<Listener<T>>();
   /** Signal per plain state key. */
@@ -148,9 +148,11 @@ export function createStore<T extends object>(name: string, creator: StateCreato
    * Accepts a partial object or an updater function `(prev) => partial`.
    * Computed and action keys are skipped. If no value actually changed
    * (`Object.is`), the update is a no-op — listeners are NOT notified.
-   * Unknown keys create new signal-backed slots (zustand semantics).
+   * Unknown keys create new signal-backed slots. With `replace: true`,
+   * plain state keys missing from the partial are reset to `undefined`
+   * (zustand replace semantics for a per-key-signal store).
    */
-  const setState = (partial: Partial<T> | ((prev: T) => Partial<T>)): void => {
+  const setState = (partial: Partial<T> | ((prev: T) => Partial<T>), replace?: boolean): void => {
     if (destroyed) return;
     const resolved = typeof partial === "function" ? partial(proxy) : partial;
 
@@ -158,21 +160,31 @@ export function createStore<T extends object>(name: string, creator: StateCreato
     let changed = false;
 
     batch(() => {
-      for (const key of Object.keys(resolved)) {
-        if (derived.has(key) || actionKeys.has(key)) continue;
-        const newVal = Reflect.get(resolved, key);
+      const writeKey = (key: string, newVal: unknown): void => {
         let sig = keySignals.get(key);
         if (!sig) {
           sig = signal(newVal);
           keySignals.set(key, sig);
           mirror[key] = newVal;
           changed = true;
-          continue;
+          return;
         }
         if (!Object.is(mirror[key], newVal)) {
           mirror[key] = newVal;
           sig.value = newVal;
           changed = true;
+        }
+      };
+
+      for (const key of Object.keys(resolved)) {
+        if (derived.has(key) || actionKeys.has(key)) continue;
+        writeKey(key, Reflect.get(resolved, key));
+      }
+      if (replace) {
+        for (const key of keySignals.keys()) {
+          if (!Object.prototype.hasOwnProperty.call(resolved, key)) {
+            writeKey(key, undefined);
+          }
         }
       }
       if (changed) {
@@ -188,25 +200,52 @@ export function createStore<T extends object>(name: string, creator: StateCreato
   };
 
   /**
-   * Subscribe to state changes. The listener receives `(state, prevState)` —
-   * `state` is the stable proxy, `prevState` a plain snapshot taken before
-   * the write. Returns an unsubscribe function.
+   * Subscribe to state changes.
+   *
+   * - `subscribe(listener)` — fires on every change with `(state, prevState)`
+   *   (`state` is the stable proxy, `prevState` a plain snapshot).
+   * - `subscribe(selector, listener)` — fires only when the selected slice
+   *   changes (`Object.is`), with `(slice, prevSlice)`.
+   *
+   * Returns an unsubscribe function.
    */
-  const subscribe = (listener: Listener<T>): (() => void) => {
-    listeners.add(listener);
+  function subscribe(listener: Listener<T>): () => void;
+  function subscribe<S>(
+    selector: (state: T) => S,
+    listener: (slice: S, prevSlice: S) => void,
+  ): () => void;
+  function subscribe<S>(
+    selectorOrListener: Listener<T> | ((state: T) => S),
+    sliceListener?: (slice: S, prevSlice: S) => void,
+  ): () => void {
+    let entry: Listener<T>;
+    if (sliceListener) {
+      const selector = selectorOrListener as (state: T) => S;
+      let prevSlice = untracked(() => selector(proxy));
+      entry = () => {
+        const nextSlice = untracked(() => selector(proxy));
+        if (!Object.is(nextSlice, prevSlice)) {
+          const before = prevSlice;
+          prevSlice = nextSlice;
+          sliceListener(nextSlice, before);
+        }
+      };
+    } else {
+      entry = selectorOrListener as Listener<T>;
+    }
+    listeners.add(entry);
     return () => {
-      listeners.delete(listener);
+      listeners.delete(entry);
     };
-  };
+  }
 
   /**
-   * Tear down the store: clear listeners and remove from the global registry.
-   * Further `setState` calls are no-ops.
+   * Tear down the store: clear listeners. Further `setState` calls are
+   * no-ops.
    */
   const destroy = (): void => {
     destroyed = true;
     listeners.clear();
-    storeRegistry.delete(name);
   };
 
   const api: StoreApi<T> = { getState, setState, subscribe, destroy };
@@ -231,9 +270,6 @@ export function createStore<T extends object>(name: string, creator: StateCreato
   // Derived initial values compute AFTER all key signals exist (computed is
   // lazy — first .value read runs the fn, which may call get()).
   syncDerived();
-
-  // Register
-  storeRegistry.set(name, api as StoreApi);
 
   return api;
 }

@@ -18,7 +18,7 @@
  *   as `on{Name}` callback props (`"select"` → `onSelect`) that forward to
  *   the live arg — so child → parent callbacks land in the Actions panel.
  */
-import { render, unmount, State } from "@lark.js/mvc";
+import { render, unmount } from "@lark.js/mvc";
 import type { Component } from "@lark.js/mvc";
 import { jsx } from "@lark.js/mvc/jsx-runtime";
 import { getChannel } from "storybook/preview-api";
@@ -42,11 +42,11 @@ export interface LarkStoryConfig<TArgs extends object = StoryArgs> {
    */
   events?: readonly string[];
   /**
-   * Derive `State` keys from args. Applied before each render — `State.set`
-   * notifies tracked readers, so stories can drive components whose bodies
-   * read `State.get(key)`.
+   * Side channel invoked with the args before each render — write them into
+   * a `createStore` store the component reads, so stories can drive
+   * components without pushing props (store writes notify tracked readers).
    */
-  state?: (args: TArgs) => Record<string, unknown>;
+  onArgs?: (args: TArgs) => void;
   /**
    * Re-mount the component from scratch on every args change instead of
    * pushing props into the existing instance. Default `false`.
@@ -167,9 +167,8 @@ function sweep(): void {
 export function larkRender<TArgs extends object = StoryArgs>(
   config: LarkStoryConfig<TArgs>,
 ): (args: TArgs, context: LarkStoryContext) => HTMLElement {
-  const applyState = (args: TArgs): void => {
-    if (!config.state) return;
-    State.set(config.state(args)); // per-key signals notify tracked readers
+  const applyArgs = (args: TArgs): void => {
+    config.onArgs?.(args); // store writes notify tracked readers
   };
 
   return (args: TArgs, context: LarkStoryContext): HTMLElement => {
@@ -188,7 +187,7 @@ export function larkRender<TArgs extends object = StoryArgs>(
     // early, so the DOM is never thrown away behind the framework's back.
     if (existing && !remount && existing.el.isConnected) {
       existing.args = storyArgs;
-      applyState(args);
+      applyArgs(args);
       render(jsx(config.component, buildProps(existing)), existing.el);
       return existing.el;
     }
@@ -207,7 +206,7 @@ export function larkRender<TArgs extends object = StoryArgs>(
     entry.handlers = makeHandlers(entry, config.events ?? []);
     stories.set(context.id, entry);
 
-    applyState(args);
+    applyArgs(args);
     // Hostless render works on a detached element — no connection dance.
     render(jsx(config.component, buildProps(entry)), el);
 

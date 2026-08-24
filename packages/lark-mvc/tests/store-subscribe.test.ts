@@ -30,13 +30,8 @@ interface CountState {
   increment: () => void;
 }
 
-let storeCounter = 0;
-function nextName(): string {
-  return `subscribe-test-${++storeCounter}`;
-}
-
-function makeStore(name: string) {
-  return createStore<CountState>(name, (set, get) => ({
+function makeStore() {
+  return createStore<CountState>((set, get) => ({
     count: 0,
     step: 1,
     increment() {
@@ -47,7 +42,7 @@ function makeStore(name: string) {
 
 describe("createStore - subscribe", () => {
   it("subscribe fires on setState", () => {
-    const store = makeStore(nextName());
+    const store = makeStore();
     const listener = vi.fn();
     store.subscribe(listener);
 
@@ -62,7 +57,7 @@ describe("createStore - subscribe", () => {
   });
 
   it("subscribe fires on action call", () => {
-    const store = makeStore(nextName());
+    const store = makeStore();
     const listener = vi.fn();
     store.subscribe(listener);
 
@@ -75,7 +70,7 @@ describe("createStore - subscribe", () => {
   });
 
   it("unsubscribe stops notifications", () => {
-    const store = makeStore(nextName());
+    const store = makeStore();
     const listener = vi.fn();
     const off = store.subscribe(listener);
 
@@ -87,7 +82,7 @@ describe("createStore - subscribe", () => {
   });
 
   it("setState with no actual change does not notify", () => {
-    const store = makeStore(nextName());
+    const store = makeStore();
     const listener = vi.fn();
     store.subscribe(listener);
 
@@ -98,14 +93,14 @@ describe("createStore - subscribe", () => {
   });
 
   it("setState with updater function", () => {
-    const store = makeStore(nextName());
+    const store = makeStore();
     store.setState((prev) => ({ count: prev.count + 10 }));
     expect(store.getState().count).toBe(10);
     store.destroy();
   });
 
   it("destroy clears listeners", () => {
-    const store = makeStore(nextName());
+    const store = makeStore();
     const listener = vi.fn();
     store.subscribe(listener);
 
@@ -118,13 +113,13 @@ describe("createStore - subscribe", () => {
 
 describe("getState (tracked proxy)", () => {
   it("returns a stable proxy identity", () => {
-    const store = makeStore(nextName());
+    const store = makeStore();
     expect(store.getState()).toBe(store.getState());
     store.destroy();
   });
 
   it("spread produces a plain snapshot including actions", () => {
-    const store = makeStore(nextName());
+    const store = makeStore();
     store.setState({ count: 3 });
     const snap = { ...store.getState() };
     expect(snap.count).toBe(3);
@@ -134,7 +129,7 @@ describe("getState (tracked proxy)", () => {
   });
 
   it("key reads inside an effect subscribe to THAT key only", () => {
-    const store = makeStore(nextName());
+    const store = makeStore();
     let runs = 0;
     const dispose = effect(() => {
       store.getState().count;
@@ -153,7 +148,7 @@ describe("getState (tracked proxy)", () => {
   });
 
   it("batches multi-key setState into one effect run", () => {
-    const store = makeStore(nextName());
+    const store = makeStore();
     let runs = 0;
     const dispose = effect(() => {
       store.getState().count;
@@ -174,7 +169,7 @@ describe("getState (tracked proxy)", () => {
       count: number;
       [k: string]: unknown;
     }
-    const store = createStore<Extra>(nextName(), () => ({ count: 0 }));
+    const store = createStore<Extra>(() => ({ count: 0 }));
     store.setState({ label: "new" });
     expect(store.getState()["label"]).toBe("new");
     store.destroy();

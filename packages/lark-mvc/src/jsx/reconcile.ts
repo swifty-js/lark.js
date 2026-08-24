@@ -55,7 +55,7 @@
  */
 
 import { batch, untracked, signal, effect, Signal } from "../reactive";
-import { funcWithTry, noop, devWarn } from "../utils";
+import { devWarn } from "../utils";
 import { SVG_NS, MATH_NS, strSafe } from "../common";
 import { canonicalComponent } from "../component-registry";
 import {
@@ -190,11 +190,10 @@ export function render(node: JSXNode, container: Element): void {
   container.textContent = "";
   const end = document.createComment("");
   container.appendChild(end);
-  const rec: RootRecord = { vnode: signal(node), dispose: noop, nodes: [], end };
+  const rec: RootRecord = { vnode: signal(node), dispose: () => undefined, nodes: [], end };
   roots.set(container, rec);
   rec.dispose = effect(() => {
-    const content = rec.vnode.value;
-    funcWithTry(renderRoot, [container, rec, content], null, noop);
+    renderRoot(container, rec, rec.vnode.value);
   });
 }
 
@@ -260,8 +259,10 @@ function normalizeInto(node: JSXNode, out: NItem[]): void {
       return;
     }
     // Function component — mounted as an instance, never invoked inline.
+    // Canonicalized ONCE here (HMR alias chain) so the diff hot path
+    // compares plain function identity.
     if (typeof type === "function") {
-      out.push({ k: COMPONENT, fn: type as Component, key: node.key, props });
+      out.push({ k: COMPONENT, fn: canonicalComponent(type as Component), key: node.key, props });
       return;
     }
     if (typeof type === "string") {
@@ -282,7 +283,9 @@ function compatible(r: RNode, item: NItem): boolean {
   if (r.k !== item.k) return false;
   if (r.k === ELEMENT) return r.type === (item as NElement).type;
   if (r.k === COMPONENT) {
-    return canonicalComponent(r.instance.fn) === canonicalComponent((item as NComponent).fn);
+    // item.fn is canonicalized at normalize time; instance.fn is updated in
+    // place by HMR swaps — plain identity comparison, no alias walk here.
+    return r.instance.fn === (item as NComponent).fn;
   }
   return true;
 }
@@ -422,7 +425,7 @@ function destroyRNode(r: RNode): void {
       if (inst.renderDispose) {
         const dispose = inst.renderDispose;
         inst.renderDispose = undefined;
-        funcWithTry(dispose, [], null, noop);
+        dispose();
       }
       for (const child of r.nodes) destroyRNode(child);
       destroyInstanceState(inst);
@@ -505,7 +508,7 @@ function createComponent(
   parentDom: Element,
   ns: string | null,
 ): RComponent {
-  const inst = createInstance(canonicalComponent(item.fn));
+  const inst = createInstance(item.fn);
   // Seed props before the first render (removal keys registered — all props
   // come from parent renders in the FC model).
   writeInstanceProps(inst, item.props);
@@ -534,7 +537,7 @@ function mountComponent(r: RComponent): void {
   inst.renderDispose = effect(() => {
     inst.invalidate.value; // manual/HMR re-render channel
     if (inst.destroyed) return;
-    funcWithTry(renderComponent, [r], null, noop);
+    renderComponent(r);
   });
 }
 
@@ -621,7 +624,7 @@ function unwrap(value: unknown): unknown {
 }
 
 /** Normalize a `class` / `className` value to a class string. */
-export function classToString(value: unknown): string {
+function classToString(value: unknown): string {
   if (value == null || value === false) return "";
   if (typeof value === "string") return value;
   if (Array.isArray(value)) {
@@ -641,7 +644,7 @@ export function classToString(value: unknown): string {
 }
 
 /** Normalize a `style` value to an inline style string. */
-export function styleToString(value: unknown): string {
+function styleToString(value: unknown): string {
   if (value == null || value === false) return "";
   if (typeof value === "string") return value;
   if (typeof value === "object") {
@@ -771,7 +774,7 @@ function applyEvent(r: RElement, name: string, value: unknown): string | undefin
         const fn = b.current;
         if (!fn) return;
         // batch(): multi-signal writes in one handler → one re-render.
-        batch(() => funcWithTry(fn, [e], null, noop));
+        batch(() => fn(e));
       },
     };
     binding = events[type] = b;
@@ -832,7 +835,7 @@ function applyAttr(r: RElement, name: string, value: unknown): void {
 
 function callRef(ref: RefValue, el: Element | null): void {
   if (typeof ref === "function") {
-    funcWithTry(ref, [el], null, noop);
+    ref(el);
   } else if (ref && typeof ref === "object") {
     ref.current = el;
   }

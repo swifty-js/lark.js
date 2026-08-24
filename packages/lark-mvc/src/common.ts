@@ -21,55 +21,14 @@
  */
 
 /**
- * Lark framework shared constants and helpers.
- *
- * This module is the single source of truth for:
- * - Router event name constants
- * - Regex patterns for URL parsing
- * - SVG/MathML namespaces and `strSafe`
+ * Lark framework shared constants and helpers (rendering).
  */
-
-/** Global counter for generating unique IDs */
-let globalCounter = 0;
-
-/**
- * Router event name constants.
- *
- * - `CHANGE` — pre-change phase (preventable/rejectable)
- * - `CHANGED` — post-change phase (final notification, framework re-mounts views)
- * - `PAGE_UNLOAD` — `beforeunload` lifecycle
- */
-export const RouterEvents = {
-  CHANGE: "change",
-  CHANGED: "changed",
-  PAGE_UNLOAD: "page_unload",
-};
-
-/** URL query/hash trim regexp */
-export const URL_TRIM_HASH_REGEXP = /(?:^.*\/\/[^/]+|#.*$)/gi;
-
-/** URL trim query regexp (before hash) */
-export const URL_TRIM_QUERY_REGEXP = /^[^#]*#?!?/;
-
-/** URL param key-value regexp */
-export const URL_PARAM_REGEXP = /([^=&?/#]+)=?([^&#?]*)/g;
-
-/** URL params test regexp */
-export const IS_URL_PARAMS = /(?!^)=|&/;
-
-/** URL query/hash trim regexp for path extraction */
-export const URL_QUERY_HASH_REGEXP = /[#?].*$/;
 
 /** SVG namespace */
 export const SVG_NS = "http://www.w3.org/2000/svg";
 
 /** MathML namespace */
 export const MATH_NS = "http://www.w3.org/1998/Math/MathML";
-
-/** Increment global counter and return new value */
-export function nextCounter(): number {
-  return ++globalCounter;
-}
 
 /**
  * Null-safe `String(v)` — `null` / `undefined` become `""`.

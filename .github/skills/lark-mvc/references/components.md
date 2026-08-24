@@ -50,7 +50,7 @@ unmount(container);              // dispose all instances + effects, clear DOM
 3. Each pass: `beginRender` (hook cursor reset) → `fn(props)` TRACKED →
    `endRender` (hook-count check) → slice diff into the host between the
    previous nodes and the end anchor → post-commit flush (child mounts,
-   prop pushes, refs) → `flushInstanceEffects` (pending `useEffect`s).
+   prop pushes, refs) → `flushInstanceEffects` (pending mount `useEffect`s).
 4. Prop updates: the parent's flush batch-writes changed keys into the
    instance's per-key signals; keys absent this round are removed
    (`undefined` — React removal semantics). The child re-renders only if it
@@ -85,41 +85,46 @@ useComputed<T>(fn: () => T): ReadonlySignal<T>
 // closure is captured on the first render: read reactive inputs (signals /
 // props / stores) inside it, not captured locals.
 
-useMemo<T>(fn: () => T, deps?: unknown[]): T
-// Recompute when deps change (Object.is); no deps → every render.
-
-useEffect(fn: () => (() => void) | void, deps?: unknown[]): void
-// Runs AFTER the DOM commit. no deps → after every render; [] → mount
-// only; [a, b] → when a dep changes. Cleanup runs before the next run and
-// on unmount.
-
 useSignalEffect(fn: () => void | (() => void)): void
 // effect(fn) created once on mount, re-runs when any signal it read
 // changes, disposed on unmount. Async bodies: read signals first, then
 // untracked(() => ...). First-render closure (like useComputed).
 
+useEffect(fn: () => (() => void) | void): void
+// MOUNT-ONLY: runs once AFTER the first DOM commit (refs filled); a
+// returned fn is the unmount cleanup. There is NO deps parameter — for
+// data-driven re-runs use useSignalEffect (signals ARE the deps).
+
 onCleanup(fn: () => void): void
 // Register an unmount cleanup exactly once per slot.
 
-useUrlState(defaults)        // [read, write] — see state-routing.md
-useQuery(key, fetcher, o?)   // slot-cached query, auto-disposed — services.md
+useBlocker(blocker)          // navigation blocker for the component lifetime
+useUrlState(defaults)        // [value, stable setValue] — see state-routing.md
 ```
+
+There are NO deps arrays anywhere: `useMemo` and `useEffect(fn, deps)` do
+not exist. Derive → `useComputed`; react → `useSignalEffect`; mount/unmount
+→ `useEffect(fn)`.
 
 DOM access pattern (ref + mount effect — no `setTimeout` hacks):
 
 ```tsx
 function SearchBox() {
   const input = useRef<HTMLInputElement>();
-  useEffect(() => input.current?.focus(), []);
+  useEffect(() => input.current?.focus());
   return <input ref={input} />;
 }
 ```
 
-Removed hooks (migrate): `onMount(fn)` → `useEffect(fn, [])`;
+Removed hooks (migrate): `useMemo(fn, deps)` → `useComputed(fn)` (or plain
+inline code); `useEffect(fn, deps)` → `useSignalEffect(fn)` (data-driven) or
+`useEffect(fn)` (mount-only); `onMount` → `useEffect`;
 `useInterval`/`useTimeout` → `useEffect` with a timer + cleanup;
-`useResource`/`ctx.capture` → create in `useMemo(() => make(), [])` +
+`useResource`/`ctx.capture` → create via `useSignal`/`useRef` +
 `onCleanup(() => it.destroy())`; `useEvent`/`ctx.on` → gone (no ctx emitter);
-`ctx.wrapAsync` → a sequence counter or `useQuery`.
+`ctx.wrapAsync` → a sequence counter; `useQuery`/`createQuery` → removed
+(SWR-style async state belongs to a future dedicated package — build on
+signals directly meanwhile).
 
 ## DOM events — per-node inline listeners
 
@@ -213,22 +218,16 @@ slot signal reads subscribe the parent, and a child that reads
 `props.children` re-renders whenever the parent re-renders (fresh vnode
 identity — same as React).
 
-## Component registry (string routes only)
+## Component identity (no string registry)
 
-Imported components used as JSX tags never need registration. String paths
-exist for routes / lazy loading / Module Federation:
+Components are always direct function references — JSX tags, route
+`component` entries, and `lazy()` results alike. There is no
+`registerComponent` and no path-string registry.
 
-```ts
-import { registerComponent, invalidateComponent } from "@lark.js/mvc";
-
-registerComponent("views/home", Home); // path → component fn
-invalidateComponent("views/home");     // force re-load on next route hit
-```
-
-Internals (`src/component-registry.ts`): `ensureComponentName(fn)` assigns
-`__cN_FnName` for route-config components; `aliasComponent(old, new)` +
+Internals (`src/component-registry.ts`): `aliasComponent(old, new)` +
 `canonicalComponent(fn)` form the HMR alias chain the reconciler matches
-through — stale imports keep matching hot-swapped instances.
+through — stale imports (in parents or route tables) keep matching
+hot-swapped instances.
 
 ## Composition patterns (no inheritance)
 
@@ -236,7 +235,7 @@ through — stale imports keep matching hot-swapped instances.
 // Higher-order component — wrap and forward props
 function withLogging<P extends object>(Inner: FC<P>): FC<P> {
   return function Logged(props: P) {
-    useEffect(() => () => console.log("destroyed"), []);
+    useEffect(() => () => console.log("destroyed"));
     return <Inner {...props} />;
   };
 }

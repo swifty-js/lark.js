@@ -26,11 +26,10 @@
  * `hotSwapByComponent(oldFn, newFn)` hot-swaps component code without a full
  * page reload, preserving instance state across updates:
  *
- * 1. `aliasComponent(old, new)` — parents holding the STALE import keep
- *    matching live instances (the reconciler compares canonical identities),
- *    and string routes keep resolving.
- * 2. Registry entries pointing at the old function are swapped.
- * 3. Every live instance of the old function is swapped in place
+ * 1. `aliasComponent(old, new)` — parents (or route tables) holding the
+ *    STALE import keep matching live instances (the reconciler compares
+ *    canonical identities).
+ * 2. Every live instance of the old function is swapped in place
  *    (`swapInstanceFn`): plain state slots (`useSignal` / `useRef`) survive;
  *    closure-bound slots (effects, computeds, memos, queries) are disposed
  *    and recreated by the next render so no stale closures linger. The
@@ -44,16 +43,16 @@
  * (ChunkLoadError). The global sidesteps module resolution entirely.
  */
 import { batch } from "./reactive";
-import { aliasComponent, getComponentRegistry } from "./component-registry";
+import { aliasComponent } from "./component-registry";
 import { getInstances, swapInstanceFn } from "./component";
 import type { Component } from "./jsx/vnode";
 
 /**
- * Component HMR: alias + registry swap + in-place instance swap.
+ * Component HMR: alias + in-place instance swap.
  *
  * Runtime-guarded: non-function arguments and functions with no live
- * instances/registry entries no-op safely, so the broad injection gate
- * (any `.tsx`/`.jsx` default export) cannot break non-component modules.
+ * instances no-op safely, so the broad injection gate (any `.tsx`/`.jsx`
+ * default export) cannot break non-component modules.
  *
  * @returns whether any live instance was swapped
  */
@@ -64,10 +63,6 @@ export function hotSwapByComponent(oldFn: unknown, newFn: unknown): boolean {
   const oldC = oldFn as Component;
   const newC = newFn as Component;
   aliasComponent(oldC, newC);
-  const registry = getComponentRegistry();
-  for (const path in registry) {
-    if (registry[path] === oldC) registry[path] = newC;
-  }
   const instances = Array.from(getInstances(oldC));
   batch(() => {
     for (const inst of instances) {
@@ -78,11 +73,5 @@ export function hotSwapByComponent(oldFn: unknown, newFn: unknown): boolean {
   return instances.length > 0;
 }
 
-// ─── Global HMR handle ────────────────────────────────────────────────
-// Set once when this module loads. Framework.boot() also registers it to
-// guard against tree-shaken module side effects.
-if (typeof globalThis !== "undefined" && !globalThis.__lark_hmr__) {
-  globalThis.__lark_hmr__ = {
-    hotSwapByComponent,
-  };
-}
+// The `globalThis.__lark_hmr__` handle is registered ONCE at the package
+// entry (src/index.ts top level) — the single registration point.

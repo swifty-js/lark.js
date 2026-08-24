@@ -81,7 +81,7 @@ describe("render()", () => {
   it("re-render with a different component unmounts the old one", () => {
     const cleanup = vi.fn();
     function A() {
-      useEffect(() => cleanup, []);
+      useEffect(() => cleanup);
       return <p>A</p>;
     }
     function B() {
@@ -121,7 +121,7 @@ describe("unmount()", () => {
   it("clears the DOM and runs all cleanups", () => {
     const cleanup = vi.fn();
     function App() {
-      useEffect(() => cleanup, []);
+      useEffect(() => cleanup);
       return <p>x</p>;
     }
     render(<App />, host);

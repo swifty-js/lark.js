@@ -22,7 +22,7 @@
 
 /**
  * Function-component runtime tests: hostless instances, per-render body
- * re-runs, hook slots (useSignal/useRef/useMemo/useComputed/useEffect/
+ * re-runs, hook slots (useSignal/useRef/useComputed/useEffect(mount-only)/
  * useSignalEffect/onCleanup), fine-grained props, callback props, children,
  * anchor-slice invariants, and teardown order.
  */
@@ -34,7 +34,6 @@ import { signal } from "../src/reactive";
 import {
   useSignal,
   useRef,
-  useMemo,
   useComputed,
   useEffect,
   useSignalEffect,
@@ -374,7 +373,7 @@ describe("component — keyed lists & ordering", () => {
     const show = signal(true);
     const cleanup = vi.fn();
     function Temp() {
-      useEffect(() => cleanup, []);
+      useEffect(() => cleanup);
       return <p>temp</p>;
     }
     function App() {
@@ -388,8 +387,8 @@ describe("component — keyed lists & ordering", () => {
   });
 });
 
-describe("hooks — useEffect deps semantics", () => {
-  it("[] runs once after mount; cleanup on unmount", () => {
+describe("hooks — useEffect (mount-only) semantics", () => {
+  it("runs once after mount; cleanup on unmount", () => {
     const run = vi.fn();
     const cleanup = vi.fn();
     const tick = signal(0);
@@ -398,7 +397,7 @@ describe("hooks — useEffect deps semantics", () => {
       useEffect(() => {
         run();
         return cleanup;
-      }, []);
+      });
       return <p>{tick.value}</p>;
     }
     render(<App />, host);
@@ -411,26 +410,7 @@ describe("hooks — useEffect deps semantics", () => {
     expect(cleanup).toHaveBeenCalledTimes(1);
   });
 
-  it("re-runs when a dep changes; previous cleanup runs first", () => {
-    const dep = signal("a");
-    const calls: string[] = [];
-    function App() {
-      const v = dep.value;
-      useEffect(() => {
-        calls.push(`run:${v}`);
-        return () => calls.push(`clean:${v}`);
-      }, [v]);
-      return <p>{v}</p>;
-    }
-    render(<App />, host);
-    dep.value = "b";
-    dep.value = "b"; // same value — no re-render, no effect
-    expect(calls).toEqual(["run:a", "clean:a", "run:b"]);
-    unmount(host);
-    expect(calls).toEqual(["run:a", "clean:a", "run:b", "clean:b"]);
-  });
-
-  it("no deps → runs after every render", () => {
+  it("does NOT re-run on re-renders (mount-only — use useSignalEffect for reactivity)", () => {
     const run = vi.fn();
     const tick = signal(0);
     function App() {
@@ -443,7 +423,26 @@ describe("hooks — useEffect deps semantics", () => {
     render(<App />, host);
     tick.value++;
     tick.value++;
-    expect(run).toHaveBeenCalledTimes(3);
+    expect(run).toHaveBeenCalledTimes(1);
+  });
+
+  it("data-driven side effects go through useSignalEffect (cleanup between runs)", () => {
+    const dep = signal("a");
+    const calls: string[] = [];
+    function App() {
+      useSignalEffect(() => {
+        const v = dep.value; // tracked
+        calls.push(`run:${v}`);
+        return () => calls.push(`clean:${v}`);
+      });
+      return <p>{dep.value}</p>;
+    }
+    render(<App />, host);
+    dep.value = "b";
+    dep.value = "b"; // same value — no notification
+    expect(calls).toEqual(["run:a", "clean:a", "run:b"]);
+    unmount(host);
+    expect(calls).toEqual(["run:a", "clean:a", "run:b", "clean:b"]);
   });
 
   it("runs AFTER the DOM commit (element is queryable)", () => {
@@ -451,7 +450,7 @@ describe("hooks — useEffect deps semantics", () => {
     function App() {
       useEffect(() => {
         textAtEffect = host.querySelector("p")?.textContent ?? null;
-      }, []);
+      });
       return <p>ready</p>;
     }
     render(<App />, host);
@@ -469,7 +468,7 @@ describe("hooks — refs / memo / computed / cleanup", () => {
       cells.push(el);
       useEffect(() => {
         el.current!.textContent = "via-ref";
-      }, []);
+      });
       return <p ref={el}>initial</p>;
     }
     render(<App />, host);
@@ -480,18 +479,18 @@ describe("hooks — refs / memo / computed / cleanup", () => {
     expect(cells[0].current).toBeNull(); // nulled on teardown
   });
 
-  it("useMemo recomputes only when deps change", () => {
+  it("useComputed memoizes: unrelated re-renders do not recompute", () => {
     const compute = vi.fn((n: number) => n * 2);
     const dep = signal(1);
     const tick = signal(0);
     function App() {
       tick.value;
-      const doubled = useMemo(() => compute(dep.value), [dep.value]);
-      return <p>{doubled}</p>;
+      const doubled = useComputed(() => compute(dep.value));
+      return <p>{doubled.value}</p>;
     }
     render(<App />, host);
     expect(compute).toHaveBeenCalledTimes(1);
-    tick.value++; // unrelated re-render
+    tick.value++; // unrelated re-render — computed is cached
     expect(compute).toHaveBeenCalledTimes(1);
     dep.value = 5;
     expect(compute).toHaveBeenCalledTimes(2);
@@ -566,11 +565,11 @@ describe("teardown order", () => {
   it("runs child cleanups before parent cleanups (React order)", () => {
     const order: string[] = [];
     function Child() {
-      useEffect(() => () => order.push("child"), []);
+      useEffect(() => () => order.push("child"));
       return <i>c</i>;
     }
     function Parent() {
-      useEffect(() => () => order.push("parent"), []);
+      useEffect(() => () => order.push("parent"));
       return (
         <div>
           <Child />

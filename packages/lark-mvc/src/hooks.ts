@@ -21,26 +21,25 @@
  */
 
 /**
- * Hooks for function components (React rules of hooks).
+ * Hooks for function components (React rules of hooks, signals-only).
  *
  * The component function re-runs on EVERY render pass, so hooks are
  * call-order-indexed slots on the current instance: call them
  * unconditionally, in the same order, at the top level of the component body
  * — never inside conditions, loops, or event handlers.
  *
- * Signals-first divergences from React worth knowing:
+ * Signals are the SINGLE dependency-tracking mechanism — there are NO deps
+ * arrays anywhere:
+ * - derive values with `useComputed` (auto-tracked, lazy)
+ * - run reactive side effects with `useSignalEffect` (auto-tracked)
+ * - run one-time post-commit setup with `useEffect` (mount-only; cleanup on
+ *   unmount)
+ * - register teardown with `onCleanup`
  * - `useSignal(initial)` returns a stable `Signal` — write `sig.value` from
- *   handlers, read it in JSX. There is no setState/re-render-the-world; only
- *   readers of that signal re-render.
- * - The component body is a TRACKED region: reading `props.x`, a signal,
- *   `State.get(key)`, store state, or `Router.parse()` subscribes the
- *   instance. Handlers and async callbacks read snapshots.
- * - `useEffect` runs after the DOM commit (deps semantics match React:
- *   no deps → every render, `[]` → mount only, cleanup before re-run and on
- *   unmount).
+ *   handlers, read it in JSX. Only readers of that signal re-render.
  */
 import { signal, computed, effect, type Signal, type ReadonlySignal } from "./reactive";
-import { requireInstance, useValueSlot, useMemoSlot, useEffectSlot } from "./component";
+import { requireInstance, useValueSlot, useMountSlot } from "./component";
 
 // ============================================================
 // State hooks
@@ -70,7 +69,7 @@ export function useSignal<T>(initial: T): Signal<T> {
  *
  * @example
  * const input = useRef<HTMLInputElement>();
- * useEffect(() => input.current?.focus(), []);
+ * useEffect(() => input.current?.focus());
  * return <input ref={input} />;
  */
 export function useRef<T = Element>(initial: T | null = null): { current: T | null } {
@@ -80,8 +79,8 @@ export function useRef<T = Element>(initial: T | null = null): { current: T | nu
 /**
  * Create a derived `computed` once per instance. Reading `.value` in JSX
  * subscribes the component; the computation re-runs lazily when its signal
- * dependencies change. Prefer this over `useMemo` for signal-derived data —
- * no deps array needed.
+ * dependencies change — no deps array, dependencies are tracked
+ * automatically.
  *
  * Note: the computation closure is captured on the FIRST render — read
  * reactive inputs (signals/props/stores) inside it, not captured locals.
@@ -93,44 +92,15 @@ export function useComputed<T>(fn: () => T): ReadonlySignal<T> {
   return useValueSlot(() => computed(fn));
 }
 
-/**
- * Memoize a computation against a deps array (React semantics): recomputed
- * when any dep changes (`Object.is`); no deps → every render. For
- * signal-derived values prefer `useComputed`.
- */
-export function useMemo<T>(fn: () => T, deps?: unknown[]): T {
-  return useMemoSlot(fn, deps);
-}
-
 // ============================================================
 // Effect hooks
 // ============================================================
 
 /**
- * Run a side effect after the DOM commit (React semantics).
- *
- * - no `deps` → runs after every render
- * - `[]` → runs once after mount
- * - `[a, b]` → runs when any dep changes (`Object.is` comparison)
- *
- * A returned function is the cleanup: it runs before the next effect run and
- * on unmount.
- *
- * @example
- * useEffect(() => {
- *   const timer = setInterval(tick, 1000);
- *   return () => clearInterval(timer);
- * }, []);
- */
-export function useEffect(fn: () => void | (() => void), deps?: unknown[]): void {
-  useEffectSlot(fn, deps);
-}
-
-/**
- * Run a REACTIVE side effect: created once on mount, re-runs whenever any
- * signal it read changes (`@preact/signals-core` `effect` semantics — no
- * deps array). A returned function is the between-runs / final cleanup.
- * Disposed on unmount.
+ * Run a REACTIVE side effect: created once on mount, runs immediately and
+ * re-runs whenever any signal it read changes (`@preact/signals-core`
+ * `effect` semantics — no deps array). A returned function is the
+ * between-runs / final cleanup. Disposed on unmount.
  *
  * Do not WRITE signals the callback also reads — that is a cycle. The
  * callback closure is captured on the first render; read reactive inputs
@@ -138,7 +108,7 @@ export function useEffect(fn: () => void | (() => void), deps?: unknown[]): void
  *
  * @example
  * useSignalEffect(() => {
- *   const path = Router.parse().path; // subscribe to navigation
+ *   const path = router.location.value.pathname; // subscribe to navigation
  *   void loadContent(path);
  * });
  */
@@ -147,6 +117,24 @@ export function useSignalEffect(fn: () => void | (() => void)): void {
     () => effect(fn),
     (dispose) => (dispose as () => void)(),
   );
+}
+
+/**
+ * Run a one-time setup AFTER the first DOM commit (refs are filled). A
+ * returned function is the unmount cleanup.
+ *
+ * This is mount-only — there is NO deps parameter. For side effects that
+ * should re-run when data changes, use `useSignalEffect` (signals are the
+ * dependency-tracking mechanism, not deps arrays).
+ *
+ * @example
+ * useEffect(() => {
+ *   const timer = setInterval(tick, 1000);
+ *   return () => clearInterval(timer);
+ * });
+ */
+export function useEffect(fn: () => void | (() => void)): void {
+  useMountSlot(fn);
 }
 
 /**

@@ -21,7 +21,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { strSafe, nextCounter } from "../src/common";
+import { strSafe } from "../src/common";
 
 describe("common", () => {
   describe("strSafe", () => {
@@ -51,17 +51,6 @@ describe("common", () => {
     });
     it("converts object to string via toString", () => {
       expect(strSafe({ toString: () => "custom" })).toBe("custom");
-    });
-  });
-
-  describe("nextCounter", () => {
-    it("returns incrementing numbers", () => {
-      const c1 = nextCounter();
-      const c2 = nextCounter();
-      expect(c2).toBe(c1 + 1);
-    });
-    it("returns a number", () => {
-      expect(typeof nextCounter()).toBe("number");
     });
   });
 });

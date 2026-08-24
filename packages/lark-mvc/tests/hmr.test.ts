@@ -26,11 +26,6 @@ import { raw, createVNode, type Component } from "../src/jsx/vnode";
 import { injectComponentHmrSnippet, isLarkComponentSource } from "../src/hmr-inject";
 import { useSignal } from "../src/hooks";
 import { render, unmount } from "../src/jsx/reconcile";
-import {
-  registerComponent,
-  invalidateComponent,
-  getComponentRegistry,
-} from "../src/component-registry";
 
 /** Component factory: label distinguishes versions; count state via useSignal. */
 function makeCounter(label: string): Component {
@@ -44,8 +39,6 @@ let host: HTMLElement;
 
 describe("HMR", () => {
   beforeEach(() => {
-    const reg = getComponentRegistry();
-    for (const key of Object.keys(reg)) invalidateComponent(key);
     host = document.createElement("div");
     document.body.appendChild(host);
   });
@@ -105,16 +98,6 @@ describe("HMR", () => {
       // keep the same instance instead of remounting.
       render(createVNode(V1, {}), host);
       expect(host.querySelector(".new")).toBe(domBefore);
-    });
-
-    it("updates registry entries so string routes resolve the new code", () => {
-      const V1 = makeCounter("old");
-      registerComponent("test/swap", V1);
-      render(createVNode(V1, {}), host);
-
-      const V2 = makeCounter("new");
-      hotSwapByComponent(V1, V2);
-      expect(getComponentRegistry()["test/swap"]).toBe(V2);
     });
 
     it("no-ops for identical or non-function arguments", () => {

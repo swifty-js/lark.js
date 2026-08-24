@@ -168,6 +168,7 @@ describe("reconcile — attributes", () => {
 
   it("rejects native lowercase inline handlers (onclick) as an XSS guard", () => {
     const spy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    // @ts-expect-error — native lowercase inline handlers are intentionally untyped
     render(<button onclick="alert(1)" />, host);
     expect(host.firstElementChild!.hasAttribute("onclick")).toBe(false);
     spy.mockRestore();
@@ -381,7 +382,7 @@ describe("reconcile — refs", () => {
   });
 
   it("fills { current } refs and clears them on unmount", () => {
-    const ref: { current: Element | null } = { current: null };
+    const ref: { current: HTMLInputElement | null } = { current: null };
     render(<input ref={ref} />, host);
     expect(ref.current).toBe(host.querySelector("input"));
     unmount(host);
@@ -389,8 +390,8 @@ describe("reconcile — refs", () => {
   });
 
   it("swapping the ref prop releases the old ref", () => {
-    const a: { current: Element | null } = { current: null };
-    const b: { current: Element | null } = { current: null };
+    const a: { current: HTMLParagraphElement | null } = { current: null };
+    const b: { current: HTMLParagraphElement | null } = { current: null };
     render(<p ref={a} />, host);
     expect(a.current).not.toBeNull();
     render(<p ref={b} />, host);

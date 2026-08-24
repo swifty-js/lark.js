@@ -40,23 +40,15 @@
  * any module without pulling the framework in.
  */
 
+import type { LarkIntrinsicElements } from "./jsx/dom-types";
 import { createVNode, Fragment, raw, type Component, type JSXNode, type VNode } from "./jsx/vnode";
 
 export { Fragment, raw };
 export type { Component, JSXNode, VNode };
 
-/**
- * DOM event delivered to Lark event handlers. Handlers receive the native
- * event from a per-node listener — use `e.target` / `e.currentTarget`.
- */
-export type LarkEvent = Event;
-
-/**
- * Value for `onXxx` JSX event props: an inline handler function, wired to a
- * stable per-node listener whose current handler is swapped every render.
- * Closures capture loop variables directly.
- */
-export type JsxEventValue = (e: LarkEvent) => unknown;
+// Typed DOM attribute layer (per-tag props, native-event handler types,
+// aria/svg/mathml) — ported from Preact v10 and adapted to Lark semantics.
+export type * from "./jsx/dom-types";
 
 /**
  * Create a JSX element (automatic runtime entry, static children).
@@ -83,42 +75,6 @@ export const jsxs = jsx;
 // JSX type namespace (resolved by TypeScript via jsxImportSource)
 // ============================================================
 
-/** Attributes accepted on any intrinsic (tag-name) JSX element. */
-export interface LarkAttributes {
-  /** Permissive catch-all — any attribute is serialized (escaped). */
-  [attr: string]: unknown;
-  /** Stable element id. */
-  id?: string | number;
-  /** `key` — sibling compare key for the keyed diff (never written to the DOM). */
-  key?: string | number;
-  /** Element ref: callback (null on unmount) or a `{ current }` cell. */
-  ref?: ((el: Element | null) => void) | { current: Element | null };
-  /** Class value: string, array (falsy entries dropped), or truthy-key map. */
-  class?: string | Array<string | false | null | undefined> | Record<string, unknown>;
-  /** Alias of `class` (React muscle memory). */
-  className?: string | Array<string | false | null | undefined> | Record<string, unknown>;
-  /** Inline style: raw string or camelCase object (no implicit `px`). */
-  style?: string | Record<string, string | number>;
-  children?: JSXNode;
-  // Common DOM events (any `on` + capitalized-type prop works, e.g. onPointerdown)
-  onClick?: JsxEventValue;
-  onDblclick?: JsxEventValue;
-  onInput?: JsxEventValue;
-  onChange?: JsxEventValue;
-  onSubmit?: JsxEventValue;
-  onKeydown?: JsxEventValue;
-  onKeyup?: JsxEventValue;
-  onFocus?: JsxEventValue;
-  onBlur?: JsxEventValue;
-  onMousedown?: JsxEventValue;
-  onMouseup?: JsxEventValue;
-  onMouseenter?: JsxEventValue;
-  onMouseleave?: JsxEventValue;
-  onScroll?: JsxEventValue;
-  onTouchstart?: JsxEventValue;
-  onTouchend?: JsxEventValue;
-}
-
 // The `declare` modifier keeps the namespace fully type-only (erasable) so it
 // compiles identically under both tsconfig.json (verbatimModuleSyntax: true)
 // and tsconfig.build.json (verbatimModuleSyntax: false).
@@ -136,7 +92,23 @@ export declare namespace JSX {
   interface IntrinsicAttributes {
     key?: string | number;
   }
-  interface IntrinsicElements {
-    [tag: string]: LarkAttributes;
-  }
+  /**
+   * Per-tag typed intrinsic elements (HTML + SVG + MathML, ported from
+   * Preact v10) — strict: unknown tags are compile errors. Register custom
+   * elements via module augmentation (declaration merging):
+   *
+   * ```ts
+   * import type { HTMLAttributes } from "@lark.js/mvc";
+   *
+   * declare module "@lark.js/mvc/jsx-runtime" {
+   *   namespace JSX {
+   *     interface IntrinsicElements {
+   *       "my-widget": HTMLAttributes<HTMLElement> & { variant?: string };
+   *     }
+   *   }
+   * }
+   * ```
+   */
+  // eslint-disable-next-line @typescript-eslint/no-empty-object-type
+  interface IntrinsicElements extends LarkIntrinsicElements {}
 }

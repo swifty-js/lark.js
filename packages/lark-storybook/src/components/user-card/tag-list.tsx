@@ -26,12 +26,11 @@ export default function TagList(props: TagListProps) {
             size="s"
             pill
             role="button"
-            tabindex="0"
+            tabindex={0}
             data-tag={tag}
             onClick={pick}
-            onKeydown={(e) => {
-              const key = (e as KeyboardEvent).key;
-              if (key !== "Enter" && key !== " ") return;
+            onKeyDown={(e) => {
+              if (e.key !== "Enter" && e.key !== " ") return;
               e.preventDefault();
               pick(e);
             }}

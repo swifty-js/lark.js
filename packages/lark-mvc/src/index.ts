@@ -65,7 +65,11 @@ export type { ReadonlySignal } from "./reactive";
 export { render, unmount } from "./jsx/reconcile";
 export { raw, Fragment } from "./jsx/vnode";
 export type { JSXNode, VNode, RawHTML, Component } from "./jsx/vnode";
-export type { LarkEvent, JsxEventValue, LarkAttributes } from "./jsx-runtime";
+
+// Typed DOM attribute layer (per-tag intrinsic props, native-event handler
+// types, `Signalish`/`Ref`/`ClassValue`/`CSSProperties`, aria/svg/mathml) —
+// ported from Preact v10 and adapted to Lark semantics.
+export type * from "./jsx/dom-types";
 
 // Hooks (call-order-indexed slots — React rules of hooks; signals-only,
 // no deps arrays)

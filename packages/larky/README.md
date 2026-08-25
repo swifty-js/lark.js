@@ -20,7 +20,8 @@ restrained feature set.
   with per-key subscriptions and `computed` derived slots.
 - **Built-in react-router-style router (data mode only)** —
   `createRouter(routes)` factory, `:param`/`*` ranking, `navigate`, async
-  blockers, `lazy()` code splitting, `<RouterView/>` outlet.
+  blockers, `lazy()` code splitting, `<RouterView/>` outlet, `useUrlState`
+  URL-search-param state.
 - **State-preserving HMR** for Vite AND webpack — auto-injected, no
   `import.meta.hot` boilerplate; `useSignal`/`useRef` state survives edits.
 - **100% TypeScript** — complete typed JSX: strict per-tag intrinsic

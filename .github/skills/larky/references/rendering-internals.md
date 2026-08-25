@@ -37,10 +37,8 @@ cascade unless data actually flows.
   and ONE `Cycle detected` error is thrown after the drain.
 - Runaway safety net: cycles between FRESH jobs (mount/unmount churn
   creates a new job per iteration) evade the per-job counter, so a flush
-  processing >2000 jobs switches on verbose `[larky]` diagnostics (labeled
-  job-queue dumps, per-instance re-render/props/invalidate logs) and a
-  HARD STOP at 10000 jobs drops the queue and throws — a diagnosable
-  error instead of a silent page freeze. Zero cost on the normal path.
+  processing 10000+ jobs HARD-STOPS — the queue is dropped and an error is
+  thrown instead of a silent page freeze. Zero cost on the normal path.
 - Dispose guard: a stopped effect's queued job no-ops (a stopped Vue
   runner would otherwise run untracked).
 

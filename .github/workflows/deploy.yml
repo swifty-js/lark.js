@@ -59,7 +59,7 @@ jobs:
       - name: Build @lark.js/mvc
         run: pnpm --filter @lark.js/mvc build
       - name: Build chart-js
-        run: pnpm --filter chart-js build 
+        run: pnpm --filter chart-js build
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:

@@ -123,5 +123,29 @@ records it as the ACTIVE router for `useRouter()` / prop-less
   param-only change keeps the SAME instance (re-renders only tracked
   readers); `lazy()` loads dedupe in flight, cache on the route, and
   propagate failures as unhandled rejections.
-- There is NO hash routing, NO `useLocation`/`useParams` alias hooks, and
-  NO `useUrlState`.
+- There is NO hash routing and NO `useLocation`/`useParams` alias hooks.
+
+## `useUrlState(defaults?)` — URL search params as component state
+
+```tsx
+function Pager() {
+  const [params, setParams] = useUrlState({ page: "1", size: "20" });
+  return (
+    <button
+      onClick={() => setParams((p) => ({ page: String(Number(p.page) + 1) }))}
+    >
+      Page {params.page}
+    </button>
+  );
+}
+```
+
+A REAL hook (component-only, uses a hook slot) on the ACTIVE router:
+`value` is a TRACKED read of `searchParams` merged over `defaults` (fresh
+every render — the component re-renders on URL changes; omit `defaults` to
+read every current param). `setValue(patch | updater, {replace?})` is
+SLOT-STABLE (created once per instance) and navigates with the patched
+params, preserving pathname, hash, and unrelated search params —
+`undefined`/`null` deletes a key. `defaults` and the router are captured
+on the FIRST render. The re-render commits like any write — microtask-
+batched (`await nextTick()` in tests).

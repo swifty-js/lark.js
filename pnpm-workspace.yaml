@@ -19,7 +19,7 @@
 # SOFTWARE.
 
 packages:
-  - packages/*
+  - packages/**/*
 
 allowBuilds:
   '@vscode/vsce-sign': true

@@ -159,6 +159,8 @@ slot). First render's `fn` wins.
 
 ### `useBlocker(fn)` — navigation guard (see state-routing.md)
 
+### `useUrlState(defaults?)` — URL search-param state (see state-routing.md)
+
 ## Instance lifecycle
 
 ```

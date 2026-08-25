@@ -32,7 +32,7 @@ export const useAuthStore = createStore<AuthState>((set) => ({
   logout() {
     logoutApi().then(() => {
       set({ loggedIn: false, user: null });
-      window.location.href = "/plaza";
+      window.location.href = `${import.meta.env.BASE_URL}plaza`;
     });
   },
 }));

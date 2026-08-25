@@ -75,7 +75,12 @@ export default defineConfig({ plugins: [larkyPlugin()] });
 
 ```jsonc
 // tsconfig.json
-{ "compilerOptions": { "jsx": "react-jsx", "jsxImportSource": "@lark.js/larky" } }
+{
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "@lark.js/larky",
+  },
+}
 ```
 
 Webpack: add `new LarkyPlugin()` from `@lark.js/larky/webpack` (the JSX
@@ -137,6 +142,6 @@ SWR-style server state (belongs in a dedicated package on the same signals).
 | `@lark.js/larky/jsx-dev-runtime` | `jsxDEV` dev runtime                                        |
 | `@lark.js/larky/vite`            | `larkyPlugin()` — JSX defaults + auto component HMR         |
 | `@lark.js/larky/webpack`         | `LarkyPlugin` (recommended), `larkyLoader`                  |
-| `@lark.js/larky/client`          | Ambient types: `*.css` modules, HMR globals                 |
+| `@lark.js/larky/client`          | Ambient types: HMR globals                                  |
 
 MIT © hangtiancheng

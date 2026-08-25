@@ -80,9 +80,10 @@
   },
   "scripts": {
     "prepublish": "pnpm build",
-    "build": "tsup",
+    "build": "tsup && tsc -p tsconfig.dist.json",
     "format": "oxfmt --write .",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.build.json --noEmit",
+    "typecheck:dist": "tsc -p tsconfig.dist.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage"

@@ -1,0 +1,24 @@
+{
+  // Consumer-view typecheck: resolves "@lark.js/larky" to the BUNDLED dist
+  // d.ts (what a file:-installed consumer sees), catching dts-flattening
+  // regressions that src-path checking cannot. Run via `pnpm typecheck:dist`
+  // (requires a prior `pnpm build`).
+  "compilerOptions": {
+    "noEmit": true,
+    "strict": true,
+    "lib": ["esnext", "DOM", "DOM.Iterable"],
+    "module": "esnext",
+    "moduleDetection": "force",
+    "moduleResolution": "bundler",
+    "skipLibCheck": true,
+    "target": "esnext",
+    "jsx": "react-jsx",
+    "jsxImportSource": "@lark.js/larky",
+    "paths": {
+      "@lark.js/larky/jsx-dev-runtime": ["./dist/jsx-dev-runtime.d.ts"],
+      "@lark.js/larky/jsx-runtime": ["./dist/jsx-runtime.d.ts"],
+      "@lark.js/larky": ["./dist/index.d.ts"]
+    }
+  },
+  "include": ["tests-dist"]
+}

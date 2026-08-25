@@ -73,6 +73,11 @@ export type { JSXNode, VNode, RawHTML, Component } from "./jsx/vnode";
 // ported from Preact v10 and adapted to Larky semantics.
 export type * from "./jsx/dom-types";
 
+// The JSX namespace (React-19-style import): `import type { JSX } from
+// "@lark.js/larky"` enables `JSX.HTMLAttributes<T>`, `JSX.IntrinsicElements`,
+// `JSX.TargetedEvent`, ... in user type positions.
+export type { JSX } from "./jsx-runtime";
+
 // Hooks (call-order-indexed slots — React rules of hooks; signals-only,
 // no useState, no deps arrays)
 export { useSignal, useRef, useComputed, useSignalEffect, useEffect, onCleanup } from "./hooks";

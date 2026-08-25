@@ -218,4 +218,4 @@ dist-docs
 
 .playwright-cli
 
-packages/preact
+**/dist-app

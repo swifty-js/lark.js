@@ -1,18 +1,19 @@
 {
-  "name": "@lark.js/mvc",
-  "version": "0.0.34",
-  "description": "@lark.js/mvc - TypeScript framework",
+  "name": "@lark.js/larky",
+  "version": "0.0.1",
+  "description": "@lark.js/larky - React-style TypeScript framework on @vue/reactivity",
   "keywords": [
     "framework",
     "lark.js",
-    "mvc",
-    "swifty.js"
+    "larky",
+    "react-style",
+    "vue-reactivity"
   ],
   "license": "MIT",
   "author": "https://github.com/hangtiancheng",
   "repository": {
     "url": "https://github.com/tianchenghang/lark.js",
-    "directory": "packages/lark-mvc"
+    "directory": "packages/larky"
   },
   "files": [
     "dist",
@@ -80,14 +81,14 @@
   "scripts": {
     "prepublish": "pnpm build",
     "build": "tsup",
-    "format": "oxfmt --write ./",
+    "format": "oxfmt --write .",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.build.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@preact/signals-core": "^1.14.4"
+    "@vue/reactivity": "^3.5.0"
   },
   "devDependencies": {
     "@types/node": "^24.13.3",

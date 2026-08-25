@@ -60,8 +60,22 @@ if (typeof globalThis !== "undefined" && !globalThis.__larky_hmr__) {
 // primitive set. Reads inside component bodies/computed/effects subscribe;
 // writes re-render on the next microtask (automatic batching). `nextTick()`
 // awaits the committed DOM; `flushSync()` forces a synchronous commit.
-export { signal, computed, effect, untracked, isSignal, nextTick, flushSync } from "./reactive";
-export type { Signal, ReadonlySignal } from "./reactive";
+// `signal` is DEEP (plain objects/arrays are proxied); `shallowSignal` /
+// `markRaw` / `toRaw` are the identity-preserving escape hatches for
+// third-party class instances (Monaco, chart/map SDKs, sockets).
+export {
+  signal,
+  shallowSignal,
+  computed,
+  effect,
+  untracked,
+  isSignal,
+  markRaw,
+  toRaw,
+  nextTick,
+  flushSync,
+} from "./reactive";
+export type { Signal, ShallowSignal, ReadonlySignal } from "./reactive";
 
 // Rendering (React-DOM style root API + JSX helpers)
 export { render, unmount } from "./jsx/reconcile";
@@ -80,7 +94,15 @@ export type { JSX } from "./jsx-runtime";
 
 // Hooks (call-order-indexed slots — React rules of hooks; signals-only,
 // no useState, no deps arrays)
-export { useSignal, useRef, useComputed, useSignalEffect, useEffect, onCleanup } from "./hooks";
+export {
+  useSignal,
+  useShallowSignal,
+  useRef,
+  useComputed,
+  useSignalEffect,
+  useEffect,
+  onCleanup,
+} from "./hooks";
 
 // Router (factory-based, history-only, react-router data mode on signals)
 export { createRouter, RouterView, useRouter, useBlocker, matchPath, matchRoutes } from "./router";

@@ -56,7 +56,15 @@
  * explicit trusted-HTML path.
  */
 
-import { untracked, shallowSignal, effect, flushSync, isSignal, type Signal } from "../reactive";
+import {
+  untracked,
+  shallowSignal,
+  effect,
+  flushSync,
+  isSignal,
+  isFlushRunaway,
+  type Signal,
+} from "../reactive";
 import { devWarn } from "../utils";
 import { SVG_NS, MATH_NS, strSafe } from "../common";
 import { canonicalComponent } from "../component-registry";
@@ -65,9 +73,10 @@ import {
   writeInstanceProps,
   beginRender,
   endRender,
-  flushInstanceEffects,
+  queueMountEffects,
   destroyInstanceState,
   registerInstance,
+  debugName,
   type Instance,
 } from "../component";
 import { Fragment, isRawHTML, isVNode, type Component, type JSXNode } from "./vnode";
@@ -205,8 +214,11 @@ export function render(node: JSXNode, container: Element): void {
   // stays unregistered so a later render() can retry cleanly.
   rec.dispose = effect(() => {
     renderRoot(container, rec, rec.vnode.value);
-  });
+  }, "render<root>");
   roots.set(container, rec);
+  // Mount `useEffect`s were queued as jobs during the first pass — drain
+  // them synchronously so the imperative entry commits effects too.
+  flushSync();
 }
 
 function renderRoot(container: Element, rec: RootRecord, content: JSXNode): void {
@@ -553,11 +565,14 @@ function createComponent(
 function mountComponent(r: RComponent): void {
   const inst = r.instance;
   registerInstance(inst);
-  inst.renderDispose = effect(() => {
-    void inst.invalidate.value; // manual/HMR re-render channel
-    if (inst.destroyed) return;
-    renderComponent(r);
-  });
+  inst.renderDispose = effect(
+    () => {
+      void inst.invalidate.value; // manual/HMR re-render channel
+      if (inst.destroyed) return;
+      renderComponent(r);
+    },
+    `render<${debugName(inst)}>`,
+  );
 }
 
 /**
@@ -567,6 +582,7 @@ function mountComponent(r: RComponent): void {
  */
 function renderComponent(r: RComponent): void {
   const inst = r.instance;
+  if (isFlushRunaway()) console.error(`[larky] re-render ${debugName(inst)}`);
   const pass: Pass = { ops: [] };
   const prev = beginRender(inst);
   let out: unknown;
@@ -578,10 +594,10 @@ function renderComponent(r: RComponent): void {
   const items: NItem[] = [];
   normalizeInto(out as JSXNode, items);
   r.nodes = patchChildren(r.host, r.nodes, items, pass, r.ns, r.end);
-  untracked(() => {
-    flushOps(pass.ops);
-    flushInstanceEffects(inst);
-  });
+  untracked(() => flushOps(pass.ops));
+  // Deferred to a job: running them here (inside THIS render effect) would
+  // let Vue suppress their writes to body-read signals as self-triggers.
+  queueMountEffects(inst);
 }
 
 // ============================================================

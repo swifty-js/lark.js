@@ -37,8 +37,16 @@
  *   unmount)
  * - register teardown with `onCleanup`
  */
-import { signal, computed, effect, type Signal, type ReadonlySignal } from "./reactive";
-import { requireInstance, useValueSlot, useMountSlot } from "./component";
+import {
+  signal,
+  shallowSignal,
+  computed,
+  effect,
+  type Signal,
+  type ShallowSignal,
+  type ReadonlySignal,
+} from "./reactive";
+import { requireInstance, useValueSlot, useMountSlot, debugName } from "./component";
 
 // ============================================================
 // State hooks
@@ -53,6 +61,14 @@ import { requireInstance, useValueSlot, useMountSlot } from "./component";
  * Deep (`@vue/reactivity` `ref`): `list.value.push(x)` notifies readers —
  * no immutable-update dance required. State survives HMR swaps.
  *
+ * DEEP means plain objects/arrays stored here are wrapped in a reactive
+ * PROXY (`sig.value !== stored`). Never store third-party class instances
+ * (Monaco/CodeMirror editors, chart/map SDKs, sockets) in a deep signal —
+ * the proxy breaks their internal identity checks (`a !== b` for the same
+ * object) and can hang them in an infinite loop. Hold instances in
+ * `useRef` (non-reactive), or use `useShallowSignal` / `markRaw` when
+ * reactivity on the reference itself is needed.
+ *
  * @example
  * function Counter() {
  *   const count = useSignal(0);
@@ -61,6 +77,23 @@ import { requireInstance, useValueSlot, useMountSlot } from "./component";
  */
 export function useSignal<T>(initial: T): Signal<T> {
   return useValueSlot(() => signal(initial) as Signal<T>, undefined, true);
+}
+
+/**
+ * Declare instance-local reactive state that is SHALLOW: only `.value`
+ * ASSIGNMENT notifies, and the stored value is kept AS-IS — no deep proxy,
+ * identity preserved (`sig.value === stored`). This is the reactive-safe
+ * container for third-party class instances (Monaco editors, chart/map
+ * SDKs) when components must re-render on the reference change; for
+ * non-reactive holders prefer `useRef`. State survives HMR swaps.
+ *
+ * @example
+ * const editor = useShallowSignal<monaco.editor.IStandaloneCodeEditor | null>(null);
+ * useEffect(() => { editor.value = monaco.editor.create(el); });
+ * return <div>{editor.value ? "ready" : "loading"}</div>;
+ */
+export function useShallowSignal<T>(initial: T): ShallowSignal<T> {
+  return useValueSlot(() => shallowSignal(initial) as ShallowSignal<T>, undefined, true);
 }
 
 /**
@@ -115,8 +148,9 @@ export function useComputed<T>(fn: () => T): ReadonlySignal<T> {
  * });
  */
 export function useSignalEffect(fn: () => void | (() => void)): void {
+  const inst = requireInstance("useSignalEffect");
   useValueSlot(
-    () => effect(fn),
+    () => effect(fn, `signalEffect<${debugName(inst)}>`),
     (dispose) => (dispose as () => void)(),
   );
 }

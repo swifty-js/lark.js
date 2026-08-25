@@ -13,7 +13,10 @@ signals, props proxy) and ONE `effect()` whose body:
    signal/prop/store/router read subscribes THIS instance),
 3. normalizes the output to a flat item list and diffs the instance's
    slice in place,
-4. flushes deferred ops + pending `useEffect`s inside `untracked()`.
+4. flushes deferred ops inside `untracked()` and queues pending
+   `useEffect`s as a `mountEffects` job (same flush, after the whole
+   commit — OUTSIDE the render effect, so their signal writes schedule
+   re-renders instead of being suppressed as self-triggers).
 
 Parents and children re-render independently — there is no top-down
 cascade unless data actually flows.
@@ -32,6 +35,12 @@ cascade unless data actually flows.
 - Cycle guard: per-flush execution counts; a job exceeding 100 runs is
   skipped for the rest of the flush (halts ping-pong so the queue drains)
   and ONE `Cycle detected` error is thrown after the drain.
+- Runaway safety net: cycles between FRESH jobs (mount/unmount churn
+  creates a new job per iteration) evade the per-job counter, so a flush
+  processing >2000 jobs switches on verbose `[larky]` diagnostics (labeled
+  job-queue dumps, per-instance re-render/props/invalidate logs) and a
+  HARD STOP at 10000 jobs drops the queue and throws — a diagnosable
+  error instead of a silent page freeze. Zero cost on the normal path.
 - Dispose guard: a stopped effect's queued job no-ops (a stopped Vue
   runner would otherwise run untracked).
 
@@ -88,14 +97,14 @@ after the slice's DOM commit inside `untracked()`:
 
 ## Timing summary
 
-| Action                         | When the DOM reflects it                    |
-| ------------------------------ | ------------------------------------------- |
-| `render(vnode, el)` (first/re) | Synchronously, before return                |
-| Child mounts during a pass     | Same synchronous commit (post-commit flush) |
-| `sig.value = x` (any write)    | Next microtask flush (`await nextTick()`)   |
-| `flushSync(() => write)`       | Synchronously, before `flushSync` returns   |
-| `useEffect` callbacks          | After the instance's FIRST commit           |
-| `unmount(el)`                  | Synchronously                               |
+| Action                         | When the DOM reflects it                                              |
+| ------------------------------ | --------------------------------------------------------------------- |
+| `render(vnode, el)` (first/re) | Synchronously, before return                                          |
+| Child mounts during a pass     | Same synchronous commit (post-commit flush)                           |
+| `sig.value = x` (any write)    | Next microtask flush (`await nextTick()`)                             |
+| `flushSync(() => write)`       | Synchronously, before `flushSync` returns                             |
+| `useEffect` callbacks          | Queued job, same flush after the whole commit (sync after `render()`) |
+| `unmount(el)`                  | Synchronously                                                         |
 
 Perf notes: prefer many small subscribed readers over one mega-component
 (fine-grained re-renders are the design); keys on lists avoid positional

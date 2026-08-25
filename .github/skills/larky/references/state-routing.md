@@ -2,18 +2,27 @@
 
 ## Reactive primitives (backed by `@vue/reactivity`)
 
-| Export           | Semantics                                                                                                                                                                  |
-| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `signal(v)`      | Vue `ref(v)` — DEEP: nested mutations (`obj.value.a.push(x)`) notify readers. `Signal<T>` = Vue `Ref<T>`.                                                                  |
-| `computed(fn)`   | Lazy auto-tracked derived value (`ReadonlySignal<T>` = `ComputedRef<T>`). Read `.value` to subscribe.                                                                      |
-| `effect(fn)`     | Runs `fn` immediately (tracked); re-runs microtask-batched on dependency change. `fn` may return a cleanup (runs between runs and on dispose). Returns a dispose function. |
-| `untracked(fn)`  | Runs `fn` with tracking paused — reads inside do NOT subscribe the enclosing effect.                                                                                       |
-| `isSignal(v)`    | `isRef` — the reconciler's unwrap check; also detects computeds. There is NO `Signal` class / `instanceof`.                                                                |
-| `nextTick()`     | Promise resolving after the pending flush commits (rejects if a job threw). Resolves immediately when idle.                                                                |
-| `flushSync(fn?)` | Runs `fn`, then drains the job queue synchronously — the DOM is committed on return.                                                                                       |
+| Export             | Semantics                                                                                                                                                                     |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `signal(v)`        | Vue `ref(v)` — DEEP: nested mutations (`obj.value.a.push(x)`) notify readers. `Signal<T>` = Vue `Ref<T>`. Plain objects are stored as reactive PROXIES (`sig.value !== v`).   |
+| `shallowSignal(v)` | Vue `shallowRef(v)` — only `.value` ASSIGNMENT notifies; value stored AS-IS (identity preserved). REQUIRED for third-party class instances (Monaco etc.). `ShallowSignal<T>`. |
+| `computed(fn)`     | Lazy auto-tracked derived value (`ReadonlySignal<T>` = `ComputedRef<T>`). Read `.value` to subscribe.                                                                         |
+| `effect(fn)`       | Runs `fn` immediately (tracked); re-runs microtask-batched on dependency change. `fn` may return a cleanup (runs between runs and on dispose). Returns a dispose function.    |
+| `untracked(fn)`    | Runs `fn` with tracking paused — reads inside do NOT subscribe the enclosing effect.                                                                                          |
+| `isSignal(v)`      | `isRef` — the reconciler's unwrap check; also detects computeds. There is NO `Signal` class / `instanceof`.                                                                   |
+| `markRaw(obj)`     | Marks an object so deep signals/stores never proxy it — per-object escape hatch for library instances kept in deep state.                                                     |
+| `toRaw(v)`         | Unwraps a reactive proxy back to the original object (identity repairs at interop boundaries).                                                                                |
+| `nextTick()`       | Promise resolving after the pending flush commits (rejects if a job threw). Resolves immediately when idle.                                                                   |
+| `flushSync(fn?)`   | Runs `fn`, then drains the job queue synchronously — the DOM is committed on return.                                                                                          |
 
 There is deliberately NO `batch()` (batching is automatic), NO `reactive()`
 export (signals are the single primitive), NO event emitters.
+
+**Deep-proxy hazard**: a class instance stored in a DEEP signal comes back
+as a proxy that fails the library's internal `===` checks — Monaco's
+sentinel-node `while` loop then never terminates (silent page freeze).
+Instance handles belong in `useRef`; reactive references in
+`useShallowSignal`/`shallowSignal` or `markRaw`.
 
 ## Scheduling (React-18-style automatic batching)
 
@@ -28,7 +37,8 @@ export (signals are the single primitive), NO event emitters.
   — Vue scheduler semantics), and a single `Cycle detected` error is
   thrown after the drain, rejecting `nextTick()` awaiters. Self-writes
   inside a job's own run are suppressed by `@vue/reactivity` (no
-  allowRecurse).
+  allowRecurse) — which is why mount `useEffect`s run as SEPARATE queued
+  jobs after the commit, not inside the render effect.
 - Errors bubble: a throwing job rejects the flush promise; surviving
   queued jobs are rescheduled.
 

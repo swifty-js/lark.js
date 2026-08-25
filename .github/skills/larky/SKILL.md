@@ -5,10 +5,16 @@ description: >-
   React-style TypeScript frontend framework located at packages/larky —
   plain function components ((props) => JSX, body re-runs per render,
   hostless instances with NO wrapper elements), call-order-indexed hooks
-  with NO deps arrays and NO useState (useSignal, useRef, useComputed,
-  useSignalEffect, useEffect is MOUNT-ONLY, onCleanup, useBlocker),
+  with NO deps arrays and NO useState (useSignal, useShallowSignal, useRef,
+  useComputed, useSignalEffect, useEffect is MOUNT-ONLY and runs as a
+  same-flush job after the whole commit, onCleanup, useBlocker),
   fine-grained reactivity via @vue/reactivity (signal = Vue ref, DEEP —
-  list.value.push(x) notifies; one render effect per instance; NO event
+  list.value.push(x) notifies, but NEVER store third-party class instances
+  (Monaco/CodeMirror/chart/map SDKs) in a deep signal: the reactive proxy
+  breaks their internal identity checks and hangs the page in a silent
+  infinite loop — hold instances in useRef, or useShallowSignal /
+  shallowSignal / markRaw / toRaw when the reference must be reactive; one
+  render effect per instance; NO event
   emitters; NO error-swallowing wrappers — errors bubble),
   MICROTASK-BATCHED re-renders (writes never render synchronously — await
   nextTick() to observe the DOM, flushSync() to force a commit; there is NO
@@ -36,12 +42,15 @@ description: >-
   /vite, /webpack, /jsx-runtime, /client), works under packages/larky or
   any consumer app that installs @lark.js/larky (file: protocol included),
   or mentions any of these symbols and concepts — render, unmount, FC,
-  signal, computed, effect, untracked, isSignal, nextTick, flushSync,
-  useSignal, useComputed, useSignalEffect, useEffect, onCleanup,
+  signal, shallowSignal, computed, effect, untracked, isSignal, markRaw,
+  toRaw, nextTick, flushSync,
+  useSignal, useShallowSignal, useComputed, useSignalEffect, useEffect,
+  onCleanup,
   createRouter, RouterView, useRouter, useBlocker, matchRoutes,
   RouteObject, createStore, raw, Signalish, TargetedEvent, HTMLAttributes,
   JSX.IntrinsicElements, larkyPlugin, LarkyPlugin, hotSwapByComponent, or
-  "why doesn't my component re-render" / "why is the DOM not updated yet"
+  "why doesn't my component re-render" / "why is the DOM not updated yet" /
+  "the page freezes/hangs after navigating or mounting an editor"
   in a larky app. Even if the user just says "add a page/view/component to
   the larky app", consult this skill first. Do NOT reach for lark-mvc
   (@lark.js/mvc) semantics here: larky has NO batch(), NO useUrlState, NO
@@ -77,14 +86,14 @@ dedicated package).
 
 ## Package entry points
 
-| Import                           | Provides                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@lark.js/larky`                 | Runtime: `render`, `unmount`, `signal`, `computed`, `effect`, `untracked`, `isSignal`, `nextTick`, `flushSync`, hooks (`useSignal`, `useRef`, `useComputed`, `useSignalEffect`, `useEffect` mount-only, `onCleanup`), `createRouter`/`RouterView`/`useRouter`/`useBlocker`/`matchPath`/`matchRoutes`, `createStore`, `hotSwapByComponent`, `raw`, `Fragment`, all types (`FC`, `JSX`, `Signal`, `HTMLAttributes`, `RouteObject`, `RouterApi`, ...) |
-| `@lark.js/larky/jsx-runtime`     | JSX automatic runtime (`jsx`/`jsxs`, `Fragment`, `raw`, the `JSX` namespace + full DOM type layer) — referenced by `jsxImportSource`, not imported by hand                                                                                                                                                                                                                                                                                         |
-| `@lark.js/larky/jsx-dev-runtime` | `jsxDEV` dev runtime                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| `@lark.js/larky/vite`            | `larkyPlugin()` — oxc JSX defaults + auto component HMR                                                                                                                                                                                                                                                                                                                                                                                            |
-| `@lark.js/larky/webpack`         | `LarkyPlugin` (recommended), `larkyLoader`                                                                                                                                                                                                                                                                                                                                                                                                         |
-| `@lark.js/larky/client`          | Ambient types: `*.css` module declarations, HMR globals                                                                                                                                                                                                                                                                                                                                                                                            |
+| Import                           | Provides                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@lark.js/larky`                 | Runtime: `render`, `unmount`, `signal`, `shallowSignal`, `computed`, `effect`, `untracked`, `isSignal`, `markRaw`, `toRaw`, `nextTick`, `flushSync`, hooks (`useSignal`, `useShallowSignal`, `useRef`, `useComputed`, `useSignalEffect`, `useEffect` mount-only, `onCleanup`), `createRouter`/`RouterView`/`useRouter`/`useBlocker`/`matchPath`/`matchRoutes`, `createStore`, `hotSwapByComponent`, `raw`, `Fragment`, all types (`FC`, `JSX`, `Signal`, `ShallowSignal`, `HTMLAttributes`, `RouteObject`, `RouterApi`, ...) |
+| `@lark.js/larky/jsx-runtime`     | JSX automatic runtime (`jsx`/`jsxs`, `Fragment`, `raw`, the `JSX` namespace + full DOM type layer) — referenced by `jsxImportSource`, not imported by hand                                                                                                                                                                                                                                                                                                                                                                   |
+| `@lark.js/larky/jsx-dev-runtime` | `jsxDEV` dev runtime                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `@lark.js/larky/vite`            | `larkyPlugin()` — oxc JSX defaults + auto component HMR                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `@lark.js/larky/webpack`         | `LarkyPlugin` (recommended), `larkyLoader`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `@lark.js/larky/client`          | Ambient types: `*.css` module declarations, HMR globals                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 
 tsconfig: `"jsx": "react-jsx"`, `"jsxImportSource": "@lark.js/larky"`.
 
@@ -106,7 +115,10 @@ effect run:  fn(props)  ── TRACKED: every signal read subscribes the
         │
    post-commit flush ───── UNTRACKED: child instance mounts (sync), per-key
         │                  prop pushes, ref calls
-   flushInstanceEffects ── pending useEffect (mount) callbacks run
+   mountEffects job ────── pending useEffect (mount) callbacks run as a
+        │                  queued job in the SAME flush, after the whole
+        │                  commit (outside the render effect — their writes
+        │                  schedule re-renders instead of being suppressed)
         │
 signal / prop write ──> subscribed render jobs ENQUEUE on the microtask
                         queue (deduplicated) — ONE flush per tick renders
@@ -197,7 +209,16 @@ by hand.
    readers; no immutable-update dance needed for component state. BUT
    **props and store keys are SHALLOW**: props keep parent-object identity;
    `store.setState` compares by `Object.is` — replace references there
-   (`set({ list: [...get().list, item] })`).
+   (`set({ list: [...get().list, item] })`). **NEVER store third-party
+   class instances (Monaco/CodeMirror editors, chart/map SDKs, sockets) in
+   a deep signal**: `sig.value` returns a reactive PROXY (`!== stored`),
+   which breaks the library's internal identity checks and can hang the
+   page in a silent synchronous loop (Monaco's sentinel-node `while` is
+   the classic case). Hold instances in `useRef` (non-reactive); when the
+   reference itself must be reactive, use `useShallowSignal` /
+   `shallowSignal` (identity-preserving, `.value`-assignment reactivity)
+   or wrap the object with `markRaw` first. DOM elements are exempt (Vue
+   never proxies them).
 6. **Never create write cycles** — an effect (or body) writing a signal
    that another effect writes back ping-pongs; the flusher SKIPS the guilty
    job after 100 re-runs and throws `Cycle detected` once after the drain

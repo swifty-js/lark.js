@@ -76,6 +76,31 @@ Returns the SAME `Signal` every render (created once from `initial`).
 State survives HMR swaps. Never call bare `signal()` in a body — it would
 be recreated per render.
 
+DEEP means stored plain objects/arrays are wrapped in a reactive proxy
+(`sig.value !== stored`). **Never store third-party class instances
+(Monaco/CodeMirror editors, chart/map SDKs, sockets) in a deep signal** —
+the proxy breaks their internal identity checks (`a !== b` for the same
+object) and can hang the page in a silent synchronous loop. Use `useRef`
+for instance handles, or `useShallowSignal` when the reference must be
+reactive. DOM elements are exempt (Vue never proxies them).
+
+### `useShallowSignal(initial)` — reactive reference (SHALLOW, identity-preserving)
+
+```tsx
+const editor = useShallowSignal<monaco.editor.IStandaloneCodeEditor | null>(
+  null,
+);
+useEffect(() => {
+  editor.value = monaco.editor.create(el.current!); // stored AS-IS, no proxy
+});
+return <div>{editor.value ? "ready" : "loading"}</div>; // re-renders on assignment
+```
+
+Only `.value` ASSIGNMENT notifies; the value is never proxied
+(`sig.value === stored`). The reactive-safe container for third-party
+instances. Module-level equivalent: `shallowSignal`; per-object opt-out for
+deep signals: `markRaw(obj)`; unwrap an existing proxy: `toRaw(v)`.
+
 ### `useRef(initial?)` — mutable cell (NOT reactive)
 
 ```tsx
@@ -121,8 +146,11 @@ useEffect(() => {
 });
 ```
 
-Runs ONCE after the first DOM commit (refs are filled). There is NO deps
-parameter — for data-driven re-runs use `useSignalEffect`.
+Runs ONCE after the first DOM commit (refs are filled), as a queued job in
+the SAME flush after the whole tree committed — synchronous after
+`render()`. Because it runs OUTSIDE the render effect, writing a signal the
+body reads correctly schedules a re-render. There is NO deps parameter —
+for data-driven re-runs use `useSignalEffect`.
 
 ### `onCleanup(fn)` — teardown hook
 

@@ -113,8 +113,7 @@ function ProjectsPage() {
   if (!u.value) return <div id="projects">please sign in</div>;
   return (
     <div id="projects">
-      projects {routeId ?? "none"} ({projects.value.length}){" "}
-      {String(loading.value)}
+      projects {routeId ?? "none"} ({projects.value.length}) {String(loading.value)}
     </div>
   );
 }
@@ -162,12 +161,8 @@ describe("app-shaped navigation", () => {
 
     // click "/projects" in the header nav
     const links = Array.from(container.querySelectorAll("a"));
-    const projectsLink = links.find(
-      (a) => a.getAttribute("href") === "/projects",
-    )!;
-    projectsLink.dispatchEvent(
-      new MouseEvent("click", { bubbles: true, cancelable: true }),
-    );
+    const projectsLink = links.find((a) => a.getAttribute("href") === "/projects")!;
+    projectsLink.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
 
     await nextTick();
     expect(location.pathname.startsWith("/projects")).toBe(true);
@@ -184,9 +179,7 @@ describe("app-shaped navigation", () => {
 
     // then to editor
     const editorLink = links.find((a) => a.getAttribute("href") === "/editor")!;
-    editorLink.dispatchEvent(
-      new MouseEvent("click", { bubbles: true, cancelable: true }),
-    );
+    editorLink.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
     await nextTick();
     expect(container.querySelector("#editor")).toBeTruthy();
 

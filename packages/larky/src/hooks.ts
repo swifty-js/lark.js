@@ -46,7 +46,7 @@ import {
   type ShallowSignal,
   type ReadonlySignal,
 } from "./reactive";
-import { requireInstance, useValueSlot, useMountSlot, debugName } from "./component";
+import { requireInstance, useValueSlot, useMountSlot } from "./component";
 
 // ============================================================
 // State hooks
@@ -148,9 +148,9 @@ export function useComputed<T>(fn: () => T): ReadonlySignal<T> {
  * });
  */
 export function useSignalEffect(fn: () => void | (() => void)): void {
-  const inst = requireInstance("useSignalEffect");
+  requireInstance("useSignalEffect");
   useValueSlot(
-    () => effect(fn, `signalEffect<${debugName(inst)}>`),
+    () => effect(fn),
     (dispose) => (dispose as () => void)(),
   );
 }

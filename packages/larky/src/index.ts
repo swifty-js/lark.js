@@ -35,7 +35,7 @@
  * | Rendering | `render`, `unmount`, `raw`, `Fragment` |
  * | Hooks | `useSignal`, `useRef`, `useComputed`, `useSignalEffect`, `useEffect` (mount-only), `onCleanup` |
  * | Router | `createRouter`, `RouterView`, `useRouter`, `useBlocker`, `matchPath`, `matchRoutes` |
- * | State | `createStore` |
+ * | State | `createStore`, `useUrlState` |
  * | HMR | `hotSwapByComponent` |
  * | Types | All types from `./types` via `export *` |
  *
@@ -111,6 +111,9 @@ export type { RouterOptions } from "./router";
 // Store (zustand-aligned state management — per-key signals)
 export { createStore } from "./store";
 export type { StoreApi } from "./store";
+
+// URL state hook (sync component state with URL search params)
+export { useUrlState } from "./url-state";
 
 // HMR (called by auto-injected snippets through globalThis.__larky_hmr__)
 export { hotSwapByComponent };

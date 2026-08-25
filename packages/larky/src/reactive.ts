@@ -74,50 +74,17 @@ export type {
 // Microtask job queue
 // ============================================================
 
-type Job = { (): void; label?: string };
+type Job = () => void;
 
 /** A job re-queued more than this many times in one flush is a cycle. */
 const MAX_RECURSION = 100;
 
-// ---- runaway safety net --------------------------------------------
 // A silent synchronous freeze is the worst failure mode: if one flush
-// processes an abnormal number of jobs, verbose diagnostics switch on
-// (labeled job dumps, per-instance render/props logs), and a hard stop
-// drops the queue and throws instead of hanging the page forever.
-// Zero cost on the normal path — everything is gated on the counter.
+// processes an abnormal number of jobs, a hard stop drops the queue and
+// throws instead of hanging the page forever.
 
-/** One flush processing this many jobs is abnormal — start verbose logging. */
-const RUNAWAY_AT = 2000;
 /** Hard stop: drop the queue and throw instead of freezing the page. */
 const HARD_STOP = 10000;
-
-let runaway = false;
-
-/** TRUE while the current flush is in runaway mode (debug logging gate). */
-export function isFlushRunaway(): boolean {
-  return runaway;
-}
-
-function jobLabel(job: Job): string {
-  return job.label ?? "unlabeled";
-}
-
-function dumpQueueWindow(i: number): void {
-  const from = Math.max(0, i - 15);
-  const win = queue.slice(from, i + 15).map(jobLabel);
-  console.error(`[larky] queue[${from}..${from + win.length - 1}]: ${win.join(" | ")}`);
-  const hot: string[] = [];
-  for (const [job, count] of flushCounts) {
-    if (count > 5) hot.push(`${jobLabel(job)}x${count}`);
-  }
-  console.error(
-    `[larky] hot jobs: ${
-      hot.length
-        ? hot.join(", ")
-        : "(none over 5 — jobs are FRESH each iteration: mount/unmount churn)"
-    }`,
-  );
-}
 
 const queue: Job[] = [];
 const queued = new Set<Job>();
@@ -136,8 +103,7 @@ const resolvedPromise: Promise<void> = Promise.resolve();
  * dependencies are suppressed by @vue/reactivity, so effects must run
  * OUTSIDE the effect stack for their writes to schedule re-renders).
  */
-export function queueJob(job: Job, label?: string): void {
-  if (label && !job.label) job.label = label;
+export function queueJob(job: Job): void {
   if (queued.has(job)) return;
   queued.add(job);
   queue.push(job);
@@ -170,9 +136,6 @@ function flushJobs(): void {
       const count = (flushCounts.get(job) ?? 0) + 1;
       flushCounts.set(job, count);
       if (count > MAX_RECURSION) {
-        console.error(
-          `[larky] cycle: job "${jobLabel(job)}" re-queued ${count} times in one flush — skipping it`,
-        );
         cycleError ??= new Error(
           "Cycle detected: an effect was re-queued more than " +
             `${MAX_RECURSION} times in one flush. An effect (or component body) ` +
@@ -180,33 +143,20 @@ function flushJobs(): void {
         );
         continue;
       }
-      if (i === RUNAWAY_AT) {
-        runaway = true;
-        console.error(
-          `[larky] FLUSH RUNAWAY: ${i} jobs processed in ONE flush (queue=${queue.length}) — verbose logging ON`,
-        );
-        dumpQueueWindow(i);
-      } else if (runaway && i % 1000 === 0) {
-        console.error(`[larky] flush runaway: at job #${i} (queue=${queue.length})`);
-        dumpQueueWindow(i);
-      }
       if (i >= HARD_STOP) {
-        dumpQueueWindow(i);
         const dropped = queue.length - i;
         queue.length = 0;
         queued.clear();
         cycleError = new Error(
           `[larky] HARD STOP: one flush processed ${HARD_STOP}+ jobs — infinite re-render loop. ` +
-            `Dropped ${dropped} pending jobs. See the [larky] logs above for the loop participants.`,
+            `Dropped ${dropped} pending jobs.`,
         );
-        console.error(cycleError.message);
         break;
       }
       job();
     }
     if (cycleError) throw cycleError;
   } finally {
-    runaway = false;
     queue.splice(0, Math.min(i + 1, queue.length));
     flushCounts.clear();
     isFlushing = false;
@@ -259,7 +209,7 @@ export function flushSync<T = void>(fn?: () => T): T {
  *
  * @returns A dispose function — stops tracking and runs the last cleanup.
  */
-export function effect(fn: () => void | (() => void), label?: string): () => void {
+export function effect(fn: () => void | (() => void)): () => void {
   let cleanup: (() => void) | undefined;
   let disposed = false;
   const invoke = (): void => {
@@ -276,7 +226,6 @@ export function effect(fn: () => void | (() => void), label?: string): () => voi
   const job: Job = () => {
     if (!disposed) runner();
   };
-  if (label) job.label = label;
   const runner = vueEffect(invoke, { scheduler: () => queueJob(job) });
   return (): void => {
     if (disposed) return;

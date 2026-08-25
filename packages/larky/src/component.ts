@@ -46,7 +46,7 @@
  * dependency-tracking mechanism — derive with `useComputed`, react with
  * `useSignalEffect`.
  */
-import { shallowSignal, isFlushRunaway, queueJob, untracked, type Signal } from "./reactive";
+import { shallowSignal, queueJob, untracked, type Signal } from "./reactive";
 import { hasOwnProperty, devWarn } from "./utils";
 import type { Component } from "./jsx/vnode";
 
@@ -89,8 +89,6 @@ export type HookSlot = ValueSlot | MountSlot;
 export interface Instance {
   /** The component function (mutated in place by HMR swaps). */
   fn: Component;
-  /** Debug id (creation sequence) — used in [larky] logs. */
-  id: number;
   destroyed: boolean;
   /** Stable tracked props proxy passed to `fn` on every render. */
   proxy: Record<string, unknown>;
@@ -119,13 +117,6 @@ export interface Instance {
   renderDispose: (() => void) | undefined;
 }
 
-let instanceSeq = 0;
-
-/** `Name#id` label for [larky] debug logs. */
-export function debugName(inst: Instance): string {
-  return `${inst.fn.name || "anonymous"}#${inst.id}`;
-}
-
 /** Create an instance for a component function (props seeded separately). */
 export function createInstance(fn: Component): Instance {
   const propsSignals = new Map<string, Signal<unknown>>();
@@ -150,7 +141,6 @@ export function createInstance(fn: Component): Instance {
   });
   return {
     fn,
-    id: ++instanceSeq,
     destroyed: false,
     proxy,
     propsTarget,
@@ -170,7 +160,6 @@ export function createInstance(fn: Component): Instance {
 
 /** Invalidate the instance — its render job enqueues on the microtask queue. */
 export function invalidateInstance(inst: Instance): void {
-  if (isFlushRunaway()) console.error(`[larky] invalidate ${debugName(inst)}`);
   inst.invalidate.value = ++inst.invalidateN;
 }
 
@@ -184,14 +173,11 @@ export function invalidateInstance(inst: Instance): void {
 export function writeInstanceProps(inst: Instance, props: Record<string, unknown>): void {
   const { propsSignals, propsTarget, propsKeys } = inst;
   let keysChanged = false;
-  // Runaway-only diagnostics — zero allocation on the normal hot path.
-  const changed: string[] | null = isFlushRunaway() ? [] : null;
   for (const key of propsKeys) {
     if (!hasOwnProperty(props, key)) {
       propsKeys.delete(key);
       Reflect.deleteProperty(propsTarget, key);
       keysChanged = true;
-      changed?.push(`-${key}`);
       const sig = propsSignals.get(key);
       if (sig) sig.value = undefined;
     }
@@ -203,7 +189,6 @@ export function writeInstanceProps(inst: Instance, props: Record<string, unknown
       keysChanged = true;
     }
     const value = props[key];
-    if (changed && !Object.is(propsTarget[key], value)) changed.push(key);
     propsTarget[key] = value;
     const sig = propsSignals.get(key);
     if (sig) {
@@ -211,9 +196,6 @@ export function writeInstanceProps(inst: Instance, props: Record<string, unknown
     } else {
       propsSignals.set(key, shallowSignal(value));
     }
-  }
-  if (changed && changed.length > 0) {
-    console.error(`[larky] props→${debugName(inst)}: ${changed.join(", ")}`);
   }
   // Plain mirror ++: reading `keysVersion.value` here would run inside the
   // parent's tracked render effect on the seed path and subscribe the parent.
@@ -361,7 +343,7 @@ export function queueMountEffects(inst: Instance): void {
     }
   }
   if (!pending) return;
-  queueJob(() => untracked(() => flushInstanceEffects(inst)), `mountEffects<${debugName(inst)}>`);
+  queueJob(() => untracked(() => flushInstanceEffects(inst)));
 }
 
 function disposeSlot(slot: HookSlot): void {

@@ -14,7 +14,6 @@ import {
   generateCode,
   CHART_THEMES,
 } from "@/lib/chart-builder";
-import { registerChartCompletion } from "@/lib/chart-completion";
 
 Chart.register(...registerables);
 
@@ -220,7 +219,6 @@ export class WcEditorPage extends WcElement {
 
   private ensureMonaco(): void {
     if (this.codeEditor || !this.monacoHost.value) return;
-    registerChartCompletion();
     const ed = monaco.editor.create(this.monacoHost.value, {
       value: this.code,
       language: "javascript",

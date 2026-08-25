@@ -25,7 +25,9 @@ function copy404(): Plugin {
 }
 
 export default defineConfig({
-  base: "lark.js",
+  // Canonical base form ("/x/", not "x") so import.meta.env.BASE_URL ends
+  // with a slash — MSW joins its worker URL onto it (see main.tsx).
+  base: "/lark.js/",
   plugins: [larkMvcPlugin(), tailwindcss(), copy404()],
   resolve: {
     alias: {

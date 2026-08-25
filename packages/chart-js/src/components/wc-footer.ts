@@ -1,11 +1,11 @@
 import { customElement } from "lit/decorators.js";
 import type { TemplateResult } from "lit";
-import { CpElement, html } from "@/components/base";
+import { WcElement, html } from "@/components/base";
 import { icon } from "@/lib/icons";
 import { unsafeHTML } from "lit/directives/unsafe-html.js";
 
-@customElement("cp-footer")
-export class CpFooter extends CpElement {
+@customElement("wc-footer")
+export class WcFooter extends WcElement {
   protected override render(): TemplateResult {
     return html`
       <footer class="border-border bg-surface-alt/40 border-t">
@@ -29,6 +29,6 @@ export class CpFooter extends CpElement {
 
 declare global {
   interface HTMLElementTagNameMap {
-    "cp-footer": CpFooter;
+    "wc-footer": WcFooter;
   }
 }

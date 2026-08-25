@@ -1,7 +1,7 @@
 import { customElement, state } from "lit/decorators.js";
 import type { TemplateResult } from "lit";
 import { ref, createRef } from "lit/directives/ref.js";
-import { CpElement, html, nothing } from "@/components/base";
+import { WcElement, html, nothing } from "@/components/base";
 import { loginApi, registerApi } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
 import { closeAuthModal, showAuthModal } from "@/lib/ui";
@@ -14,8 +14,8 @@ import { effect } from "@lark.js/mvc";
  * Login / register modal. Visibility follows the `showAuthModal` signal
  * from the lark ui state module.
  */
-@customElement("cp-auth-modal")
-export class CpAuthModal extends CpElement {
+@customElement("wc-auth-modal")
+export class WcAuthModal extends WcElement {
   @state() private open = false;
   @state() private mode: "login" | "register" = "login";
   @state() private email = "";
@@ -276,6 +276,6 @@ export class CpAuthModal extends CpElement {
 
 declare global {
   interface HTMLElementTagNameMap {
-    "cp-auth-modal": CpAuthModal;
+    "wc-auth-modal": WcAuthModal;
   }
 }

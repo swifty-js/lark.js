@@ -1,6 +1,6 @@
 import { customElement, property, state } from "lit/decorators.js";
 import type { TemplateResult } from "lit";
-import { CpElement, html } from "@/components/base";
+import { WcElement, html } from "@/components/base";
 import { icon } from "@/lib/icons";
 import { unsafeHTML } from "lit/directives/unsafe-html.js";
 import { animateIn } from "@/lib/anim";
@@ -76,8 +76,8 @@ const SECTIONS: HelpSection[] = [
   },
 ];
 
-@customElement("cp-help-page")
-export class CpHelpPage extends CpElement {
+@customElement("wc-help-page")
+export class WcHelpPage extends WcElement {
   @property() activePath = "";
   @property() sectionParam = "start";
 
@@ -184,6 +184,6 @@ export class CpHelpPage extends CpElement {
 
 declare global {
   interface HTMLElementTagNameMap {
-    "cp-help-page": CpHelpPage;
+    "wc-help-page": WcHelpPage;
   }
 }

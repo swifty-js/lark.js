@@ -1,6 +1,6 @@
 import { customElement, property, state } from "lit/decorators.js";
 import type { TemplateResult } from "lit";
-import { CpElement, html, nothing } from "@/components/base";
+import { WcElement, html, nothing } from "@/components/base";
 import {
   listProjectsApi,
   getProjectDetailApi,
@@ -22,8 +22,8 @@ import { ref, createRef } from "lit/directives/ref.js";
  * clone-chart dialogs. Navigation to the editor is dispatched as
  * `nav-request` CustomEvents consumed by the lark shell.
  */
-@customElement("cp-projects-page")
-export class CpProjectsPage extends CpElement {
+@customElement("wc-projects-page")
+export class WcProjectsPage extends WcElement {
   @property() activePath = "";
 
   @state() private loggedIn = false;
@@ -456,6 +456,6 @@ export class CpProjectsPage extends CpElement {
 
 declare global {
   interface HTMLElementTagNameMap {
-    "cp-projects-page": CpProjectsPage;
+    "wc-projects-page": WcProjectsPage;
   }
 }

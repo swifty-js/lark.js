@@ -15,7 +15,7 @@ const fail = (message: string) => ({ ok: false, message });
  * (`window.location.href = "/plaza"`), which re-evaluates this module —
  * a bare `let` would reset to `true` and silently re-login the user.
  */
-const SESSION_KEY = "cp-mock-session";
+const SESSION_KEY = "wc-mock-session";
 let sessionActive = sessionStorage.getItem(SESSION_KEY) !== "off";
 
 function setSession(active: boolean): void {

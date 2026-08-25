@@ -1,6 +1,6 @@
 import { customElement, property, state } from "lit/decorators.js";
 import type { TemplateResult } from "lit";
-import { CpElement, html, nothing } from "@/components/base";
+import { WcElement, html, nothing } from "@/components/base";
 import { homeChartsApi, type ChartItem } from "@/lib/api";
 import { icon } from "@/lib/icons";
 import { unsafeHTML } from "lit/directives/unsafe-html.js";
@@ -52,8 +52,8 @@ function buildGroups(charts: ChartItem[]): ChartGroup[] {
  * Chart Plaza — community chart gallery with type filter chips, category
  * sections, and a preview dialog. Data loads from `/api/charts/home`.
  */
-@customElement("cp-plaza-page")
-export class CpPlazaPage extends CpElement {
+@customElement("wc-plaza-page")
+export class WcPlazaPage extends WcElement {
   @property() activePath = "";
 
   @state() private charts: ChartItem[] = [];
@@ -379,6 +379,6 @@ export class CpPlazaPage extends CpElement {
 
 declare global {
   interface HTMLElementTagNameMap {
-    "cp-plaza-page": CpPlazaPage;
+    "wc-plaza-page": WcPlazaPage;
   }
 }

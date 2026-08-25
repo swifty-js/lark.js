@@ -1,8 +1,8 @@
-import "@/components/cp-header";
-import "@/components/cp-footer";
-import "@/components/cp-auth-modal";
-import "@/components/cp-plaza-page";
-import "@/components/cp-projects-page";
-import "@/components/cp-help-page";
-import "@/components/cp-not-found-page";
-import "@/components/cp-editor-page";
+import "@/components/wc-header";
+import "@/components/wc-footer";
+import "@/components/wc-auth-modal";
+import "@/components/wc-plaza-page";
+import "@/components/wc-projects-page";
+import "@/components/wc-help-page";
+import "@/components/wc-not-found-page";
+import "@/components/wc-editor-page";

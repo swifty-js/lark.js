@@ -9,7 +9,7 @@ type MaybeRender = TemplateResult | typeof nothing;
  * Tailwind stylesheet applies) + an inline `ic` icon helper wrapping
  * lucide-static SVG strings.
  */
-export class CpElement extends LitElement {
+export class WcElement extends LitElement {
   protected override createRenderRoot(): HTMLElement {
     return this;
   }

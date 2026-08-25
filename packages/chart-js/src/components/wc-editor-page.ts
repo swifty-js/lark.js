@@ -1,6 +1,6 @@
 import { customElement, property, state } from "lit/decorators.js";
 import type { TemplateResult } from "lit";
-import { CpElement, html, nothing } from "@/components/base";
+import { WcElement, html, nothing } from "@/components/base";
 import { ref, createRef } from "lit/directives/ref.js";
 import { icon, chartTypeIcons } from "@/lib/icons";
 import { unsafeHTML } from "lit/directives/unsafe-html.js";
@@ -65,8 +65,8 @@ function evalChartCode(
  * grid), right side live chart.js preview. Navigation back to projects
  * dispatches `nav-request`.
  */
-@customElement("cp-editor-page")
-export class CpEditorPage extends CpElement {
+@customElement("wc-editor-page")
+export class WcEditorPage extends WcElement {
   @property() activePath = "/editor";
 
   @state() private activeTab: "visual" | "code" | "data" = "visual";
@@ -919,6 +919,6 @@ export class CpEditorPage extends CpElement {
 
 declare global {
   interface HTMLElementTagNameMap {
-    "cp-editor-page": CpEditorPage;
+    "wc-editor-page": WcEditorPage;
   }
 }

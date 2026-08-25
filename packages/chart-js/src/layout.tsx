@@ -1,6 +1,6 @@
 import { RouterView, type RouterApi } from "@lark.js/mvc";
 import "@/components";
-import type { CpHeader } from "@/components/cp-header";
+import type { WcHeader } from "@/components/wc-header";
 import { useRef, useEffect } from "@lark.js/mvc";
 
 /**
@@ -30,7 +30,7 @@ export default function Layout({ router }: { router: RouterApi }) {
       ref={shell}
       class={`flex flex-col ${isEditor ? "h-screen overflow-hidden" : "min-h-screen"}`}
     >
-      <cp-header activePath={currentPath} />
+      <wc-header activePath={currentPath} />
 
       <main
         class={`min-h-0 flex-1 ${isEditor ? "flex flex-col overflow-hidden" : ""}`}
@@ -38,11 +38,11 @@ export default function Layout({ router }: { router: RouterApi }) {
         <RouterView router={router} />
       </main>
 
-      {!isEditor && <cp-footer />}
+      {!isEditor && <wc-footer />}
 
-      <cp-auth-modal />
+      <wc-auth-modal />
     </div>
   );
 }
 
-export type { CpHeader };
+export type { WcHeader };

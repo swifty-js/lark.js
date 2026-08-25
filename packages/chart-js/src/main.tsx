@@ -9,33 +9,43 @@ import Layout from "./layout";
  * `nav-request` CustomEvents which Layout translates into
  * router.navigate().
  */
-const router = createRouter([
-  { path: "/", component: () => <cp-plaza-page activePath="/" /> },
-  { path: "/plaza", component: () => <cp-plaza-page activePath="/plaza" /> },
-  {
-    path: "/projects",
-    component: () => <cp-projects-page activePath="/projects" />,
-  },
-  {
-    path: "/editor",
-    component: () => <cp-editor-page activePath="/editor" />,
-  },
-  {
-    path: "/help",
-    component: () => <cp-help-page activePath="/help" />,
-  },
-  {
-    path: "*",
-    component: () => <cp-not-found-page activePath="*" />,
-  },
-], { basename: "lark.js" });
+const router = createRouter(
+  [
+    { path: "/", component: () => <wc-plaza-page activePath="/" /> },
+    { path: "/plaza", component: () => <wc-plaza-page activePath="/plaza" /> },
+    {
+      path: "/projects",
+      component: () => <wc-projects-page activePath="/projects" />,
+    },
+    {
+      path: "/editor",
+      component: () => <wc-editor-page activePath="/editor" />,
+    },
+    {
+      path: "/help",
+      component: () => <wc-help-page activePath="/help" />,
+    },
+    {
+      path: "*",
+      component: () => <wc-not-found-page activePath="*" />,
+    },
+  ],
+  { basename: "lark.js" },
+);
 
 async function enableMocking(): Promise<void> {
-  if (import.meta.env.PROD) return;
+  // The GitHub Pages deploy has no real backend, so mock whenever
+  // VITE_API_BASE is unset (it stays unset in local dev too).
+  if (import.meta.env.VITE_API_BASE) return;
   const { worker } = await import("./mocks/browser");
   // Await the Service Worker registration so the initial auth/charts
-  // requests are guaranteed to be intercepted.
-  await worker.start({ onUnhandledRequest: "bypass" });
+  // requests are guaranteed to be intercepted. The worker script is only
+  // served under the Vite base path ("/lark.js/mockServiceWorker.js"),
+  // so registering MSW's default "/mockServiceWorker.js" would 404.
+  await worker.start({
+    onUnhandledRequest: "bypass",
+    serviceWorker: { url: `${import.meta.env.BASE_URL}mockServiceWorker.js` },
+  });
 }
 
 enableMocking().then(() => {

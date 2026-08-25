@@ -1,7 +1,7 @@
 import { customElement, property, state } from "lit/decorators.js";
 import type { TemplateResult } from "lit";
 import { ref, createRef } from "lit/directives/ref.js";
-import { CpElement, html, nothing, unsafeHTML } from "@/components/base";
+import { WcElement, html, nothing, unsafeHTML } from "@/components/base";
 import { useAuthStore } from "@/lib/auth-store";
 import { openAuthModal } from "@/lib/ui";
 import { icon } from "@/lib/icons";
@@ -21,8 +21,8 @@ export const NAV_ITEMS = [
  * dispatched as a `nav-request` CustomEvent (detail: path) — the lark
  * shell subscribes and calls `router.navigate`.
  */
-@customElement("cp-header")
-export class CpHeader extends CpElement {
+@customElement("wc-header")
+export class WcHeader extends WcElement {
   @property() activePath = "";
 
   @state() private user: UserInfo | null = null;
@@ -198,6 +198,6 @@ export class CpHeader extends CpElement {
 
 declare global {
   interface HTMLElementTagNameMap {
-    "cp-header": CpHeader;
+    "wc-header": WcHeader;
   }
 }

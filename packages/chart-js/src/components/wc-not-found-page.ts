@@ -1,12 +1,12 @@
 import { customElement, property } from "lit/decorators.js";
 import type { TemplateResult } from "lit";
-import { CpElement, html } from "@/components/base";
+import { WcElement, html } from "@/components/base";
 import { icon } from "@/lib/icons";
 import { unsafeHTML } from "lit/directives/unsafe-html.js";
 import { animateIn } from "@/lib/anim";
 
-@customElement("cp-not-found-page")
-export class CpNotFoundPage extends CpElement {
+@customElement("wc-not-found-page")
+export class WcNotFoundPage extends WcElement {
   @property() activePath = "";
 
   protected override firstUpdated(): void {
@@ -51,6 +51,6 @@ export class CpNotFoundPage extends CpElement {
 
 declare global {
   interface HTMLElementTagNameMap {
-    "cp-not-found-page": CpNotFoundPage;
+    "wc-not-found-page": WcNotFoundPage;
   }
 }

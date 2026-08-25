@@ -219,4 +219,4 @@ dist-docs
 .playwright-cli
 
 **/dist-app
-packages/charts
+

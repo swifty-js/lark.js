@@ -20,8 +20,9 @@
  * SOFTWARE.
  */
 
-import { toChildArray } from "./element.ts";
-import type { Children, ComponentType, VNode } from "./element.ts";
+import { toChildArray } from "./element";
+import type { Children, ComponentType, VNode } from "./element";
+import { canonical, hmrActive } from "./hmr";
 
 /**
  * A mount point. setState performs no partial update; instead it marks the
@@ -78,17 +79,43 @@ export function setActiveRoot(root: Root | null): void {
   activeRoot = root;
 }
 
-/** Run a function component. Component rendering is serial (parent runs first, children are diffed next), so no stack is needed */
+/**
+ * Run a function component. Component rendering is serial (parent runs first,
+ * children are diffed next), so no stack is needed.
+ *
+ * Under HMR the CANONICAL (latest) function runs against the instance's
+ * existing hooks array — that is what preserves state across hot swaps. Slots
+ * the edited body no longer reaches are cleaned up and dropped, so a shrunk
+ * hook list cannot leak effects or misalign later renders.
+ */
 export function renderComponent(vnode: VNode): VNode[] {
-  currentHooks = vnode.hooks!;
+  const hooks = vnode.hooks!;
+  currentHooks = hooks;
   hookIndex = 0;
-  const rendered = (vnode.type as ComponentType)(vnode.props);
+  const fn = hmrActive
+    ? canonical(vnode.type as ComponentType)
+    : (vnode.type as ComponentType);
+  const rendered = fn(vnode.props);
   currentHooks = null;
+  if (hookIndex < hooks.length) {
+    for (let i = hookIndex; i < hooks.length; i++) {
+      const slot = hooks[i];
+      if (slot.tag === "effect" && slot.cleanup) {
+        slot.cleanup();
+      }
+    }
+    hooks.length = hookIndex;
+  }
   return toChildArray(rendered);
 }
 
-/** Returns [slot, isFresh]. The slot object is reused across renders — that is where state lives */
-function getSlot<H extends Hook>(create: () => H): [H, boolean] {
+/**
+ * Returns [slot, isFresh]. The slot object is reused across renders — that is
+ * where state lives. A tag mismatch (an HMR edit changed the hook order)
+ * destructively resets the slot: the stale effect cleanup runs, then a fresh
+ * slot takes its place.
+ */
+function getSlot<H extends Hook>(tag: H["tag"], create: () => H): [H, boolean] {
   if (currentHooks === null) {
     throw new Error("Hooks can only be called inside a function component.");
   }
@@ -98,13 +125,22 @@ function getSlot<H extends Hook>(create: () => H): [H, boolean] {
     currentHooks.push(slot);
     return [slot, true];
   }
-  return [currentHooks[index] as H, false];
+  const slot = currentHooks[index];
+  if (slot.tag !== tag) {
+    if (slot.tag === "effect" && slot.cleanup) {
+      slot.cleanup();
+    }
+    const fresh = create();
+    currentHooks[index] = fresh;
+    return [fresh, true];
+  }
+  return [slot as H, false];
 }
 
 export function useState<S>(
   initialState: S | (() => S),
 ): [S, Dispatch<SetStateAction<S>>] {
-  const [slot] = getSlot<StateHook>(() => {
+  const [slot] = getSlot<StateHook>("state", () => {
     const root = activeRoot!;
     const created: StateHook = {
       tag: "state",
@@ -140,7 +176,7 @@ export function useState<S>(
 }
 
 export function useEffect(create: EffectCallback, deps?: DepList): void {
-  const [slot, mounted] = getSlot<EffectHook>(() => ({
+  const [slot, mounted] = getSlot<EffectHook>("effect", () => ({
     tag: "effect",
     create,
     deps: deps ?? null,
@@ -155,7 +191,7 @@ export function useEffect(create: EffectCallback, deps?: DepList): void {
 }
 
 export function useMemo<T>(factory: () => T, deps: DepList): T {
-  const [slot, mounted] = getSlot<MemoHook>(() => ({
+  const [slot, mounted] = getSlot<MemoHook>("memo", () => ({
     tag: "memo",
     value: factory(),
     deps,
@@ -211,13 +247,8 @@ export function flushEffects(children: VNode[]): void {
   });
 }
 
-/** Before unmounting a subtree, run every component's effect cleanup inside it (children before parents) */
-export function teardownEffects(vnode: VNode): void {
-  walk(vnode.children, runCleanups);
-  runCleanups(vnode);
-}
-
-function runCleanups(vnode: VNode): void {
+/** Run one instance's effect cleanups; the unmount teardown walk (diff.ts) drives this */
+export function runEffectCleanups(vnode: VNode): void {
   for (const slot of vnode.hooks ?? []) {
     if (slot.tag === "effect" && slot.cleanup) {
       slot.cleanup();

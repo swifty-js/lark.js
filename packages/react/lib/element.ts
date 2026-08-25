@@ -20,9 +20,9 @@
  * SOFTWARE.
  */
 
-import type { Hook } from "./hooks.ts";
+import type { Hook } from "./hooks";
 
-export type Key = string | number;
+export type Key = string | number | bigint;
 
 export interface Props {
   [name: string]: any;
@@ -38,9 +38,9 @@ export type Children =
   VNode | string | number | boolean | null | undefined | Children[];
 
 /**
- * type / key / props are the immutable "descriptor", produced by createElement;
- * dom / children / hooks are "instance" fields, filled in by the renderer on
- * mount / update.
+ * type / key / props are the immutable "descriptor", produced by the JSX
+ * runtimes / createElement; dom / children / hooks / refCleanup are
+ * "instance" fields, filled in by the renderer on mount / update.
  *
  * The descriptor is never mutated by the renderer (React's element immutability
  * principle); each diff produces fresh instance objects. Only the hooks array is
@@ -56,26 +56,42 @@ export interface VNode {
   children: VNode[] | null;
   /** Owned by function components only; keeps the same array reference across renders */
   hooks: Hook[] | null;
+  /** Cleanup returned by a function ref (React 19 ref-cleanup semantics); host elements only */
+  refCleanup: (() => void) | null;
 }
 
-export const Fragment = Symbol.for("swifty.fragment");
-export const Text = Symbol.for("swifty.text");
+export const Fragment = Symbol.for("lark.react.fragment");
+export const Text = Symbol.for("lark.react.text");
+
+/** Shared descriptor factory for the classic (createElement) and automatic (jsx) runtimes */
+export function createVNode(
+  type: VNodeType,
+  key: Key | null | undefined,
+  props: Props,
+): VNode {
+  return {
+    type,
+    key: key === null || key === undefined ? null : String(key),
+    props,
+    dom: null,
+    children: null,
+    hooks: null,
+    refCleanup: null,
+  };
+}
 
 export function createElement(
   type: VNodeType,
   config?: (Props & { key?: Key }) | null,
   ...children: Children[]
 ): VNode {
-  let key: string | null = null;
+  let key: Key | null = null;
   const props: Props = {};
 
   if (config) {
     for (const name of Object.keys(config)) {
       if (name === "key") {
-        key =
-          config.key === null || config.key === undefined
-            ? null
-            : String(config.key);
+        key = config.key ?? null;
         continue;
       }
       props[name] = config[name];
@@ -84,19 +100,11 @@ export function createElement(
   if (children.length > 0) {
     props.children = children.length === 1 ? children[0] : children;
   }
-
-  return { type, key, props, dom: null, children: null, hooks: null };
+  return createVNode(type, key, props);
 }
 
 function createTextVNode(nodeValue: string | number): VNode {
-  return {
-    type: Text,
-    key: null,
-    props: { nodeValue: String(nodeValue) },
-    dom: null,
-    children: null,
-    hooks: null,
-  };
+  return createVNode(Text, null, { nodeValue: String(nodeValue) });
 }
 
 /**

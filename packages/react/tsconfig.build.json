@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleDetection": "force",
+    "moduleResolution": "bundler",
+    "declaration": true,
+    "declarationDir": "./dist",
+    "declarationMap": false,
+    "outDir": "./dist",
+    "rootDir": "./lib",
+    "strict": true,
+    "noFallthroughCasesInSwitch": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "sourceMap": false,
+    "types": ["node"]
+  },
+  "include": ["lib"]
+}

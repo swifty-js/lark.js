@@ -20,16 +20,17 @@
  * SOFTWARE.
  */
 
-import { createDom, updateProps } from "./dom.ts";
-import { Text, toChildArray } from "./element.ts";
-import type { VNode } from "./element.ts";
+import { attachRef, createDom, detachRef, updateProps } from "./dom";
+import { Text, toChildArray } from "./element";
+import type { VNode, VNodeType } from "./element";
+import { canonical, hmrActive } from "./hmr";
 import {
   flushEffects,
   renderComponent,
+  runEffectCleanups,
   setActiveRoot,
-  teardownEffects,
-} from "./hooks.ts";
-import type { Root } from "./hooks.ts";
+} from "./hooks";
+import type { Root } from "./hooks";
 
 /**
  * Render a root: diff a fresh instance tree, commit it synchronously, then
@@ -46,6 +47,24 @@ export function renderRoot(root: Root): void {
   );
   setActiveRoot(null);
   flushEffects(root.children);
+}
+
+/**
+ * Tag identity. Plain `===` in production; once HMR performed a swap,
+ * component functions also match through the alias chain, so stale
+ * descriptors (an old `root.element`, a `useMemo`-cached element) keep
+ * matching hot-swapped instances.
+ */
+function sameType(a: VNodeType, b: VNodeType): boolean {
+  if (a === b) {
+    return true;
+  }
+  return (
+    hmrActive &&
+    typeof a === "function" &&
+    typeof b === "function" &&
+    canonical(a) === canonical(b)
+  );
 }
 
 /**
@@ -96,7 +115,7 @@ export function diffChildren(
     if (oldChild.key !== newChild.key) {
       break;
     }
-    if (oldChild.type === newChild.type) {
+    if (sameType(oldChild.type, newChild.type)) {
       matched[index] = oldChild;
       lastPlacedIndex = index;
     } else {
@@ -128,7 +147,7 @@ export function diffChildren(
       existing.delete(mapKey);
 
       const oldChild = oldChildren[oldIndex];
-      if (oldChild.type !== newChild.type) {
+      if (!sameType(oldChild.type, newChild.type)) {
         removals.push(oldChild);
         continue;
       }
@@ -174,7 +193,7 @@ export function diffChildren(
   return result;
 }
 
-/** Build an instance from a descriptor; when previous is non-null, carry over dom / children / hooks */
+/** Build an instance from a descriptor; when previous is non-null, carry over dom / children / hooks / refCleanup */
 function instantiate(desc: VNode, previous: VNode | null): VNode {
   return {
     type: desc.type,
@@ -188,6 +207,7 @@ function instantiate(desc: VNode, previous: VNode | null): VNode {
         : typeof desc.type === "function"
           ? []
           : null,
+    refCleanup: previous === null ? null : previous.refCleanup,
   };
 }
 
@@ -200,18 +220,21 @@ export function mount(
   const vnode = instantiate(desc, null);
 
   if (vnode.type === Text) {
-    vnode.dom = createDom(vnode);
+    vnode.dom = createDom(vnode, parentDom);
     parentDom.insertBefore(vnode.dom, anchor);
     return vnode;
   }
   if (typeof vnode.type === "string") {
-    const dom = createDom(vnode);
+    const dom = createDom(vnode, parentDom);
     vnode.dom = dom;
     // Children are inserted into the parent before it enters the tree, so the whole subtree triggers only one real mount
-    vnode.children = toChildArray(vnode.props.children).map((child) =>
-      mount(child, dom, null),
-    );
+    vnode.children = vnode.props.dangerouslySetInnerHTML
+      ? []
+      : toChildArray(vnode.props.children).map((child) =>
+          mount(child, dom, null),
+        );
     parentDom.insertBefore(dom, anchor);
+    attachRef(vnode);
     return vnode;
   }
   // Function components / Fragments produce no DOM of their own; children mount directly onto the same host parent
@@ -241,13 +264,26 @@ function patch(
   if (typeof vnode.type === "string") {
     const dom = vnode.dom as Element;
     updateProps(dom, oldVNode.props, vnode.props);
-    // Children live inside their own dom with nothing to the right, so the anchor is null
-    vnode.children = diffChildren(
-      dom,
-      oldVNode.children ?? [],
-      toChildArray(vnode.props.children),
-      null,
-    );
+    if (vnode.props.dangerouslySetInnerHTML) {
+      // updateProps just rewrote innerHTML; the old child instances lost their
+      // DOM already, but their effect cleanups / refs must still run
+      for (const child of oldVNode.children ?? []) {
+        unmount(child);
+      }
+      vnode.children = [];
+    } else {
+      // Children live inside their own dom with nothing to the right, so the anchor is null
+      vnode.children = diffChildren(
+        dom,
+        oldVNode.children ?? [],
+        toChildArray(vnode.props.children),
+        null,
+      );
+    }
+    if (oldVNode.props.ref !== vnode.props.ref) {
+      detachRef(vnode, oldVNode.props.ref);
+      attachRef(vnode);
+    }
     return vnode;
   }
   const rendered =
@@ -263,10 +299,21 @@ function patch(
   return vnode;
 }
 
-/** Unmount: run every effect cleanup in the subtree first, then detach the topmost host node */
+/** Unmount: tear down the subtree (children before parents), then detach the topmost host nodes */
 export function unmount(vnode: VNode): void {
-  teardownEffects(vnode);
+  teardown(vnode);
   removeDoms(vnode);
+}
+
+/** One walk per unmount: effect cleanups and ref detachment, children first */
+function teardown(vnode: VNode): void {
+  for (const child of vnode.children ?? []) {
+    teardown(child);
+  }
+  runEffectCleanups(vnode);
+  if (vnode.dom !== null) {
+    detachRef(vnode);
+  }
 }
 
 function removeDoms(vnode: VNode): void {

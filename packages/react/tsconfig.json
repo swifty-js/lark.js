@@ -1,15 +1,10 @@
 {
   "compilerOptions": {
     "target": "ESNext",
-    "lib": [
-      "ESNext",
-      "DOM",
-      "DOM.Iterable"
-    ],
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "moduleDetection": "force",
     "moduleResolution": "bundler",
-    "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
     "noEmit": true,
     "strict": true,
@@ -19,21 +14,15 @@
     "skipLibCheck": true,
     "verbatimModuleSyntax": true,
     "erasableSyntaxOnly": true,
-    "jsx": "react",
-    "jsxFactory": "__react__.createElement",
-    "jsxFragmentFactory": "__react__.Fragment",
+    "jsx": "react-jsx",
+    "jsxImportSource": "@lark.js/react",
     "types": [],
     "paths": {
-      "@/*": [
-        "./src/*"
-      ],
-      "@lib/*": [
-        "./lib/*"
-      ]
+      "@lark.js/react/jsx-dev-runtime": ["./lib/jsx-dev-runtime.ts"],
+      "@lark.js/react/jsx-runtime": ["./lib/jsx-runtime.ts"],
+      "@lark.js/react/vite": ["./lib/vite.ts"],
+      "@lark.js/react": ["./lib/index.ts"]
     }
   },
-  "include": [
-    "src",
-    "lib"
-  ],
+  "include": ["lib", "tests", "tsup.config.ts", "vitest.config.ts"]
 }

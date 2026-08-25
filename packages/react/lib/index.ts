@@ -20,11 +20,23 @@
  * SOFTWARE.
  */
 
-import { renderRoot } from "./diff.ts";
-import { createElement, Fragment } from "./element.ts";
-import type { Children } from "./element.ts";
-import { useCallback, useEffect, useMemo, useRef, useState } from "./hooks.ts";
-import type { Root } from "./hooks.ts";
+import { renderRoot } from "./diff";
+import { createElement, Fragment } from "./element";
+import type { Children } from "./element";
+import { hotSwapByComponent, registerRoot, unregisterRoot } from "./hmr";
+import { useCallback, useEffect, useMemo, useRef, useState } from "./hooks";
+import type { Root } from "./hooks";
+
+// Global HMR handle — THE single registration point. Auto-injected HMR
+// snippets (see ./vite.ts) call it via `globalThis.__lark_react_hmr__`
+// instead of importing "@lark.js/react" (an import inside an HMR callback
+// would register the module as an MF shared consumer → ChunkLoadError).
+const globalScope = globalThis as {
+  __lark_react_hmr__?: { hotSwapByComponent: typeof hotSwapByComponent };
+};
+if (!globalScope.__lark_react_hmr__) {
+  globalScope.__lark_react_hmr__ = { hotSwapByComponent };
+}
 
 const roots = new WeakMap<Node, Root>();
 
@@ -65,6 +77,11 @@ export function render(element: Children, container: Node): void {
   }
   root.element = element;
   dirtyRoots.delete(root);
+  if (element === null || element === undefined) {
+    unregisterRoot(root);
+  } else {
+    registerRoot(root);
+  }
   renderRoot(root);
 }
 
@@ -84,24 +101,19 @@ export function createRoot(container: Node): {
 
 export { createElement, Fragment };
 export { useCallback, useEffect, useMemo, useRef, useState };
-export type { Children, ComponentType, Props, VNode } from "./element.ts";
+export { hotSwapByComponent };
+export type {
+  Children,
+  ComponentType,
+  Key,
+  Props,
+  VNode,
+  VNodeType,
+} from "./element";
 export type {
   DepList,
   Dispatch,
   EffectCallback,
   SetStateAction,
-} from "./hooks.ts";
-
-const __react__ = {
-  createElement,
-  Fragment,
-  render,
-  createRoot,
-  useState,
-  useEffect,
-  useMemo,
-  useCallback,
-  useRef,
-};
-
-export default __react__;
+} from "./hooks";
+export type { Ref } from "./jsx-runtime";

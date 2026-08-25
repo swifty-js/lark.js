@@ -20,13 +20,27 @@
  * SOFTWARE.
  */
 
-import { Text } from "./element.ts";
-import type { Props, VNode } from "./element.ts";
+import { Text } from "./element";
+import type { Props, VNode } from "./element";
+
+const SVG_NAMESPACE = "http://www.w3.org/2000/svg";
 
 const ATTRIBUTE_ALIAS: Record<string, string> = {
   className: "class",
   htmlFor: "for",
 };
+
+/** Props consumed by the reconciler itself — never written to the DOM */
+const RESERVED_PROPS = new Set([
+  "children",
+  "key",
+  "ref",
+  "dangerouslySetInnerHTML",
+]);
+
+/** CSS properties that take unitless numbers (preact's proven pattern) */
+const UNITLESS_STYLE_REGEXP =
+  /acit|ex(?:s|g|n|p|$)|rph|grid|ows|mnc|ntw|ine[ch]|zoo|^ord|itera/i;
 
 function isEventName(name: string): boolean {
   return (
@@ -40,11 +54,18 @@ function eventTypeOf(name: string): string {
   return name.slice(2).toLowerCase();
 }
 
-export function createDom(vNode: VNode): Node {
+export function createDom(vNode: VNode, parentDom: Node): Node {
   if (vNode.type === Text) {
     return document.createTextNode(vNode.props.nodeValue);
   }
-  const dom = document.createElement(vNode.type as string);
+  const type = vNode.type as string;
+  // <svg> opens the namespace; descendants inherit it until <foreignObject> escapes back to HTML
+  const dom =
+    type === "svg" ||
+    ((parentDom as Element).namespaceURI === SVG_NAMESPACE &&
+      parentDom.nodeName !== "foreignObject")
+      ? document.createElementNS(SVG_NAMESPACE, type)
+      : document.createElement(type);
   updateProps(dom, {}, vNode.props);
   return dom;
 }
@@ -56,7 +77,7 @@ export function updateProps(
   newProps: Props,
 ): void {
   for (const name of Object.keys(oldProps)) {
-    if (name === "children" || name in newProps) {
+    if (RESERVED_PROPS.has(name) || name in newProps) {
       continue;
     }
     if (isEventName(name)) {
@@ -67,7 +88,7 @@ export function updateProps(
   }
 
   for (const name of Object.keys(newProps)) {
-    if (name === "children") {
+    if (RESERVED_PROPS.has(name)) {
       continue;
     }
     const next = newProps[name];
@@ -91,6 +112,14 @@ export function updateProps(
     }
     setProp(dom, name, next);
   }
+
+  // Like React, dangerouslySetInnerHTML is the explicit trusted-HTML escape
+  // hatch: the value is parsed as markup, so callers must sanitize untrusted input.
+  const nextHtml = newProps.dangerouslySetInnerHTML?.__html;
+  const prevHtml = oldProps.dangerouslySetInnerHTML?.__html;
+  if (nextHtml !== prevHtml) {
+    dom.innerHTML = nextHtml ?? "";
+  }
 }
 
 function setProp(dom: Element, name: string, value: unknown): void {
@@ -103,9 +132,10 @@ function setProp(dom: Element, name: string, value: unknown): void {
     }
     return;
   }
-  // Controlled properties like value / checked only reflect in the UI when written as properties
-  if (name in dom) {
-    // dom[name] = value === null || value === undefined ? "" : value;
+  // Controlled properties like value / checked only reflect in the UI when
+  // written as properties. SVG elements are excluded: their reflected props
+  // (className, width, ...) are read-only SVGAnimated* objects.
+  if (dom.namespaceURI !== SVG_NAMESPACE && name in dom) {
     Reflect.set(dom, name, value === null || value === undefined ? "" : value);
     return;
   }
@@ -116,7 +146,26 @@ function setProp(dom: Element, name: string, value: unknown): void {
   dom.setAttribute(name, value === true ? "" : String(value));
 }
 
-type StyleValue = string | Record<string, string> | null | undefined;
+type StyleValue = string | Record<string, string | number> | null | undefined;
+
+function setStyleValue(
+  style: CSSStyleDeclaration,
+  name: string,
+  value: string | number | null | undefined,
+): void {
+  if (name.startsWith("--")) {
+    style.setProperty(
+      name,
+      value === null || value === undefined ? "" : String(value),
+    );
+    return;
+  }
+  const resolved =
+    typeof value === "number" && !UNITLESS_STYLE_REGEXP.test(name)
+      ? `${value}px`
+      : (value ?? "");
+  Reflect.set(style, name, resolved);
+}
 
 function applyStyle(
   dom: HTMLElement,
@@ -137,8 +186,7 @@ function applyStyle(
   if (prev && typeof prev === "object") {
     for (const name of Object.keys(prev)) {
       if (!(name in next)) {
-        // dom.style[name] = "";
-        Reflect.set(dom.style, name, "");
+        setStyleValue(dom.style, name, "");
       }
     }
   }
@@ -148,8 +196,49 @@ function applyStyle(
       prev === null ||
       prev[name] !== next[name]
     ) {
-      // dom.style[name] = next[name];
-      Reflect.set(dom.style, name, next[name]);
+      setStyleValue(dom.style, name, next[name]);
     }
   }
+}
+
+/**
+ * Attach `props.ref` to a freshly inserted host element. A function ref may
+ * return a cleanup (React 19 semantics), stored on the instance; an object
+ * ref gets `.current` assigned.
+ */
+export function attachRef(vnode: VNode): void {
+  const ref = vnode.props.ref;
+  if (!ref) {
+    return;
+  }
+  if (typeof ref === "function") {
+    const cleanup = ref(vnode.dom);
+    vnode.refCleanup = typeof cleanup === "function" ? cleanup : null;
+    return;
+  }
+  ref.current = vnode.dom;
+}
+
+/**
+ * Detach a ref (unmount, or the old ref when a patch swaps refs). Prefers the
+ * stored cleanup; a cleanup-less function ref is called with null.
+ *
+ * @param ref The ref to detach — defaults to the instance's own; patch passes
+ *            the OLD props' ref explicitly while `vnode` already carries the
+ *            old cleanup via instantiate().
+ */
+export function detachRef(vnode: VNode, ref: unknown = vnode.props.ref): void {
+  if (!ref) {
+    return;
+  }
+  if (typeof ref === "function") {
+    if (vnode.refCleanup !== null) {
+      vnode.refCleanup();
+      vnode.refCleanup = null;
+    } else {
+      ref(null);
+    }
+    return;
+  }
+  (ref as { current: unknown }).current = null;
 }

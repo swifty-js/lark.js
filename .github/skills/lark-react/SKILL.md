@@ -122,6 +122,10 @@ export default defineConfig({ plugins: [larkReactPlugin()] });
    in tests `await Promise.resolve()` observes the committed DOM (one await
    per cascade wave). `setState` identity is stable; the eager
    `Object.is` bailout skips renders when the value did not change.
+   `setState(fn)` treats a FUNCTION argument as an updater and CALLS it with
+   the previous state — to store a function as state (e.g. a store action
+   from an external-store hook), wrap it: `setState(() => fn)`. Update loops
+   that never settle throw `Maximum update depth exceeded` after 50 waves.
 3. **Every update re-renders the whole root** — there is no memo/bailout
    pruning. Keep bodies cheap; the diff converges DOM writes, but component
    code itself always re-executes. Handlers are re-created per render (fine

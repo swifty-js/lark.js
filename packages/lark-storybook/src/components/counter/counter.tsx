@@ -1,16 +1,16 @@
 /**
  * Counter — internal signal state next to Storybook-controlled props.
  *
- * Tweaking the `step` control does NOT reset `count`: larkRender re-renders
- * the same component instance (the reconciler pushes changed props through
- * per-key signals), exactly like a parent component re-rendering. The body
- * reads `props.step` / `props.label` (tracked), so control changes re-render.
+ * The `<lk-counter>` web component is CONTROLLED here: its `value` attribute
+ * is pushed from the `count` signal, and its composed `change` CustomEvent
+ * writes back. Tweaking the `step` control does NOT reset `count`: larkRender
+ * re-renders the same component instance (the reconciler pushes changed props
+ * through per-key signals), exactly like a parent component re-rendering.
  *
  * Note the arg is called `initialCount`, not `count` — `count` lives in a
  * `useSignal` slot and only its initial value comes from the args.
  */
 import { useSignal } from "@lark.js/mvc";
-import styles from "./counter.module.css";
 
 export interface CounterProps {
   label?: string;
@@ -23,48 +23,20 @@ export interface CounterProps {
 export default function Counter(props: CounterProps) {
   const count = useSignal(props.initialCount ?? 0);
 
-  const step = props.step ?? 1;
-
-  const change = (next: number): void => {
+  const change = (event: Event): void => {
+    const next = (event as CustomEvent<{ count: number }>).detail.count;
     count.value = next;
     props.onChange?.({ count: next });
   };
 
   return (
-    <div class={styles["counter"]}>
-      <div class={styles["counter__label"]}>{props.label ?? "Counter"}</div>
-
-      <div class={styles["counter__value"]}>{count.value}</div>
-
-      <wa-button-group class={styles["counter__actions"]} label="Counter actions">
-        <wa-button
-          type="button"
-          variant="neutral"
-          appearance="outlined"
-          size="s"
-          onClick={() => change(count.value - step)}
-        >
-          - {step}
-        </wa-button>
-        <wa-button
-          type="button"
-          variant="neutral"
-          appearance="plain"
-          size="s"
-          onClick={() => change(props.initialCount ?? 0)}
-        >
-          Reset
-        </wa-button>
-        <wa-button
-          type="button"
-          variant="brand"
-          appearance="filled"
-          size="s"
-          onClick={() => change(count.value + step)}
-        >
-          + {step}
-        </wa-button>
-      </wa-button-group>
-    </div>
+    <lk-counter
+      class="inline-flex"
+      label={props.label ?? "Counter"}
+      value={count.value}
+      step={props.step ?? 1}
+      initial={props.initialCount ?? 0}
+      onChange={change}
+    ></lk-counter>
   );
 }

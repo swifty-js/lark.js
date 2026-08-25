@@ -1,5 +1,3 @@
-import styles from "./tag-list.module.css";
-
 export interface TagListProps {
   tags?: string[];
   /** Extra class applied by the parent (no host element — the component owns it). */
@@ -16,32 +14,23 @@ export default function TagList(props: TagListProps) {
 
   const tags = Array.isArray(props.tags) ? props.tags : [];
   return (
-    <div class={[styles["tag-list"], props.class]}>
+    <div class={["flex flex-wrap gap-1.5", props.class]}>
       {tags.length > 0 ? (
         tags.map((tag) => (
-          <wa-tag
-            class={styles["tag-list__tag"]}
-            variant="brand"
-            appearance="outlined"
-            size="s"
-            pill
-            role="button"
-            tabindex={0}
+          <button
+            key={`tag-${tag}`}
+            type="button"
+            class="cursor-pointer rounded-full border border-border bg-background px-2.5 py-0.5 text-xs font-medium text-foreground transition-colors select-none hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:translate-y-px"
             data-tag={tag}
             onClick={pick}
-            onKeyDown={(e) => {
-              if (e.key !== "Enter" && e.key !== " ") return;
-              e.preventDefault();
-              pick(e);
-            }}
           >
             {tag}
-          </wa-tag>
+          </button>
         ))
       ) : (
-        <wa-badge class={styles["tag-list__empty"]} variant="neutral" appearance="outlined">
+        <span class="rounded-full border border-border px-2.5 py-0.5 text-xs text-muted-foreground">
           No tags
-        </wa-badge>
+        </span>
       )}
     </div>
   );

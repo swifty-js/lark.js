@@ -17,8 +17,8 @@ const meta: Meta<Args> = {
   argTypes: {
     label: { control: "text" },
     variant: {
-      control: "inline-radio",
-      options: ["primary", "secondary", "ghost"],
+      control: "select",
+      options: ["primary", "secondary", "outline", "ghost", "destructive", "link"],
     },
     size: { control: "inline-radio", options: ["sm", "md", "lg"] },
     disabled: { control: "boolean" },
@@ -44,6 +44,18 @@ export const Secondary: Story = {
 
 export const Ghost: Story = {
   args: { variant: "ghost", label: "Ghost" },
+};
+
+export const Outline: Story = {
+  args: { variant: "outline", label: "Outline" },
+};
+
+export const Destructive: Story = {
+  args: { variant: "destructive", label: "Delete" },
+};
+
+export const Link: Story = {
+  args: { variant: "link", label: "Link button" },
 };
 
 export const Large: Story = {

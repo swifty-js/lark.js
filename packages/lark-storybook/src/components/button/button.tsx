@@ -1,25 +1,28 @@
 import { useSignal } from "@lark.js/mvc";
-import styles from "./button.module.css";
 
 export interface ButtonProps {
   label?: string;
-  variant?: "primary" | "secondary" | "ghost";
+  variant?: "primary" | "secondary" | "outline" | "ghost" | "destructive" | "link";
   size?: "sm" | "md" | "lg";
   disabled?: boolean;
   /** Child → parent callback (wired to the Actions panel by larkRender). */
   onClick?: (data: { clicks: number }) => void;
 }
 
+/** Lark prop names → `<lk-button>` attribute values. */
 const variantMap = {
-  primary: { waVariant: "brand", waAppearance: "filled" },
-  secondary: { waVariant: "neutral", waAppearance: "outlined" },
-  ghost: { waVariant: "neutral", waAppearance: "plain" },
+  primary: "default",
+  secondary: "secondary",
+  outline: "outline",
+  ghost: "ghost",
+  destructive: "destructive",
+  link: "link",
 } as const;
 
 const sizeMap = {
-  sm: "s",
-  md: "m",
-  lg: "l",
+  sm: "sm",
+  md: "default",
+  lg: "lg",
 } as const;
 
 export default function Button(props: ButtonProps) {
@@ -34,19 +37,18 @@ export default function Button(props: ButtonProps) {
 
   // Derived data is computed inline — the body re-runs whenever the
   // `variant` / `size` / `label` / `disabled` prop signals change.
-  const { waVariant, waAppearance } = variantMap[props.variant ?? "primary"];
-  const waSize = sizeMap[props.size ?? "md"];
+  const variant = variantMap[props.variant ?? "primary"];
+  const size = sizeMap[props.size ?? "md"];
   return (
-    <wa-button
-      class={styles["button"]}
+    <lk-button
+      class="inline-block"
       type="button"
-      variant={waVariant}
-      appearance={waAppearance}
-      size={waSize}
+      variant={variant}
+      size={size}
       disabled={props.disabled ?? false}
       onClick={press}
     >
       {props.label ?? "Button"}
-    </wa-button>
+    </lk-button>
   );
 }

@@ -20,7 +20,7 @@
  * SOFTWARE.
  */
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   render,
   useCallback,
@@ -191,5 +191,44 @@ describe("useEffect", () => {
     render(<Cascade />, container);
     await flush();
     expect(container.textContent).toBe("1");
+  });
+});
+
+describe("runaway update guard", () => {
+  it("throws Maximum update depth exceeded instead of looping forever", () => {
+    const tasks: Array<() => void> = [];
+    const spy = vi
+      .spyOn(globalThis, "queueMicrotask")
+      .mockImplementation((task) => {
+        tasks.push(task as () => void);
+      });
+    try {
+      const container = createContainer();
+      function Loop() {
+        const [n, setN] = useState(0);
+        useEffect(() => {
+          setN(n + 1);
+        });
+        return <output>{n}</output>;
+      }
+      render(<Loop />, container);
+
+      let caught: unknown = null;
+      let waves = 0;
+      try {
+        while (tasks.length > 0 && waves < 1000) {
+          waves++;
+          tasks.shift()!();
+        }
+      } catch (error) {
+        caught = error;
+      }
+      expect(String(caught)).toContain("Maximum update depth exceeded");
+      expect(waves).toBeLessThan(100);
+      // The loop is broken: nothing further is scheduled
+      expect(tasks.length).toBe(0);
+    } finally {
+      spy.mockRestore();
+    }
   });
 });

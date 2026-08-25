@@ -53,6 +53,13 @@ const [state, setState] = useState(initial); // or useState(() => initial)
 - `setState` identity is stable — safe in deps arrays and closures.
 - Accepts a value or an updater `(prev) => next`. Updaters queue and apply
   in order at the next render, so `setN(n => n + 1); setN(n => n + 1)` adds 2.
+- **Storing functions**: because ANY function argument is invoked as an
+  updater, `setState(someFn)` calls `someFn(prevState)` instead of storing
+  it. Wrap: `setState(() => someFn)`. Classic trigger: an external-store
+  hook doing `setValue(selector(store.getState()))` where the selector picks
+  a store ACTION — the action runs with the previous state, re-enters the
+  store, and loops until `Maximum update depth exceeded` (or, pre-guard, a
+  frozen page).
 - **Eager bailout**: when nothing is queued and the computed next value is
   `Object.is`-equal to the current state, the call is a complete no-op (no
   re-render).

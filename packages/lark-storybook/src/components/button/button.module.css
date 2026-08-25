@@ -1,5 +1,0 @@
-@reference "../../styles/global.css";
-
-.button {
-  @apply inline-block;
-}

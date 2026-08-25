@@ -1,0 +1,42 @@
+/**
+ * Design tokens shared by BOTH Tailwind pipelines:
+ *
+ * - `global.css` — light-DOM styles (lark components' *.module.css `@apply`)
+ * - `wc/tailwind.css` — the stylesheet adopted into every `lk-*` shadow root
+ *
+ * shadcn-style zinc palette (see README.md for the reference component
+ * recipes these tokens back).
+ */
+@theme {
+  --color-background: oklch(1 0 0);
+  --color-foreground: oklch(0.141 0.005 285.823);
+
+  --color-card: oklch(1 0 0);
+  --color-card-foreground: oklch(0.141 0.005 285.823);
+
+  --color-popover: oklch(1 0 0);
+  --color-popover-foreground: oklch(0.141 0.005 285.823);
+
+  --color-primary: oklch(0.21 0.006 285.885);
+  --color-primary-foreground: oklch(0.985 0 0);
+
+  --color-secondary: oklch(0.967 0.001 286.375);
+  --color-secondary-foreground: oklch(0.21 0.006 285.885);
+
+  --color-muted: oklch(0.967 0.001 286.375);
+  --color-muted-foreground: oklch(0.552 0.016 285.938);
+
+  --color-accent: oklch(0.967 0.001 286.375);
+  --color-accent-foreground: oklch(0.21 0.006 285.885);
+
+  --color-destructive: oklch(0.577 0.245 27.325);
+
+  --color-border: oklch(0.92 0.004 286.32);
+  --color-input: oklch(0.92 0.004 286.32);
+  --color-ring: oklch(0.705 0.015 286.067);
+
+  --shadow-elegant:
+    0 1px 2px 0 oklch(0 0 0 / 0.05), 0 4px 12px -2px oklch(0 0 0 / 0.08);
+  --shadow-elegant-hover:
+    0 2px 4px 0 oklch(0 0 0 / 0.06), 0 12px 24px -4px oklch(0 0 0 / 0.12);
+}

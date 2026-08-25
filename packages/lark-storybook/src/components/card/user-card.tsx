@@ -8,12 +8,15 @@
  * callback that forwards to this component's own `onSelect` prop — plain
  * callback composition, React style.
  *
+ * The `<lk-card>` web component provides `header` / `footer` slots; the
+ * slotted elements here are ordinary light DOM styled with inline Tailwind
+ * utilities, reconciled in place by lark.
+ *
  * `initials` shows the derived-data pattern: computed inline in the body,
  * which re-runs whenever the `user` prop signal changes (shallow — Storybook
  * always pushes a fresh object).
  */
 import TagList from "./tag-list";
-import styles from "./user-card.module.css";
 
 export interface User {
   name: string;
@@ -52,35 +55,35 @@ export default function UserCard(props: UserCardProps) {
   const tags = Array.isArray(props.tags) ? props.tags : [];
   const initials = initialsOf(user);
   return (
-    <wa-card class={styles["user-card"]} appearance="outlined" with-header>
-      <div slot="header" class={styles["user-card__head"]}>
-        <wa-avatar
-          class={styles["user-card__avatar"]}
-          initials={initials}
-          label={user.name}
-          shape="circle"
-        ></wa-avatar>
+    <lk-card class="block w-75">
+      <div slot="header" class="flex items-center gap-3">
+        <div
+          class="flex size-11 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground"
+          aria-hidden="true"
+        >
+          {initials}
+        </div>
         <div>
-          <div class={styles["user-card__name"]}>{user.name}</div>
-          <div class={styles["user-card__role"]}>{user.role}</div>
+          <div class="text-base font-semibold">{user.name}</div>
+          <div class="text-xs text-muted-foreground">{user.role}</div>
         </div>
       </div>
 
-      <wa-button
-        class={styles["user-card__email"]}
+      <lk-button
+        class="font-mono"
         href={`mailto:${user.email}`}
-        variant="brand"
-        appearance="plain"
-        size="s"
+        variant="link"
+        size="sm"
       >
         {user.email}
-      </wa-button>
+      </lk-button>
 
-      <TagList
-        class={styles["user-card__tags"]}
-        tags={tags}
-        onSelect={(data) => props.onSelect?.({ tag: String(data?.tag ?? "") })}
-      />
-    </wa-card>
+      <div slot="footer" class="w-full">
+        <TagList
+          tags={tags}
+          onSelect={(data) => props.onSelect?.({ tag: String(data?.tag ?? "") })}
+        />
+      </div>
+    </lk-card>
   );
 }

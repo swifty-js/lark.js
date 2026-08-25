@@ -1,0 +1,16 @@
+/**
+ * Tailwind build for the `lk-*` web components' SHADOW ROOTS.
+ *
+ * Compiled by @tailwindcss/vite, imported as a string (`?inline`) by
+ * `tailwind-styles.ts`, and adopted into every component's shadow root —
+ * global stylesheets never pierce the shadow boundary, so each root gets its
+ * own copy of preflight + the utilities used in `src/wc/*.ts`.
+ *
+ * `source(none)` disables automatic project-wide scanning; only this
+ * directory's Lit templates feed the candidate scanner. Tailwind v4 emits
+ * theme variables on `:root, :host`, so tokens resolve inside shadow DOM.
+ */
+@import "tailwindcss" source(none);
+@import "../styles/theme.css";
+
+@source "./";

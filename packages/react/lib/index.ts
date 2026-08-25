@@ -44,7 +44,25 @@ const roots = new WeakMap<Node, Root>();
 const dirtyRoots = new Set<Root>();
 let flushScheduled = false;
 
+/**
+ * Runaway-update guard (React's "Maximum update depth exceeded"). A cascade
+ * wave is a flush that ends with new updates already scheduled — normal for
+ * effect-driven follow-up state, fatal when it never settles: the microtask
+ * loop would starve the event loop and freeze the page. Throwing from the
+ * offending schedule call breaks the loop with a single diagnostic error.
+ */
+const MAX_CASCADE_WAVES = 50;
+let cascadeWaves = 0;
+let inFlush = false;
+
 function scheduleFlush(): void {
+  if (inFlush && cascadeWaves >= MAX_CASCADE_WAVES) {
+    cascadeWaves = 0;
+    dirtyRoots.clear();
+    throw new Error(
+      "Maximum update depth exceeded. A render body or effect schedules another update on every pass, so the tree can never settle. setState with an unchanged value bails out — make the update conditional or move it out of the render/effect path.",
+    );
+  }
   if (flushScheduled) {
     return;
   }
@@ -53,8 +71,17 @@ function scheduleFlush(): void {
     flushScheduled = false;
     const pending = [...dirtyRoots];
     dirtyRoots.clear();
-    for (const root of pending) {
-      renderRoot(root);
+    inFlush = true;
+    cascadeWaves++;
+    try {
+      for (const root of pending) {
+        renderRoot(root);
+      }
+    } finally {
+      inFlush = false;
+      if (dirtyRoots.size === 0) {
+        cascadeWaves = 0;
+      }
     }
   });
 }

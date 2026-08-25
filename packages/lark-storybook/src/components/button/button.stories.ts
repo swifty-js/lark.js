@@ -18,7 +18,14 @@ const meta: Meta<Args> = {
     label: { control: "text" },
     variant: {
       control: "select",
-      options: ["primary", "secondary", "outline", "ghost", "destructive", "link"],
+      options: [
+        "primary",
+        "secondary",
+        "outline",
+        "ghost",
+        "destructive",
+        "link",
+      ],
     },
     size: { control: "inline-radio", options: ["sm", "md", "lg"] },
     disabled: { control: "boolean" },

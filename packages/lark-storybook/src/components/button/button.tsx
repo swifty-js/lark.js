@@ -2,7 +2,8 @@ import { useSignal } from "@lark.js/mvc";
 
 export interface ButtonProps {
   label?: string;
-  variant?: "primary" | "secondary" | "outline" | "ghost" | "destructive" | "link";
+  variant?:
+    "primary" | "secondary" | "outline" | "ghost" | "destructive" | "link";
   size?: "sm" | "md" | "lg";
   disabled?: boolean;
   /** Child → parent callback (wired to the Actions panel by larkRender). */

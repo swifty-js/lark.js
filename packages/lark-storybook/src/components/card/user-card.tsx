@@ -81,7 +81,9 @@ export default function UserCard(props: UserCardProps) {
       <div slot="footer" class="w-full">
         <TagList
           tags={tags}
-          onSelect={(data) => props.onSelect?.({ tag: String(data?.tag ?? "") })}
+          onSelect={(data) =>
+            props.onSelect?.({ tag: String(data?.tag ?? "") })
+          }
         />
       </div>
     </lk-card>

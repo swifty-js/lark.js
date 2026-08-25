@@ -100,7 +100,8 @@ function makeHandlers(
   for (const name of events) {
     handlers[propNameFor(name)] = (data?: unknown) => {
       const handler = entry.args[name];
-      if (typeof handler === "function") (handler as (d?: unknown) => void)(data);
+      if (typeof handler === "function")
+        (handler as (d?: unknown) => void)(data);
     };
   }
   return handlers;

@@ -57,10 +57,9 @@ export class LkCard extends LitElement {
         style="--card-spacing: ${this.size === "sm" ? "0.75rem" : "1rem"}"
       >
         <div
-          class="grid auto-rows-min items-start gap-1 px-(--card-spacing) ${this
-            .hasHeader
-            ? ""
-            : "hidden"}"
+          class="grid auto-rows-min items-start gap-1 px-(--card-spacing) ${
+            this.hasHeader ? "" : "hidden"
+          }"
         >
           <slot name="header" @slotchange=${this.#slotChanged}></slot>
         </div>
@@ -70,10 +69,9 @@ export class LkCard extends LitElement {
         </div>
 
         <div
-          class="flex items-center border-t border-border bg-muted/50 p-(--card-spacing) ${this
-            .hasFooter
-            ? ""
-            : "hidden"}"
+          class="flex items-center border-t border-border bg-muted/50 p-(--card-spacing) ${
+            this.hasFooter ? "" : "hidden"
+          }"
         >
           <slot name="footer" @slotchange=${this.#slotChanged}></slot>
         </div>

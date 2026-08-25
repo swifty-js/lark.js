@@ -17,7 +17,13 @@ declare module "@lark.js/mvc/jsx-runtime" {
   namespace JSX {
     interface IntrinsicElements {
       "lk-button": HTMLAttributes<HTMLElement> & {
-        variant?: "default" | "outline" | "secondary" | "ghost" | "destructive" | "link";
+        variant?:
+          | "default"
+          | "outline"
+          | "secondary"
+          | "ghost"
+          | "destructive"
+          | "link";
         size?: "sm" | "default" | "lg";
         type?: "button" | "submit" | "reset";
         disabled?: boolean;

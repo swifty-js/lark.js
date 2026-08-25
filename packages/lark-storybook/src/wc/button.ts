@@ -15,12 +15,7 @@ import { ifDefined } from "lit/directives/if-defined.js";
 import { tailwindStyles } from "./tailwind-styles";
 
 export type LkButtonVariant =
-  | "default"
-  | "outline"
-  | "secondary"
-  | "ghost"
-  | "destructive"
-  | "link";
+  "default" | "outline" | "secondary" | "ghost" | "destructive" | "link";
 
 export type LkButtonSize = "sm" | "default" | "lg";
 

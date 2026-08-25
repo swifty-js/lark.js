@@ -8,14 +8,17 @@ import EditorPage from "@/components/editor-page";
 import HelpPage from "@/components/help-page";
 import NotFoundPage from "@/components/not-found-page";
 
-const router = createRouter([
-  { path: "/", component: PlazaPage },
-  { path: "/plaza", component: PlazaPage },
-  { path: "/projects", component: ProjectsPage },
-  { path: "/editor", component: EditorPage },
-  { path: "/help", component: HelpPage },
-  { path: "*", component: NotFoundPage },
-]);
+const router = createRouter(
+  [
+    { path: "/", component: PlazaPage },
+    { path: "/plaza", component: PlazaPage },
+    { path: "/projects", component: ProjectsPage },
+    { path: "/editor", component: EditorPage },
+    { path: "/help", component: HelpPage },
+    { path: "*", component: NotFoundPage },
+  ],
+  { basename: "lark.js" },
+);
 
 async function enableMocking(): Promise<void> {
   if (import.meta.env.VITE_API_BASE) return;

@@ -24,8 +24,3 @@ export function signal<T>(initial: T): Signal<T> {
     },
   };
 }
-
-export function effect(fn: () => void): () => void {
-  fn();
-  return () => {};
-}

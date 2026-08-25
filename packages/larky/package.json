@@ -89,7 +89,7 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@vue/reactivity": "^3.5.0"
+    "@vue/reactivity": "^3.5.41"
   },
   "devDependencies": {
     "@types/node": "^24.13.3",

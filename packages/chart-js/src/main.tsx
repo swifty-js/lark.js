@@ -28,7 +28,7 @@ const router = createRouter([
     path: "*",
     component: () => <cp-not-found-page activePath="*" />,
   },
-]);
+], { basename: "lark.js" });
 
 async function enableMocking(): Promise<void> {
   if (import.meta.env.PROD) return;

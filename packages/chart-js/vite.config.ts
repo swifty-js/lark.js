@@ -25,6 +25,7 @@ function copy404(): Plugin {
 }
 
 export default defineConfig({
+  base: "lark.js",
   plugins: [larkMvcPlugin(), tailwindcss(), copy404()],
   resolve: {
     alias: {

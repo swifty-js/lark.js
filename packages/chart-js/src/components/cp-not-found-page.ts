@@ -19,7 +19,7 @@ export class CpNotFoundPage extends CpElement {
         class="relative flex min-h-[70vh] flex-col items-center justify-center px-6 text-center"
       >
         <div
-          class="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,var(--color-border)_1px,transparent_1px),linear-gradient(to_bottom,var(--color-border)_1px,transparent_1px)] [mask-image:radial-gradient(ellipse_80%_60%_at_50%_0%,black_30%,transparent_75%)] bg-[size:32px_32px] opacity-50"
+          class="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,var(--color-border)_1px,transparent_1px),linear-gradient(to_bottom,var(--color-border)_1px,transparent_1px)] mask-[radial-gradient(ellipse_80%_60%_at_50%_0%,black_30%,transparent_75%)] bg-size-[32px_32px] opacity-50"
         ></div>
         <p data-anim class="text-brand text-8xl font-bold tracking-tighter">
           404

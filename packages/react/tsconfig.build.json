@@ -15,7 +15,10 @@
     "skipLibCheck": true,
     "isolatedModules": true,
     "sourceMap": false,
-    "types": ["node"]
+    "types": ["node"],
+    "paths": {
+      "@/*": ["./src/*"],
+    }
   },
   "include": ["src"]
 }

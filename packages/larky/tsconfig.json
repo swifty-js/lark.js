@@ -6,7 +6,11 @@
     "exactOptionalPropertyTypes": false,
     "isolatedModules": true,
     "noEmit": true,
-    "lib": ["esnext", "DOM", "DOM.Iterable"],
+    "lib": [
+      "esnext",
+      "DOM",
+      "DOM.Iterable"
+    ],
     "module": "esnext",
     "moduleDetection": "force",
     "moduleResolution": "bundler",
@@ -18,10 +22,18 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "paths": {
-      "@/*": ["./src/*"],
-      "@lark.js/larky/jsx-dev-runtime": ["./src/jsx-dev-runtime.ts"],
-      "@lark.js/larky/jsx-runtime": ["./src/jsx-runtime.ts"],
-      "@lark.js/larky": ["./src/index.ts"]
+      "@lark.js/larky/jsx-dev-runtime": [
+        "./src/jsx-dev-runtime.ts"
+      ],
+      "@lark.js/larky/jsx-runtime": [
+        "./src/jsx-runtime.ts"
+      ],
+      "@lark.js/larky": [
+        "./src/index.ts"
+      ],
+      "@/*": [
+        "./src/*"
+      ],
     },
     "allowJs": true,
     "rootDir": "./",
@@ -29,7 +41,10 @@
     "sourceMap": true,
     "strict": true,
     "target": "esnext",
-    "types": ["node", "vitest/globals"],
+    "types": [
+      "node",
+      "vitest/globals"
+    ],
     "jsx": "react-jsx",
     "jsxImportSource": "@lark.js/larky",
     "verbatimModuleSyntax": true
@@ -37,9 +52,8 @@
   "include": [
     "src/**/*.ts",
     "src/**/*.tsx",
-    "tests/**/*.test.ts",
-    "tests/**/*.test.tsx",
-    "tests/helpers.ts",
+    "tests/**/*.ts",
+    "tests/**/*.tsx",
     "tsup.config.ts",
     "vitest.config.ts"
   ]

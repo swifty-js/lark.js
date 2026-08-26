@@ -1,8 +1,7 @@
-import { render } from "@lark.js/react";
+import { createRouter, render } from "@lark.js/react";
 import "./style.css";
 import { useAuthStore } from "./lib/auth-store";
 import Layout from "./layout";
-import { createRouter } from "./lib/router";
 
 const router = createRouter(
   [
@@ -25,7 +24,7 @@ const router = createRouter(
       component: () => <wc-not-found-page activePath="*" />,
     },
   ],
-  { basename: "lark.js" },
+  { basename: "/lark.js" },
 );
 
 async function enableMocking(): Promise<void> {

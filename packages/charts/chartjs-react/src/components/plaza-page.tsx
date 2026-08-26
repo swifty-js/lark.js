@@ -48,7 +48,7 @@ function buildGroups(charts: ChartItem[]): ChartGroup[] {
  * Chart Plaza — community chart gallery with type filter chips, category
  * sections, and a preview dialog. Data loads from `/api/charts/home`.
  */
-export default function PlazaPage({ navigate: _navigate }: { navigate: (to: string) => void }) {
+export default function PlazaPage() {
   const [charts, setCharts] = useState<ChartItem[]>([]);
   const [groups, setGroups] = useState<ChartGroup[]>([]);
   const [loading, setLoading] = useState(true);

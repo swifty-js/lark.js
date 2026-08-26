@@ -1,8 +1,9 @@
-import { useEffect, useRef } from "@lark.js/react";
+import { useEffect, useRef, useRouter } from "@lark.js/react";
 import { Icon } from "@/components/Icon";
 import { animateIn } from "@/lib/anim";
 
-export default function NotFoundPage({ navigate }: { navigate: (to: string) => void }) {
+export default function NotFoundPage() {
+  const { navigate } = useRouter();
   const rootRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {

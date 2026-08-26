@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "@lark.js/react";
+import { useEffect, useMemo, useRef, useRouter, useState } from "@lark.js/react";
 import { Icon } from "@/components/Icon";
 import * as monaco from "monaco-editor";
 import { Chart, registerables, type ChartConfiguration } from "chart.js/auto";
@@ -59,9 +59,10 @@ function evalChartCode(
 /**
  * Visual chart editor: left panel (visual config / Monaco code / data
  * grid), right side live chart.js preview. Navigation back to projects is
- * a `navigate` call.
+ * a `useRouter().navigate` call.
  */
-export default function EditorPage({ navigate }: { navigate: (to: string) => void }) {
+export default function EditorPage() {
+  const { navigate } = useRouter();
   const params = useMemo(() => new URLSearchParams(window.location.search), []);
   const projectId = params.get("projectId") || "";
   const chartIdParam = params.get("chartId") || "";

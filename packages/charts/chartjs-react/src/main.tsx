@@ -1,15 +1,29 @@
-import { createRoot } from "@lark.js/react";
+import { createRoot, createRouter } from "@lark.js/react";
 import "./style.css";
-import { createRouter } from "@/lib/router";
 import { useAuthStore } from "@/lib/auth-store";
 import Layout from "@/layout";
+import PlazaPage from "@/components/plaza-page";
+import ProjectsPage from "@/components/projects-page";
+import EditorPage from "@/components/editor-page";
+import HelpPage from "@/components/help-page";
+import NotFoundPage from "@/components/not-found-page";
 
 /**
  * lark-react owns routing and the whole tree (function components end to
- * end — no Lit). The router is a plain external store; Layout subscribes
- * via useRouter and renders the matching page.
+ * end — no Lit). Routing is @lark.js/react's history router: pages navigate
+ * via `useRouter().navigate`, Layout renders the match through <RouterView/>.
  */
-export const router = createRouter("lark.js");
+export const router = createRouter(
+  [
+    { path: "/", component: PlazaPage },
+    { path: "/plaza", component: PlazaPage },
+    { path: "/projects", component: ProjectsPage },
+    { path: "/editor", component: EditorPage },
+    { path: "/help", component: HelpPage },
+    { path: "*", component: NotFoundPage },
+  ],
+  { basename: "/lark.js" },
+);
 
 async function enableMocking(): Promise<void> {
   // The GitHub Pages deploy has no real backend, so mock whenever

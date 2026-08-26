@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "@lark.js/react";
+import { useEffect, useRef, useRouter, useState } from "@lark.js/react";
 import { Icon } from "@/components/Icon";
 import { animateIn } from "@/lib/anim";
 import type { IconName } from "@/lib/icons";
@@ -74,7 +74,8 @@ const SECTIONS: HelpSection[] = [
   },
 ];
 
-export default function HelpPage({ navigate }: { navigate: (to: string) => void }) {
+export default function HelpPage() {
+  const { navigate } = useRouter();
   const initial = new URLSearchParams(window.location.search).get("section") || "start";
   const [activeKey, setActiveKey] = useState(
     SECTIONS.find((s) => s.key === initial)?.key || SECTIONS[0].key,

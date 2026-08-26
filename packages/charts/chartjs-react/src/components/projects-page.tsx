@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "@lark.js/react";
+import { useEffect, useRef, useRouter, useState } from "@lark.js/react";
 import { Icon } from "@/components/Icon";
 import {
   listProjectsApi,
@@ -16,9 +16,11 @@ import type { Children } from "@lark.js/react";
 
 /**
  * My Projects — project sidebar + chart grid with new-project and
- * clone-chart dialogs. Navigation to the editor is a `navigate` call.
+ * clone-chart dialogs. Navigation to the editor is a `useRouter().navigate`
+ * call.
  */
-export default function ProjectsPage({ navigate }: { navigate: (to: string) => void }) {
+export default function ProjectsPage() {
+  const { navigate } = useRouter();
   const { loggedIn } = useStore(useAuthStore);
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [current, setCurrent] = useState<ProjectSummary | null>(null);

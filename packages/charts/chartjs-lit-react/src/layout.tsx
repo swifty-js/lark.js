@@ -1,33 +1,30 @@
-import { useState, useEffect, useRef } from "@lark.js/react";
-import type { RouterApi } from "@/lib/router";
+import { RouterView, useEffect, useRef, useRouter } from "@lark.js/react";
+import type { RouterApi } from "@lark.js/react";
 import "@/components";
 
+/**
+ * App shell over @lark.js/react's router: useRouter subscribes this
+ * component to navigation, <RouterView/> renders the matched Lit page.
+ * Lit components request navigation through the `nav-request` CustomEvent
+ * bridge (they cannot call the router hook themselves).
+ */
 export default function Layout({ router }: { router: RouterApi }) {
-  const [currentPath, setCurrentPath] = useState(router.location.value.pathname);
+  const { location } = useRouter(router);
+  const currentPath = location.pathname;
   const shell = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    const off = router.location.subscribe(() => {
-      setCurrentPath(router.location.value.pathname);
-    });
-    return off;
-  }, [router]);
 
   useEffect(() => {
     const el = shell.current;
     if (!el) return;
     const onNav = (e: Event) => {
       const path = (e as CustomEvent<string>).detail;
-      if (typeof path === "string") router.navigate(path);
+      if (typeof path === "string") void router.navigate(path);
     };
     el.addEventListener("nav-request", onNav);
     return () => el.removeEventListener("nav-request", onNav);
   }, [router]);
 
   const isEditor = currentPath === "/editor";
-
-  const route =
-    router.routes.find((r) => r.path === currentPath) ?? router.routes.find((r) => r.path === "*");
 
   return (
     <div
@@ -37,7 +34,7 @@ export default function Layout({ router }: { router: RouterApi }) {
       <wc-header activePath={currentPath} />
 
       <main className={`min-h-0 flex-1 ${isEditor ? "flex flex-col overflow-hidden" : ""}`}>
-        {route ? route.component() : null}
+        <RouterView router={router} />
       </main>
 
       {!isEditor && <wc-footer />}

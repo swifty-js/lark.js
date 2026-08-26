@@ -79,17 +79,11 @@ rejections. Under Module Federation, share `@lark.js/larky` as a singleton
 
 ## Package build & typecheck conventions (packages/larky)
 
-- `pnpm build` = `tsup && tsc -p tsconfig.dist.json` — ESM+CJS dual build,
+- `pnpm build` = `tsup` — ESM+CJS dual build,
   6 entries, `client.d.ts` copied on process exit; the trailing step is the
   **consumer-view dist typecheck**.
 - `pnpm typecheck` = dev tsconfig (src + tests, `@ts-expect-error`
   assertions enforced) + build tsconfig.
-- `pnpm typecheck:dist` = `tests-dist/smoke.tsx` compiled with `paths`
-  mapping `@lark.js/larky` → `./dist/*.d.ts`. This catches
-  **d.ts-flattening regressions** that src-path checking cannot (e.g. the
-  historical `JSX.IntrinsicElements extends JSX.IntrinsicElements`
-  self-reference that emptied the tag table for consumers). Keep this step
-  green whenever touching `dom-types.ts`, `jsx-runtime.ts`, or tsup config.
 - Tests: vitest + jsdom; `await nextTick()` after writes; `stripAnchors()`
   helper removes `<!---->` end-anchors from innerHTML snapshots.
 

@@ -1,21 +1,12 @@
 import { defineConfig } from "tsup";
-import { copyFileSync, mkdirSync } from "node:fs";
-import { join, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
-
-const root = dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
-  entry: [
-  ],
+  entry: ["src/index.ts", "src/theme.ts", "src/element.ts"],
   clean: true,
   dts: true,
-  format: ["esm", "cjs"],
+  format: ["esm"],
+  splitting: true,
   minify: false,
   sourcemap: false,
-  external: [
-  ],
   tsconfig: "./tsconfig.build.json",
-  onSuccess: async () => {
-  },
 });

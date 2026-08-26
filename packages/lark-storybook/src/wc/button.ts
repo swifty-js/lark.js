@@ -1,5 +1,5 @@
 /**
- * `<lk-button>` — Lit button styled with Tailwind utilities (see README.md
+ * `<wc-button>` — Lit button styled with Tailwind utilities (see README.md
  * for the reference recipe).
  *
  * Host handling: Tailwind classes live on the INNER <button>/<a> — the host
@@ -40,7 +40,7 @@ const SIZES: Record<LkButtonSize, string> = {
   lg: "h-9 gap-1.5 rounded-lg px-3",
 };
 
-@customElement("lk-button")
+@customElement("wc-button")
 export class LkButton extends LitElement {
   static override shadowRootOptions = {
     ...LitElement.shadowRootOptions,
@@ -106,6 +106,6 @@ export class LkButton extends LitElement {
 
 declare global {
   interface HTMLElementTagNameMap {
-    "lk-button": LkButton;
+    "wc-button": LkButton;
   }
 }

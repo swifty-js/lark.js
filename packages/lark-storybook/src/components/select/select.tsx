@@ -1,5 +1,5 @@
 /**
- * Select — wraps the `<lk-select>` web component as a controlled field.
+ * Select — wraps the `<wc-select>` web component as a controlled field.
  *
  * `options` is a real array arg; the web component's Lit Array converter
  * expects a JSON attribute, so the body serialises it (`JSON.stringify`) —
@@ -38,7 +38,7 @@ export default function Select(props: SelectProps) {
       <span class="text-xs font-medium tracking-wider text-muted-foreground uppercase">
         {props.label ?? "Select"}
       </span>
-      <lk-select
+      <wc-select
         class="w-full"
         options={JSON.stringify(options)}
         value={value.value}
@@ -46,7 +46,7 @@ export default function Select(props: SelectProps) {
         disabled={props.disabled ?? false}
         size={props.size === "sm" ? "sm" : "default"}
         onChange={change}
-      ></lk-select>
+      ></wc-select>
       <span class="font-mono text-xs text-muted-foreground">
         selected: {value.value === "" ? "—" : value.value}
       </span>

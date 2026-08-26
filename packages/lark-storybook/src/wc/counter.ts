@@ -1,5 +1,5 @@
 /**
- * `<lk-counter>` — Lit counter card composing `<lk-button>`, styled with
+ * `<wc-counter>` — Lit counter card composing `<wc-button>`, styled with
  * Tailwind utilities.
  *
  * Controlled-friendly: `value` is a plain attribute/property; every button
@@ -17,7 +17,7 @@ import { customElement, property } from "lit/decorators.js";
 import { tailwindStyles } from "./tailwind-styles";
 import "./button";
 
-@customElement("lk-counter")
+@customElement("wc-counter")
 export class LkCounter extends LitElement {
   static override styles = [
     tailwindStyles,
@@ -66,27 +66,27 @@ export class LkCounter extends LitElement {
         </div>
 
         <div class="flex gap-1.5" role="group" aria-label="Counter actions">
-          <lk-button
+          <wc-button
             variant="outline"
             size="sm"
             @click=${() => this.#set(this.value - this.step)}
           >
             &minus;&nbsp;${this.step}
-          </lk-button>
-          <lk-button
+          </wc-button>
+          <wc-button
             variant="ghost"
             size="sm"
             @click=${() => this.#set(this.initial)}
           >
             Reset
-          </lk-button>
-          <lk-button
+          </wc-button>
+          <wc-button
             variant="default"
             size="sm"
             @click=${() => this.#set(this.value + this.step)}
           >
             +&nbsp;${this.step}
-          </lk-button>
+          </wc-button>
         </div>
       </div>
     `;
@@ -95,6 +95,6 @@ export class LkCounter extends LitElement {
 
 declare global {
   interface HTMLElementTagNameMap {
-    "lk-counter": LkCounter;
+    "wc-counter": LkCounter;
   }
 }

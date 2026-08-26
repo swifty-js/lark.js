@@ -10,7 +10,7 @@ export interface ButtonProps {
   onClick?: (data: { clicks: number }) => void;
 }
 
-/** Lark prop names → `<lk-button>` attribute values. */
+/** Lark prop names → `<wc-button>` attribute values. */
 const variantMap = {
   primary: "default",
   secondary: "secondary",
@@ -41,7 +41,7 @@ export default function Button(props: ButtonProps) {
   const variant = variantMap[props.variant ?? "primary"];
   const size = sizeMap[props.size ?? "md"];
   return (
-    <lk-button
+    <wc-button
       class="inline-block"
       type="button"
       variant={variant}
@@ -50,6 +50,6 @@ export default function Button(props: ButtonProps) {
       onClick={press}
     >
       {props.label ?? "Button"}
-    </lk-button>
+    </wc-button>
   );
 }

@@ -8,7 +8,7 @@
  * callback that forwards to this component's own `onSelect` prop — plain
  * callback composition, React style.
  *
- * The `<lk-card>` web component provides `header` / `footer` slots; the
+ * The `<wc-card>` web component provides `header` / `footer` slots; the
  * slotted elements here are ordinary light DOM styled with inline Tailwind
  * utilities, reconciled in place by lark.
  *
@@ -55,7 +55,7 @@ export default function UserCard(props: UserCardProps) {
   const tags = Array.isArray(props.tags) ? props.tags : [];
   const initials = initialsOf(user);
   return (
-    <lk-card class="block w-75">
+    <wc-card class="block w-75">
       <div slot="header" class="flex items-center gap-3">
         <div
           class="flex size-11 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground"
@@ -69,14 +69,14 @@ export default function UserCard(props: UserCardProps) {
         </div>
       </div>
 
-      <lk-button
+      <wc-button
         class="font-mono"
         href={`mailto:${user.email}`}
         variant="link"
         size="sm"
       >
         {user.email}
-      </lk-button>
+      </wc-button>
 
       <div slot="footer" class="w-full">
         <TagList
@@ -86,6 +86,6 @@ export default function UserCard(props: UserCardProps) {
           }
         />
       </div>
-    </lk-card>
+    </wc-card>
   );
 }

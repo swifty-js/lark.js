@@ -1,5 +1,5 @@
 /**
- * `<lk-card>` — Lit card styled with Tailwind utilities (see README.md for
+ * `<wc-card>` — Lit card styled with Tailwind utilities (see README.md for
  * the reference recipe).
  *
  * Slots: default (content), `header`, `footer`. Shadow CSS cannot see
@@ -17,7 +17,7 @@ import { tailwindStyles } from "./tailwind-styles";
 
 export type LkCardSize = "default" | "sm";
 
-@customElement("lk-card")
+@customElement("wc-card")
 export class LkCard extends LitElement {
   static override styles = [
     tailwindStyles,
@@ -82,6 +82,6 @@ export class LkCard extends LitElement {
 
 declare global {
   interface HTMLElementTagNameMap {
-    "lk-card": LkCard;
+    "wc-card": LkCard;
   }
 }

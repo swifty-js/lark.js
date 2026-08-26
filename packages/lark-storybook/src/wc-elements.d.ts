@@ -1,5 +1,5 @@
 /**
- * `lk-*` custom-element registrations for Lark JSX.
+ * `wc-*` custom-element registrations for Lark JSX.
  *
  * `JSX.IntrinsicElements` is strict — unknown tags are compile errors — so
  * the local Lit components (src/wc) are registered here via module
@@ -16,7 +16,7 @@ import type { HTMLAttributes } from "@lark.js/mvc";
 declare module "@lark.js/mvc/jsx-runtime" {
   namespace JSX {
     interface IntrinsicElements {
-      "lk-button": HTMLAttributes<HTMLElement> & {
+      "wc-button": HTMLAttributes<HTMLElement> & {
         variant?:
           | "default"
           | "outline"
@@ -29,10 +29,10 @@ declare module "@lark.js/mvc/jsx-runtime" {
         disabled?: boolean;
         href?: string;
       };
-      "lk-card": HTMLAttributes<HTMLElement> & {
+      "wc-card": HTMLAttributes<HTMLElement> & {
         size?: "default" | "sm";
       };
-      "lk-select": HTMLAttributes<HTMLElement> & {
+      "wc-select": HTMLAttributes<HTMLElement> & {
         /** JSON array of `string | { label, value }` (Lit Array converter). */
         options?: string;
         value?: string;
@@ -40,7 +40,7 @@ declare module "@lark.js/mvc/jsx-runtime" {
         size?: "sm" | "default";
         disabled?: boolean;
       };
-      "lk-counter": HTMLAttributes<HTMLElement> & {
+      "wc-counter": HTMLAttributes<HTMLElement> & {
         label?: string;
         value?: number;
         step?: number;

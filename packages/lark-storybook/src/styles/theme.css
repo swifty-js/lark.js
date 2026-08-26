@@ -2,7 +2,7 @@
  * Design tokens shared by BOTH Tailwind pipelines:
  *
  * - `global.css` — light-DOM styles (lark components' *.module.css `@apply`)
- * - `wc/tailwind.css` — the stylesheet adopted into every `lk-*` shadow root
+ * - `wc/tailwind.css` — the stylesheet adopted into every `wc-*` shadow root
  *
  * shadcn-style zinc palette (see README.md for the reference component
  * recipes these tokens back).

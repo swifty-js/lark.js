@@ -1,7 +1,7 @@
 /**
  * Counter — internal signal state next to Storybook-controlled props.
  *
- * The `<lk-counter>` web component is CONTROLLED here: its `value` attribute
+ * The `<wc-counter>` web component is CONTROLLED here: its `value` attribute
  * is pushed from the `count` signal, and its composed `change` CustomEvent
  * writes back. Tweaking the `step` control does NOT reset `count`: larkRender
  * re-renders the same component instance (the reconciler pushes changed props
@@ -30,13 +30,13 @@ export default function Counter(props: CounterProps) {
   };
 
   return (
-    <lk-counter
+    <wc-counter
       class="inline-flex"
       label={props.label ?? "Counter"}
       value={count.value}
       step={props.step ?? 1}
       initial={props.initialCount ?? 0}
       onChange={change}
-    ></lk-counter>
+    ></wc-counter>
   );
 }

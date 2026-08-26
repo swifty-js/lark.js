@@ -1,5 +1,5 @@
 /**
- * `<lk-select>` — Lit select styled with Tailwind utilities (trigger recipe
+ * `<wc-select>` — Lit select styled with Tailwind utilities (trigger recipe
  * from README.md, backed by a native <select> for the popup).
  *
  * `options` uses Lit's Array converter, so lark passes it as a JSON string
@@ -28,7 +28,7 @@ const SIZES: Record<LkSelectSize, string> = {
   default: "h-8 rounded-lg",
 };
 
-@customElement("lk-select")
+@customElement("wc-select")
 export class LkSelect extends LitElement {
   static override shadowRootOptions = {
     ...LitElement.shadowRootOptions,
@@ -125,6 +125,6 @@ export class LkSelect extends LitElement {
 
 declare global {
   interface HTMLElementTagNameMap {
-    "lk-select": LkSelect;
+    "wc-select": LkSelect;
   }
 }

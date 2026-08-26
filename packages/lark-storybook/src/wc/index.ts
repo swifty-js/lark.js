@@ -1,5 +1,5 @@
 /**
- * Registers all `lk-*` custom elements (importing a component module defines
+ * Registers all `wc-*` custom elements (importing a component module defines
  * it via the `@customElement` decorator) and re-exports the classes.
  *
  * Imported once for side effects from `.storybook/preview.ts`.

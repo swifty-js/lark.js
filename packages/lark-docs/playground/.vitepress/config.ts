@@ -6,6 +6,7 @@ export default defineDocsConfig({
   description: "@lark.js/docs playground",
   srcDir: "docs",
   vite: {
+    // @ts-expect-error
     plugins: [tailwindcss()],
   },
 });

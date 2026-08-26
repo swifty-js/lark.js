@@ -220,3 +220,4 @@ dist-docs
 
 **/dist-app
 
+packages/lark-docs/playground/.vitepress/cache

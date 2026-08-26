@@ -1,12 +1,7 @@
-import {
-  html,
-  LitElement,
-  type PropertyValues,
-  type TemplateResult,
-} from "lit";
+import { html, LitElement, type PropertyValues, type TemplateResult } from "lit";
 import { unsafeHTML } from "lit/directives/unsafe-html.js";
 
-const TAG = "wc-mermaid";
+const MERMAID_TAG = "wc-mermaid";
 
 let instanceSeq = 0;
 let renderSeq = 0;
@@ -15,7 +10,7 @@ function isDark(): boolean {
   return document.documentElement.classList.contains("dark");
 }
 
-export class MermaidElement extends LitElement {
+export class WcMermaid extends LitElement {
   static override properties = {
     graph: { type: String },
     svg: { state: true },
@@ -26,7 +21,7 @@ export class MermaidElement extends LitElement {
   declare svg: string;
   declare error: string;
 
-  private readonly instanceId = `${TAG}-${++instanceSeq}`;
+  private readonly instanceId = `${MERMAID_TAG}-${++instanceSeq}`;
   private renderToken = 0;
   private renderedDark: boolean | undefined;
   private observer: MutationObserver | undefined;
@@ -78,10 +73,7 @@ export class MermaidElement extends LitElement {
         startOnLoad: false,
         theme: dark ? "dark" : "default",
       });
-      const { svg } = await mermaid.render(
-        `${this.instanceId}-${++renderSeq}`,
-        code,
-      );
+      const { svg } = await mermaid.render(`${this.instanceId}-${++renderSeq}`, code);
       if (token !== this.renderToken) return;
       this.renderedDark = dark;
       this.svg = svg;
@@ -95,27 +87,22 @@ export class MermaidElement extends LitElement {
 
   protected override render(): TemplateResult {
     if (this.error) {
-      return html`<pre
-        class="overflow-x-auto text-sm text-[var(--vp-c-danger-1)]"
-      >${this.error}</pre>`;
+      return html`<pre class="overflow-x-auto text-sm text-[var(--vp-c-danger-1)]">
+${this.error}</pre>`;
     }
     if (!this.svg) {
-      return html`<p class="text-sm text-[var(--vp-c-text-2)]">
-        Mermaid loading...
-      </p>`;
+      return html`<p class="text-sm text-[var(--vp-c-text-2)]">Mermaid loading...</p>`;
     }
-    return html`<div class="flex justify-center overflow-x-auto">
-      ${unsafeHTML(this.svg)}
-    </div>`;
+    return html`<div class="flex justify-center overflow-x-auto">${unsafeHTML(this.svg)}</div>`;
   }
 }
 
-if (!customElements.get(TAG)) {
-  customElements.define(TAG, MermaidElement);
+if (!customElements.get(MERMAID_TAG)) {
+  customElements.define(MERMAID_TAG, WcMermaid);
 }
 
 declare global {
   interface HTMLElementTagNameMap {
-    "wc-mermaid": MermaidElement;
+    "wc-mermaid": WcMermaid;
   }
 }

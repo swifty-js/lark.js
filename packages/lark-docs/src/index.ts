@@ -1,20 +1,15 @@
 import { readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
-import {
-  defineConfig,
-  type DefaultTheme,
-  type MarkdownRenderer,
-  type UserConfig,
-} from "vitepress";
+import { defineConfig, type DefaultTheme, type MarkdownRenderer, type UserConfig } from "vitepress";
 
 const PKG = "@lark.js/docs";
+
 const MERMAID_TAG = "wc-mermaid";
+
 const EXCLUDED_DIRS = new Set(["node_modules", "dist", "public"]);
 
 function listEntries(dir: string) {
-  return readdirSync(dir, { withFileTypes: true }).filter(
-    (entry) => !entry.name.startsWith("."),
-  );
+  return readdirSync(dir, { withFileTypes: true }).filter((entry) => !entry.name.startsWith("."));
 }
 
 function getShallowDirs(docsDir: string): string[] {
@@ -50,17 +45,9 @@ function buildItems(docsDir: string, dir: string): DefaultTheme.SidebarItem[] {
     });
 }
 
-function buildNavItems(
-  docsDir: string,
-  dir: string,
-): DefaultTheme.NavItemWithLink[] {
+function buildNavItems(docsDir: string, dir: string): DefaultTheme.NavItemWithLink[] {
   return listEntries(join(docsDir, dir))
-    .filter(
-      (entry) =>
-        entry.isFile() &&
-        entry.name.endsWith(".md") &&
-        entry.name !== "index.md",
-    )
+    .filter((entry) => entry.isFile() && entry.name.endsWith(".md") && entry.name !== "index.md")
     .map((entry) => entry.name)
     .sort((a, b) => a.localeCompare(b))
     .map((fileName) => {
@@ -120,8 +107,7 @@ export function defineDocsConfig(
   const docsDir = resolve(process.cwd(), config.srcDir ?? ".");
 
   const userMarkdownConfig = config.markdown?.config;
-  const userIsCustomElement =
-    config.vue?.template?.compilerOptions?.isCustomElement;
+  const userIsCustomElement = config.vue?.template?.compilerOptions?.isCustomElement;
   const userVite = config.vite ?? {};
 
   return defineConfig({
@@ -144,8 +130,7 @@ export function defineDocsConfig(
         ...config.vue?.template,
         compilerOptions: {
           ...config.vue?.template?.compilerOptions,
-          isCustomElement: (tag) =>
-            tag === MERMAID_TAG || (userIsCustomElement?.(tag) ?? false),
+          isCustomElement: (tag) => tag === MERMAID_TAG || (userIsCustomElement?.(tag) ?? false),
         },
       },
     },
@@ -157,9 +142,7 @@ export function defineDocsConfig(
       },
       ssr: {
         ...userVite.ssr,
-        noExternal: withPkgNoExternal(
-          userVite.ssr?.noExternal as NoExternal | undefined,
-        ),
+        noExternal: withPkgNoExternal(userVite.ssr?.noExternal as NoExternal | undefined),
       },
     },
   });

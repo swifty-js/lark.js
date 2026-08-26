@@ -30,20 +30,23 @@ export default defineConfig({
   },
   resolve: {
     alias: {
+      "@": fileURLToPath(
+        new URL("./src", import.meta.url),
+      ),
       "@lark.js/react/jsx-dev-runtime": fileURLToPath(
-        new URL("./lib/jsx-dev-runtime.ts", import.meta.url),
+        new URL("./src/jsx-dev-runtime.ts", import.meta.url),
       ),
       "@lark.js/react/jsx-runtime": fileURLToPath(
-        new URL("./lib/jsx-runtime.ts", import.meta.url),
+        new URL("./src/jsx-runtime.ts", import.meta.url),
       ),
       "@lark.js/react/vite": fileURLToPath(
-        new URL("./lib/vite.ts", import.meta.url),
+        new URL("./src/vite.ts", import.meta.url),
       ),
       "@lark.js/react/webpack": fileURLToPath(
-        new URL("./lib/webpack.ts", import.meta.url),
+        new URL("./src/webpack.ts", import.meta.url),
       ),
       "@lark.js/react": fileURLToPath(
-        new URL("./lib/index.ts", import.meta.url),
+        new URL("./src/index.ts", import.meta.url),
       ),
     },
   },

@@ -9,7 +9,7 @@
     "declarationDir": "./dist",
     "declarationMap": false,
     "outDir": "./dist",
-    "rootDir": "./lib",
+    "rootDir": "./src",
     "strict": true,
     "noFallthroughCasesInSwitch": true,
     "skipLibCheck": true,
@@ -17,5 +17,5 @@
     "sourceMap": false,
     "types": ["node"]
   },
-  "include": ["lib"]
+  "include": ["src"]
 }

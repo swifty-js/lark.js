@@ -38,7 +38,7 @@
  * renders never pay the alias lookups.
  *
  * The swap function is exposed on `globalThis.__lark_react_hmr__` (registered
- * once at the package entry, lib/index.ts) so auto-injected HMR snippets
+ * once at the package entry, src/index.ts) so auto-injected HMR snippets
  * (see ./vite.ts) can call it WITHOUT importing "@lark.js/react" — under
  * Module Federation any import of a shared singleton inside an HMR callback
  * registers the module as a shared consumer, causing ChunkLoadError.

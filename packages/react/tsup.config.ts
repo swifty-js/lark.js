@@ -24,7 +24,7 @@ import { defineConfig } from "tsup";
 
 export default defineConfig([
   {
-    entry: ["lib/index.ts"],
+    entry: ["src/index.ts"],
     clean: true,
     dts: true,
     format: ["esm", "cjs"],
@@ -37,7 +37,7 @@ export default defineConfig([
     // self-contained file with no shared chunk extraction. shims: true
     // provides __filename in ESM output (LarkReactPlugin resolves the loader
     // path through it).
-    entry: ["lib/vite.ts", "lib/webpack.ts"],
+    entry: ["src/vite.ts", "src/webpack.ts"],
     dts: true,
     format: ["esm", "cjs"],
     minify: false,
@@ -50,7 +50,7 @@ export default defineConfig([
     // JSX automatic runtime — imported by compiled JSX modules
     // (jsxImportSource: "@lark.js/react"). Pure VNode factories, kept tiny so
     // the runtime doesn't drag the whole framework into consumer chunks.
-    entry: ["lib/jsx-runtime.ts", "lib/jsx-dev-runtime.ts"],
+    entry: ["src/jsx-runtime.ts", "src/jsx-dev-runtime.ts"],
     dts: true,
     format: ["esm", "cjs"],
     minify: false,

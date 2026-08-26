@@ -24,7 +24,7 @@ import { describe, expect, it } from "vitest";
 import {
   injectComponentHmrSnippet,
   isLarkComponentSource,
-} from "../lib/hmr-inject";
+} from "../src/hmr-inject";
 
 const component = `export default function App() {\n  return null;\n}\n`;
 

@@ -18,12 +18,12 @@
     "jsxImportSource": "@lark.js/react",
     "types": [],
     "paths": {
-      "@lark.js/react/jsx-dev-runtime": ["./lib/jsx-dev-runtime.ts"],
-      "@lark.js/react/jsx-runtime": ["./lib/jsx-runtime.ts"],
-      "@lark.js/react/vite": ["./lib/vite.ts"],
-      "@lark.js/react/webpack": ["./lib/webpack.ts"],
-      "@lark.js/react": ["./lib/index.ts"]
+      "@lark.js/react/jsx-dev-runtime": ["./src/jsx-dev-runtime.ts"],
+      "@lark.js/react/jsx-runtime": ["./src/jsx-runtime.ts"],
+      "@lark.js/react/vite": ["./src/vite.ts"],
+      "@lark.js/react/webpack": ["./src/webpack.ts"],
+      "@lark.js/react": ["./src/index.ts"]
     }
   },
-  "include": ["lib", "tests", "tsup.config.ts", "vitest.config.ts"]
+  "include": ["src", "tests", "tsup.config.ts", "vitest.config.ts"]
 }

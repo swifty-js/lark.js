@@ -39,6 +39,9 @@ export default defineConfig({
       "@lark.js/react/vite": fileURLToPath(
         new URL("./lib/vite.ts", import.meta.url),
       ),
+      "@lark.js/react/webpack": fileURLToPath(
+        new URL("./lib/webpack.ts", import.meta.url),
+      ),
       "@lark.js/react": fileURLToPath(
         new URL("./lib/index.ts", import.meta.url),
       ),

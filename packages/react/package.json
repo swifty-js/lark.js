@@ -50,6 +50,16 @@
         "default": "./dist/vite.cjs"
       }
     },
+    "./webpack": {
+      "import": {
+        "types": "./dist/webpack.d.ts",
+        "default": "./dist/webpack.js"
+      },
+      "require": {
+        "types": "./dist/webpack.d.cts",
+        "default": "./dist/webpack.cjs"
+      }
+    },
     "./jsx-runtime": {
       "import": {
         "types": "./dist/jsx-runtime.d.ts",

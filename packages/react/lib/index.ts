@@ -129,6 +129,28 @@ export function createRoot(container: Node): {
 export { createElement, Fragment };
 export { useCallback, useEffect, useMemo, useRef, useState };
 export { hotSwapByComponent };
+export { createStore, useStore } from "./store";
+export type { StoreApi } from "./store";
+export {
+  createRouter,
+  matchPath,
+  matchRoutes,
+  RouterView,
+  useBlocker,
+  useRouter,
+} from "./router";
+export type {
+  Blocker,
+  Location,
+  NavigateOptions,
+  RouteMatch,
+  RouteObject,
+  RouterApi,
+  RouterOptions,
+  To,
+} from "./router";
+export { useUrlState } from "./url-state";
+export type { SetUrlState } from "./url-state";
 export type {
   Children,
   ComponentType,

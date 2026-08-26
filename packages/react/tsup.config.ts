@@ -33,13 +33,16 @@ export default defineConfig([
     tsconfig: "./tsconfig.build.json",
   },
   {
-    // Vite plugin entry — splitting: false keeps the ESM output a single
-    // self-contained file with no shared chunk extraction.
-    entry: ["lib/vite.ts"],
+    // Bundler integrations — splitting: false keeps each ESM output a single
+    // self-contained file with no shared chunk extraction. shims: true
+    // provides __filename in ESM output (LarkReactPlugin resolves the loader
+    // path through it).
+    entry: ["lib/vite.ts", "lib/webpack.ts"],
     dts: true,
     format: ["esm", "cjs"],
     minify: false,
     splitting: false,
+    shims: true,
     sourcemap: false,
     tsconfig: "./tsconfig.build.json",
   },

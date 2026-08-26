@@ -21,6 +21,7 @@
       "@lark.js/react/jsx-dev-runtime": ["./lib/jsx-dev-runtime.ts"],
       "@lark.js/react/jsx-runtime": ["./lib/jsx-runtime.ts"],
       "@lark.js/react/vite": ["./lib/vite.ts"],
+      "@lark.js/react/webpack": ["./lib/webpack.ts"],
       "@lark.js/react": ["./lib/index.ts"]
     }
   },

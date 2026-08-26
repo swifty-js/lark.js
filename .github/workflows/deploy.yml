@@ -58,12 +58,12 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Build @lark.js/mvc
         run: pnpm --filter @lark.js/mvc build
-      - name: Build chart-js
-        run: pnpm --filter chart-js build
+      - name: Build chartjs-lit-mvc
+        run: pnpm --filter chartjs-lit-mvc build
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ./packages/chart-js/dist
+          path: ./packages/charts/chartjs-lit-mvc/dist
 
   deploy:
     environment:

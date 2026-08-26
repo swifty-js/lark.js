@@ -47,7 +47,8 @@ export { Fragment, raw };
 export type { Component, JSXNode, VNode };
 
 // Typed DOM attribute layer (per-tag props, native-event handler types,
-// aria/svg/mathml) — ported from Preact v10 and adapted to Lark semantics.
+// aria/svg/mathml) — sourced from the preact package and adapted to Lark
+// semantics.
 export type * from "./jsx/dom-types";
 
 /**
@@ -93,10 +94,11 @@ export declare namespace JSX {
     key?: string | number;
   }
   /**
-   * Per-tag typed intrinsic elements (HTML + SVG + MathML, ported from
-   * Preact v10) — strict: unknown tags are compile errors. The base is
+   * Per-tag typed intrinsic elements (HTML + SVG + MathML, sourced from the
+   * preact package) — strict: unknown tags are compile errors. The base is
    * referenced through the QUALIFIED name `JSXInternal.IntrinsicElements`
-   * (dts-flattening safe — see ./jsx/dom-types.ts). Register custom elements
+   * (dts-flattening safe — see ./jsx/dom-types.ts). Per-tag props are
+   * reachable as `JSX.IntrinsicElements["input"]`. Register custom elements
    * via module augmentation (declaration merging):
    *
    * ```ts
@@ -209,110 +211,6 @@ export declare namespace JSX {
     JSXInternal.AllHTMLAttributes<RefType>;
   export type HTMLAttributes<RefType extends EventTarget = EventTarget> =
     JSXInternal.HTMLAttributes<RefType>;
-  export type HTMLAttributeReferrerPolicy = JSXInternal.HTMLAttributeReferrerPolicy;
-  export type HTMLAttributeAnchorTarget = JSXInternal.HTMLAttributeAnchorTarget;
-  export type AnchorHTMLAttributes<T extends EventTarget = HTMLAnchorElement> =
-    JSXInternal.AnchorHTMLAttributes<T>;
-  export type AreaHTMLAttributes<T extends EventTarget = HTMLAreaElement> =
-    JSXInternal.AreaHTMLAttributes<T>;
-  export type AudioHTMLAttributes<T extends EventTarget = HTMLAudioElement> =
-    JSXInternal.AudioHTMLAttributes<T>;
-  export type BaseHTMLAttributes<T extends EventTarget = HTMLBaseElement> =
-    JSXInternal.BaseHTMLAttributes<T>;
-  export type BlockquoteHTMLAttributes<T extends EventTarget = HTMLQuoteElement> =
-    JSXInternal.BlockquoteHTMLAttributes<T>;
-  export type ButtonHTMLAttributes<T extends EventTarget = HTMLButtonElement> =
-    JSXInternal.ButtonHTMLAttributes<T>;
-  export type CanvasHTMLAttributes<T extends EventTarget = HTMLCanvasElement> =
-    JSXInternal.CanvasHTMLAttributes<T>;
-  export type ColHTMLAttributes<T extends EventTarget = HTMLTableColElement> =
-    JSXInternal.ColHTMLAttributes<T>;
-  export type ColgroupHTMLAttributes<T extends EventTarget = HTMLTableColElement> =
-    JSXInternal.ColgroupHTMLAttributes<T>;
-  export type DataHTMLAttributes<T extends EventTarget = HTMLDataElement> =
-    JSXInternal.DataHTMLAttributes<T>;
-  export type DelHTMLAttributes<T extends EventTarget = HTMLModElement> =
-    JSXInternal.DelHTMLAttributes<T>;
-  export type DetailsHTMLAttributes<T extends EventTarget = HTMLDetailsElement> =
-    JSXInternal.DetailsHTMLAttributes<T>;
-  export type DialogHTMLAttributes<T extends EventTarget = HTMLDialogElement> =
-    JSXInternal.DialogHTMLAttributes<T>;
-  export type EmbedHTMLAttributes<T extends EventTarget = HTMLEmbedElement> =
-    JSXInternal.EmbedHTMLAttributes<T>;
-  export type FieldsetHTMLAttributes<T extends EventTarget = HTMLFieldSetElement> =
-    JSXInternal.FieldsetHTMLAttributes<T>;
-  export type FormHTMLAttributes<T extends EventTarget = HTMLFormElement> =
-    JSXInternal.FormHTMLAttributes<T>;
-  export type IframeHTMLAttributes<T extends EventTarget = HTMLIFrameElement> =
-    JSXInternal.IframeHTMLAttributes<T>;
-  export type HTMLAttributeCrossOrigin = JSXInternal.HTMLAttributeCrossOrigin;
-  export type ImgHTMLAttributes<T extends EventTarget = HTMLImageElement> =
-    JSXInternal.ImgHTMLAttributes<T>;
-  export type HTMLInputTypeAttribute = JSXInternal.HTMLInputTypeAttribute;
-  export type InputHTMLAttributes<T extends EventTarget = HTMLInputElement> =
-    JSXInternal.InputHTMLAttributes<T>;
-  export type InsHTMLAttributes<T extends EventTarget = HTMLModElement> =
-    JSXInternal.InsHTMLAttributes<T>;
-  export type KeygenHTMLAttributes<T extends EventTarget = HTMLUnknownElement> =
-    JSXInternal.KeygenHTMLAttributes<T>;
-  export type LabelHTMLAttributes<T extends EventTarget = HTMLLabelElement> =
-    JSXInternal.LabelHTMLAttributes<T>;
-  export type LiHTMLAttributes<T extends EventTarget = HTMLLIElement> =
-    JSXInternal.LiHTMLAttributes<T>;
-  export type LinkHTMLAttributes<T extends EventTarget = HTMLLinkElement> =
-    JSXInternal.LinkHTMLAttributes<T>;
-  export type MapHTMLAttributes<T extends EventTarget = HTMLMapElement> =
-    JSXInternal.MapHTMLAttributes<T>;
-  export type MarqueeHTMLAttributes<T extends EventTarget = HTMLMarqueeElement> =
-    JSXInternal.MarqueeHTMLAttributes<T>;
-  export type MediaHTMLAttributes<T extends EventTarget = HTMLMediaElement> =
-    JSXInternal.MediaHTMLAttributes<T>;
-  export type MenuHTMLAttributes<T extends EventTarget = HTMLMenuElement> =
-    JSXInternal.MenuHTMLAttributes<T>;
-  export type MetaHTMLAttributes<T extends EventTarget = HTMLMetaElement> =
-    JSXInternal.MetaHTMLAttributes<T>;
-  export type MeterHTMLAttributes<T extends EventTarget = HTMLMeterElement> =
-    JSXInternal.MeterHTMLAttributes<T>;
-  export type ObjectHTMLAttributes<T extends EventTarget = HTMLObjectElement> =
-    JSXInternal.ObjectHTMLAttributes<T>;
-  export type OlHTMLAttributes<T extends EventTarget = HTMLOListElement> =
-    JSXInternal.OlHTMLAttributes<T>;
-  export type OptgroupHTMLAttributes<T extends EventTarget = HTMLOptGroupElement> =
-    JSXInternal.OptgroupHTMLAttributes<T>;
-  export type OptionHTMLAttributes<T extends EventTarget = HTMLOptionElement> =
-    JSXInternal.OptionHTMLAttributes<T>;
-  export type OutputHTMLAttributes<T extends EventTarget = HTMLOutputElement> =
-    JSXInternal.OutputHTMLAttributes<T>;
-  export type ParamHTMLAttributes<T extends EventTarget = HTMLParamElement> =
-    JSXInternal.ParamHTMLAttributes<T>;
-  export type ProgressHTMLAttributes<T extends EventTarget = HTMLProgressElement> =
-    JSXInternal.ProgressHTMLAttributes<T>;
-  export type QuoteHTMLAttributes<T extends EventTarget = HTMLQuoteElement> =
-    JSXInternal.QuoteHTMLAttributes<T>;
-  export type ScriptHTMLAttributes<T extends EventTarget = HTMLScriptElement> =
-    JSXInternal.ScriptHTMLAttributes<T>;
-  export type SelectHTMLAttributes<T extends EventTarget = HTMLSelectElement> =
-    JSXInternal.SelectHTMLAttributes<T>;
-  export type SlotHTMLAttributes<T extends EventTarget = HTMLSlotElement> =
-    JSXInternal.SlotHTMLAttributes<T>;
-  export type SourceHTMLAttributes<T extends EventTarget = HTMLSourceElement> =
-    JSXInternal.SourceHTMLAttributes<T>;
-  export type StyleHTMLAttributes<T extends EventTarget = HTMLStyleElement> =
-    JSXInternal.StyleHTMLAttributes<T>;
-  export type TableHTMLAttributes<T extends EventTarget = HTMLTableElement> =
-    JSXInternal.TableHTMLAttributes<T>;
-  export type TdHTMLAttributes<T extends EventTarget = HTMLTableCellElement> =
-    JSXInternal.TdHTMLAttributes<T>;
-  export type TextareaHTMLAttributes<T extends EventTarget = HTMLTextAreaElement> =
-    JSXInternal.TextareaHTMLAttributes<T>;
-  export type ThHTMLAttributes<T extends EventTarget = HTMLTableCellElement> =
-    JSXInternal.ThHTMLAttributes<T>;
-  export type TimeHTMLAttributes<T extends EventTarget = HTMLTimeElement> =
-    JSXInternal.TimeHTMLAttributes<T>;
-  export type TrackHTMLAttributes<T extends EventTarget = HTMLTrackElement> =
-    JSXInternal.TrackHTMLAttributes<T>;
-  export type VideoHTMLAttributes<T extends EventTarget = HTMLVideoElement> =
-    JSXInternal.VideoHTMLAttributes<T>;
   export type MathMLAttributes<Target extends EventTarget = MathMLElement> =
     JSXInternal.MathMLAttributes<Target>;
   export type AnnotationMathMLAttributes<T extends EventTarget> =

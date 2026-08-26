@@ -68,7 +68,7 @@ export type { JSXNode, VNode, RawHTML, Component } from "./jsx/vnode";
 
 // Typed DOM attribute layer (per-tag intrinsic props, native-event handler
 // types, `Signalish`/`Ref`/`ClassValue`/`CSSProperties`, aria/svg/mathml) —
-// ported from Preact v10 and adapted to Lark semantics.
+// sourced from the preact package and adapted to Lark semantics.
 export type * from "./jsx/dom-types";
 
 // The JSX namespace (React-19-style import): `import type { JSX } from

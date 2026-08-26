@@ -37,7 +37,9 @@ export default defineConfig([
     entry: ["src/index.ts"],
     clean: true,
     dts: {
-      resolve: true,
+      // Inline only signals-core types; keep `preact` as an external import —
+      // dts flatteners mangle its namespace-heavy JSX types (see dom-types.ts).
+      resolve: ["@preact/signals-core"],
     },
     format: ["esm", "cjs"],
     minify: false,

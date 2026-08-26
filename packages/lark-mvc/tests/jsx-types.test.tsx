@@ -71,6 +71,12 @@ describe("jsx types — per-tag attributes", () => {
     render(<div bogus={1} />, host);
     // @ts-expect-error — value is not a boolean-typed attribute
     render(<input value={true} />, host);
+    // @ts-expect-error — no dangerouslySetInnerHTML; raw() is the only trusted-HTML path
+    render(<div dangerouslySetInnerHTML={{ __html: "<b>x</b>" }} />, host);
+    // @ts-expect-error — preact's `jsx` marker prop is not part of Lark's surface
+    render(<div jsx={true} />, host);
+    // @ts-expect-error — key is string | number (never preact's `any`)
+    render(<div key={{}} />, host);
   });
 
   it("types event handlers with native events and per-tag currentTarget", () => {

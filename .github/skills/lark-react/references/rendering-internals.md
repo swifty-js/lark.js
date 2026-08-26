@@ -1,8 +1,8 @@
 # Rendering Internals
 
 Read this when debugging reconciliation, ordering, or performance — the
-implementation lives in `packages/react/lib/diff.ts` (reconciler),
-`lib/hooks.ts` (slots + effects), `lib/dom.ts` (host writes).
+implementation lives in `packages/react/src/diff.ts` (reconciler),
+`src/hooks.ts` (slots + effects), `src/dom.ts` (host writes).
 
 ## renderRoot pipeline (synchronous, non-interruptible)
 
@@ -77,7 +77,7 @@ in the NEXT microtask wave.
 
 ## HMR canonical identity (why swaps are cheap)
 
-`lib/hmr.ts` keeps a `WeakMap` alias chain plus an `hmrActive` latch:
+`src/hmr.ts` keeps a `WeakMap` alias chain plus an `hmrActive` latch:
 
 - `sameType(a, b)` in the diff is `a === b` until the first swap; afterwards
   function tags also match when `canonical(a) === canonical(b)` (bounded

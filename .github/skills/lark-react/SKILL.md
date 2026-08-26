@@ -8,44 +8,54 @@ description: >-
   (useState, useEffect, useMemo, useCallback, useRef), a @types/react-derived
   JSX type layer where event handlers receive NATIVE DOM events (not
   synthetic), React-19-style ref cleanups, SVG namespacing,
-  dangerouslySetInnerHTML, and state-preserving HMR via the larkReactPlugin
-  vite plugin + hotSwapByComponent alias chain. Use this skill whenever
-  writing, reviewing, refactoring, or debugging code that imports
-  "@lark.js/react" or its /jsx-runtime, /jsx-dev-runtime, or /vite entries,
-  configuring its build/HMR/vitest setup, editing anything under
-  packages/react (lib/ or tests/), or answering how this mini react works —
-  even if the user just says "react" while working inside the lark.js repo.
+  dangerouslySetInnerHTML, zustand-style stores (createStore/useStore), a
+  react-router-aligned history router (createRouter, RouterView, useRouter,
+  useBlocker, matchPath/matchRoutes, lazy routes), useUrlState
+  URL-search-param state, and state-preserving HMR via the larkReactPlugin
+  Vite plugin or the LarkReactPlugin/larkReactLoader Webpack integration +
+  hotSwapByComponent alias chain. Use this skill whenever writing, reviewing,
+  refactoring, or debugging code that imports "@lark.js/react" or its
+  /jsx-runtime, /jsx-dev-runtime, /vite, or /webpack entries, configuring its
+  build/HMR/vitest setup, editing anything under packages/react (src/ or
+  tests/), or answering how this mini react works — even if the user just
+  says "react", "router", or "store" while working inside the lark.js repo.
 ---
 
 # Lark React (`@lark.js/react`)
 
 A Mini React: the smallest useful subset of React's programming model —
-elements, a keyed reconciler, five hooks, native-DOM events — with no legacy
-baggage. Source: `packages/react` (v0.0.1, ESM+CJS dual build via tsup, one
-types-only dependency: `@types/react`; zero runtime dependencies).
+elements, a keyed reconciler, five core hooks, native-DOM events — plus the
+app-level trio real apps need: a zustand-style store, a react-router-aligned
+history router, and URL-search-param state. Source: `packages/react`
+(v0.0.1, ESM+CJS dual build via tsup; one types-only dependency:
+`@types/react`; `vite` is an optional peer; zero runtime dependencies).
 
 Core philosophy: **function components only** — no classes, no Fiber, no
 interruptible scheduling, no SSR, no synthetic event system, no context, no
 portals, no memo/lazy/Suspense, no error boundaries (errors bubble). Every
 update re-renders the WHOLE root tree synchronously; render (re-running
 components) + reconcile (the keyed diff) converge actual DOM mutations onto
-the changed nodes. JSX types are **derived from `@types/react`** with two
-adaptations: handlers get NATIVE events, and `ref` takes this framework's
-`Ref<T>` (callback refs may return a cleanup, React 19 style). HMR preserves
-hook state through an alias chain — no `import.meta.hot` boilerplate.
+the changed nodes. Cross-component state goes through `createStore`/`useStore`
+(not context); routing through `createRouter` (not react-router). JSX types
+are **derived from `@types/react`** with two adaptations: handlers get NATIVE
+events, and `ref` takes this framework's `Ref<T>` (callback refs may return a
+cleanup, React 19 style). HMR preserves hook state through an alias chain —
+no `import.meta.hot` boilerplate, under Vite AND Webpack.
 
 ## Package entry points
 
-| Import                           | Provides                                                                                                                                                                                                                                                                            |
-| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@lark.js/react`                 | `render`, `createRoot`, `createElement`, `Fragment`, `useState`, `useEffect`, `useMemo`, `useCallback`, `useRef`, `hotSwapByComponent`, types (`VNode`, `ComponentType`, `Children`, `Props`, `Key`, `Ref`, `SetStateAction`, `Dispatch`, `EffectCallback`, `DepList`, `VNodeType`) |
-| `@lark.js/react/jsx-runtime`     | Automatic runtime: `jsx`, `jsxs`, `Fragment`, `Ref` type, the exported `JSX` namespace (referenced by `jsxImportSource`, not imported by hand)                                                                                                                                      |
-| `@lark.js/react/jsx-dev-runtime` | `jsxDEV` dev runtime (re-exports everything from jsx-runtime)                                                                                                                                                                                                                       |
-| `@lark.js/react/vite`            | `larkReactPlugin()` — esbuild automatic-JSX defaults + auto-injected component HMR; also exports `injectComponentHmrSnippet` for testing                                                                                                                                            |
+| Import                           | Provides                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@lark.js/react`                 | Core: `render`, `createRoot`, `createElement`, `Fragment`; hooks: `useState`, `useEffect`, `useMemo`, `useCallback`, `useRef`; store: `createStore`, `useStore`; router: `createRouter`, `RouterView`, `useRouter`, `useBlocker`, `matchPath`, `matchRoutes`; URL state: `useUrlState`; HMR: `hotSwapByComponent`; types (`VNode`, `ComponentType`, `Children`, `Props`, `Key`, `Ref`, `SetStateAction`, `Dispatch`, `EffectCallback`, `DepList`, `VNodeType`, `StoreApi`, `RouterApi`, `RouteObject`, `RouteMatch`, `RouterOptions`, `NavigateOptions`, `Location`, `To`, `Blocker`, `SetUrlState`) |
+| `@lark.js/react/jsx-runtime`     | Automatic runtime: `jsx`, `jsxs`, `Fragment`, `Ref` type, the exported `JSX` namespace (referenced by `jsxImportSource`, not imported by hand)                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `@lark.js/react/jsx-dev-runtime` | `jsxDEV` dev runtime (re-exports everything from jsx-runtime)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `@lark.js/react/vite`            | `larkReactPlugin()` — esbuild automatic-JSX defaults + auto-injected component HMR; also exports `injectComponentHmrSnippet` for testing                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `@lark.js/react/webpack`         | `LarkReactPlugin` (auto-registers the HMR loader rule — recommended) and `larkReactLoader` (default export; manual rule). JSX transform stays with your TS/babel/SWC loader                                                                                                                                                                                                                                                                                                                                                                                                                          |
 
 tsconfig for consumers: `"jsx": "react-jsx"`, `"jsxImportSource": "@lark.js/react"`.
 Under Vite the plugin sets the compile-time equivalents automatically; the
-tsconfig entries are still needed for editor/`tsc` type checking.
+tsconfig entries are still needed for editor/`tsc` type checking (and they ARE
+the JSX transform under Webpack).
 
 ## The 60-second mental model
 
@@ -65,6 +75,10 @@ renderRoot: SYNCHRONOUS, non-interruptible
         │          (≈ useLayoutEffect timing; there is no async effect queue)
 setState ──> marks the root dirty; queueMicrotask batches every setState from
              the same tick into ONE whole-root re-render
+
+store.setState / router.navigate ──> notify subscribers ──> the useStore /
+             useRouter / useUrlState hooks call setState on THEIR components
+             ──> same batched whole-root re-render as above
 ```
 
 A **component** is `function MyComp(props: P) { return <div/>; }` used as a
@@ -77,17 +91,23 @@ through the hot-swap alias chain.
 
 ```tsx
 // src/app.tsx — DEFAULT export ⇒ state-preserving HMR is auto-injected
-import { useEffect, useRef, useState } from "@lark.js/react";
+import { createStore, useEffect, useStore, useState } from "@lark.js/react";
+
+export const counterStore = createStore((set, get) => ({
+  count: 0,
+  increment: () => set({ count: get().count + 1 }),
+}));
 
 export default function App() {
-  const [count, setCount] = useState(0);
-  const box = useRef<HTMLDivElement | null>(null);
+  const count = useStore(counterStore, (s) => s.count);
+  const [name, setName] = useState("lark");
   useEffect(() => {
-    document.title = `count ${count}`;
-  }, [count]);
+    document.title = `${name} ${count}`;
+  }, [name, count]);
   return (
-    <div ref={box} className="app" style={{ padding: 16 }}>
-      <button onClick={() => setCount((n) => n + 1)}>+1</button>
+    <div className="app" style={{ padding: 16 }}>
+      <button onClick={counterStore.getState().increment}>+1</button>
+      <input value={name} onInput={(e) => setName(e.currentTarget.value)} />
       <output>{count}</output>
     </div>
   );
@@ -95,11 +115,19 @@ export default function App() {
 ```
 
 ```tsx
-// src/main.tsx
-import { createRoot } from "@lark.js/react";
+// src/main.tsx — router boot (browser-only: createRouter touches history)
+import { createRoot, createRouter, RouterView } from "@lark.js/react";
 import App from "./app";
 
-createRoot(document.getElementById("root")!).render(<App />);
+const router = createRouter([
+  { path: "/", component: App },
+  { path: "/users/:id", component: App },
+  { path: "/admin", lazy: () => import("./views/admin") },
+  { path: "*", component: App },
+]);
+createRoot(document.getElementById("root")!).render(
+  <RouterView router={router} />,
+);
 ```
 
 ```ts
@@ -108,6 +136,7 @@ import { defineConfig } from "vite";
 import { larkReactPlugin } from "@lark.js/react/vite";
 
 export default defineConfig({ plugins: [larkReactPlugin()] });
+// Webpack instead? plugins: [new LarkReactPlugin()] from "@lark.js/react/webpack"
 ```
 
 ## Critical rules (violating these causes the classic bugs)
@@ -116,16 +145,17 @@ export default defineConfig({ plugins: [larkReactPlugin()] });
    unconditionally, in the same order, at the top level. Slots are matched
    by call index; a tag mismatch at an index (an HMR edit reordered hooks)
    destructively resets that slot, and trailing slots the new body no longer
-   reaches are cleaned up and dropped.
+   reaches are cleaned up and dropped. `useStore`, `useRouter`, `useBlocker`,
+   and `useUrlState` are REAL hooks built on these slots — same rules.
 2. **setState is batched and asynchronous** — it marks the root dirty and a
    microtask re-renders once. The DOM is NOT updated when setState returns;
    in tests `await Promise.resolve()` observes the committed DOM (one await
    per cascade wave). `setState` identity is stable; the eager
    `Object.is` bailout skips renders when the value did not change.
    `setState(fn)` treats a FUNCTION argument as an updater and CALLS it with
-   the previous state — to store a function as state (e.g. a store action
-   from an external-store hook), wrap it: `setState(() => fn)`. Update loops
-   that never settle throw `Maximum update depth exceeded` after 50 waves.
+   the previous state — to store a function as state (e.g. a store action),
+   wrap it: `setState(() => fn)`. Update loops that never settle throw
+   `Maximum update depth exceeded` after 50 waves.
 3. **Every update re-renders the whole root** — there is no memo/bailout
    pruning. Keep bodies cheap; the diff converges DOM writes, but component
    code itself always re-executes. Handlers are re-created per render (fine
@@ -150,19 +180,39 @@ export default defineConfig({ plugins: [larkReactPlugin()] });
 8. **Strings are text everywhere**; `dangerouslySetInnerHTML={{ __html }}`
    is the only trusted-HTML path (it skips children reconciliation — never
    combine with children; sanitize untrusted input).
-9. **HMR hot-swaps DEFAULT-exported components** in `.tsx`/`.jsx` files —
-   `useState`/`useRef` state survives. Non-default or nested-in-module
-   components remount with fresh state on edit. Manual API:
-   `hotSwapByComponent(oldFn, newFn)`.
-10. **Out of scope by design** — no context/useReducer/portals/Suspense/
-    SSR/class components. Code needing those belongs on real React; this
-    package is deliberately minimal.
+9. **Store reactivity is SHALLOW** — `store.setState` merge-writes keys and
+   compares each with `Object.is`; mutating a nested object or pushing into
+   an array notifies nobody. Replace the reference:
+   `set({ list: [...get().list, item] })`. `getState()` is a stable
+   read-only proxy — direct writes THROW. Selectors returning fresh objects
+   per call defeat `useStore`'s slice comparison — select primitives.
+10. **The router is a browser-only factory** — `createRouter` touches
+    `history`/`location` at creation (client boot code only) and records
+    itself as the ACTIVE router that `useRouter()` / `<RouterView/>` /
+    `useUrlState()` resolve when no `router` prop/argument is given (last
+    created wins; under Module Federation share `@lark.js/react` as a
+    singleton or each copy has its own active pointer). Param-only
+    navigation (`/users/1` → `/users/2`) keeps the SAME component instance —
+    hook state survives; derive from `useRouter().params` instead of caching
+    it in state.
+11. **HMR hot-swaps DEFAULT-exported components** in `.tsx`/`.jsx` files —
+    `useState`/`useRef` state survives, under Vite (`larkReactPlugin`) and
+    Webpack (`LarkReactPlugin`/`larkReactLoader`) alike. Non-default or
+    nested-in-module components remount with fresh state on edit. Manual
+    API: `hotSwapByComponent(oldFn, newFn)`.
+12. **Out of scope by design** — no context/useReducer/portals/Suspense/
+    SSR/class components. Shared state belongs in `createStore`; routing in
+    `createRouter`; URL params in `useUrlState` — do NOT reach for zustand /
+    react-router / query-string libraries. Code needing the rest belongs on
+    real React; this package is deliberately minimal.
 
 ## Reference files — read on demand
 
-| File                                                                     | Read when working on                                                                                                                                                                     |
-| ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [references/components-and-hooks.md](references/components-and-hooks.md) | Components (props/children/key/callbacks), the five hooks in depth, render/createRoot lifecycle, update batching, effect ordering, unmount teardown, testing patterns                    |
-| [references/jsx-and-dom.md](references/jsx-and-dom.md)                   | JSX runtimes (`jsx`/`jsxs`/`jsxDEV`/`createElement`), the @types/react-derived type layer, DOM prop handling tables (aliases, events, style/px, controlled props, SVG, dSIH, refs)       |
-| [references/hmr-and-build.md](references/hmr-and-build.md)               | `larkReactPlugin` usage and injection details, `hotSwapByComponent` semantics and limits, package exports, tsup build, vitest/tsconfig setup                                             |
-| [references/rendering-internals.md](references/rendering-internals.md)   | renderRoot pipeline, two-pass keyed diff (watermark, right-to-left commit, anchors), hostless components, instance carry-over, HMR canonical identity — read when debugging renders/perf |
+| File                                                                     | Read when working on                                                                                                                                                                       |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| [references/components-and-hooks.md](references/components-and-hooks.md) | Components (props/children/key/callbacks), the five core hooks in depth, render/createRoot lifecycle, update batching, effect ordering, unmount teardown, testing patterns                 |
+| [references/store.md](references/store.md)                               | `createStore` (actions vs state keys, setState/replace, subscribe/selector subscribe, destroy, read-only proxy) and `useStore` (whole-state vs selector, staleness re-check, test recipes) |
+| [references/router-and-url-state.md](references/router-and-url-state.md) | `createRouter` (route table, matching/ranking, navigate, blockers, popstate revert, basename, lazy routes), `RouterView`, `useRouter`, `useBlocker`, `useUrlState`, router testing         |
+| [references/jsx-and-dom.md](references/jsx-and-dom.md)                   | JSX runtimes (`jsx`/`jsxs`/`jsxDEV`/`createElement`), the @types/react-derived type layer, DOM prop handling tables (aliases, events, style/px, controlled props, SVG, dSIH, refs)         |
+| [references/hmr-and-build.md](references/hmr-and-build.md)               | Vite plugin + Webpack plugin/loader usage, the shared HMR injection rewrite, `hotSwapByComponent` semantics and limits, package exports, tsup build, vitest/tsconfig setup                 |
+| [references/rendering-internals.md](references/rendering-internals.md)   | renderRoot pipeline, two-pass keyed diff (watermark, right-to-left commit, anchors), hostless components, instance carry-over, HMR canonical identity — read when debugging renders/perf   |

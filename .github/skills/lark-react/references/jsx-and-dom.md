@@ -27,7 +27,7 @@ identical across ESM/CJS copies.
 ## The type layer (derived from @types/react)
 
 `@types/react` is a **types-only dependency** — the runtime never imports
-`"react"`. `lib/jsx-runtime.ts` exports a `declare namespace JSX` whose
+`"react"`. `src/jsx-runtime.ts` exports a `declare namespace JSX` whose
 `IntrinsicElements` maps React's per-tag props through two utilities:
 
 ```ts

@@ -37,11 +37,14 @@ Instances are matched across renders by function identity among siblings
 position unmounts the old instance (hook state is lost) — except through the
 HMR alias chain (see hmr-and-build.md).
 
-## The five hooks
+## The five core hooks
 
 Hooks live in call-order-indexed slots on the instance (`vnode.hooks`), the
 one array that survives across renders. Calling a hook outside a component
 body throws `"Hooks can only be called inside a function component."`
+`useStore`, `useRouter`, `useBlocker`, and `useUrlState` (see store.md and
+router-and-url-state.md) are composed FROM these slots — the same rules of
+hooks apply to them.
 
 ### useState
 
@@ -150,6 +153,8 @@ expect(container.textContent).toBe("1");
   microtask flush (FIFO), so the committed DOM is observable. A cascade
   (effect → setState) needs one await per wave.
 - Direct `render()` calls need no await.
+- `packages/react/tests/helpers.ts` ships `flush()` (= `Promise.resolve()`),
+  `createContainer()`, and `click(el)` — reuse them.
 - See `packages/react/vitest.config.ts` for the jsdom + automatic-JSX +
   alias wiring, and `packages/react/tests/` for worked examples of every
   pattern above.

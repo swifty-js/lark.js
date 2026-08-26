@@ -24,7 +24,7 @@
  * Reactive core — the framework's single reactivity primitive set, backed by
  * `@preact/signals-core`.
  *
- * Every data source in Lark Mvc is signal-based:
+ * Every data source in lark-mvc is signal-based:
  * - component state: `useSignal()` hook slots read by component bodies
  * - props: per-key signals behind each instance's props proxy
  * - stores: per-key signals behind a tracked `getState()` proxy

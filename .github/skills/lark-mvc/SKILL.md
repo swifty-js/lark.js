@@ -49,7 +49,7 @@ description: >-
   package (future dedicated package).
 ---
 
-# Lark Mvc Framework (`@lark.js/mvc`)
+# lark-mvc Framework (`@lark.js/mvc`)
 
 A lightweight, functional-first TypeScript framework for SPAs and
 micro-frontends. Source: `packages/lark-mvc` (v0.0.32+, ESM+CJS dual build,

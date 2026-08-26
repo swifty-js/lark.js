@@ -8,7 +8,7 @@
   "scripts": {
     "prepare": "husky",
     "format:mvc": "pnpm --filter @lark.js/mvc format",
-    "test:mvc": "pnpm --filter @lark-mvc test",
+    "test:mvc": "pnpm --filter @lark.js/mvc test",
     "build:mvc": "pnpm --filter @lark.js/mvc build",
     "format:sentry": "pnpm --filter @lark.js/sentry format",
     "test:sentry": "pnpm --filter @lark.js/sentry test",

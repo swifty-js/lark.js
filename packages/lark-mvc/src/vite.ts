@@ -55,7 +55,7 @@ import { injectComponentHmrSnippet, isLarkComponentSource } from "./hmr-inject";
 const COMPONENT_MODULE_ID_REGEXP = /\.[jt]sx$/;
 
 /**
- * Create the Lark Mvc Vite plugin.
+ * Create the lark-mvc Vite plugin.
  *
  * @returns Vite plugin instance
  */

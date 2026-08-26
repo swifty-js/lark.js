@@ -21,7 +21,7 @@
  */
 
 /**
- * Ambient type declarations for Lark Mvc.
+ * Ambient type declarations for lark-mvc.
  *
  * This file is a SCRIPT declaration file (no top-level import/export) so its
  * `declare module "*.css"` wildcards register as ambient modules and its

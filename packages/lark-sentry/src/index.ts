@@ -21,12 +21,12 @@
  */
 
 /**
- * `@lark.js/sentry` — `@swifty.js/sentry` integration for Lark Mvc
+ * `@lark.js/sentry` — `@swifty.js/sentry` integration for lark-mvc
  * (v0.0.32+, signals-only).
  *
  * ## Error capture — automatic, no hook needed
  *
- * Lark Mvc has no error sink and no try-catch wrappers: errors thrown in
+ * lark-mvc has no error sink and no try-catch wrappers: errors thrown in
  * component bodies, effects, and event handlers BUBBLE to
  * `window.onerror` / `unhandledrejection`, which `@swifty.js/sentry`
  * captures natively (`enableError` / `enableUnhandledRejection`, both on by
@@ -96,7 +96,7 @@ export function installLarkSentry(router?: RouterApi): () => void {
 
 /**
  * One-call integration: initialize `@swifty.js/sentry` and install the
- * Lark Mvc route-pattern tracking.
+ * lark-mvc route-pattern tracking.
  *
  * @example
  * ```tsx

@@ -1,8 +1,8 @@
 # @lark.js/sentry
 
-`@swifty.js/sentry` integration for the [Lark Mvc](https://github.com/tianchenghang/lark.js) frontend framework (`@lark.js/mvc`, v0.0.32+ signals-only).
+`@swifty.js/sentry` integration for the [lark-mvc](https://github.com/tianchenghang/lark.js) frontend framework (`@lark.js/mvc`, v0.0.32+ signals-only).
 
-Lark Mvc has no error sink and no try-catch wrappers: errors thrown in component bodies, effects, and event handlers **bubble** to `window.onerror` / `unhandledrejection`, which `@swifty.js/sentry` captures natively (`enableError` / `enableUnhandledRejection`, on by default). What the SDK cannot infer on its own is the **matched route pattern** (`/users/:id` instead of `/users/42`) — the key for grouping page views. This package subscribes to the Lark router's signals and reports one `PV` event per committed navigation, carrying the pattern and the decoded params.
+lark-mvc has no error sink and no try-catch wrappers: errors thrown in component bodies, effects, and event handlers **bubble** to `window.onerror` / `unhandledrejection`, which `@swifty.js/sentry` captures natively (`enableError` / `enableUnhandledRejection`, on by default). What the SDK cannot infer on its own is the **matched route pattern** (`/users/:id` instead of `/users/42`) — the key for grouping page views. This package subscribes to the Lark router's signals and reports one `PV` event per committed navigation, carrying the pattern and the decoded params.
 
 ## Installation
 

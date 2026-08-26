@@ -14,15 +14,15 @@ import { customElement, property } from "lit/decorators.js";
 import { ifDefined } from "lit/directives/if-defined.js";
 import { tailwindStyles } from "./tailwind-styles";
 
-export type LkButtonVariant =
+export type WcButtonVariant =
   "default" | "outline" | "secondary" | "ghost" | "destructive" | "link";
 
-export type LkButtonSize = "sm" | "default" | "lg";
+export type WcButtonSize = "sm" | "default" | "lg";
 
 const BASE =
   "inline-flex w-full shrink-0 items-center justify-center border text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50";
 
-const VARIANTS: Record<LkButtonVariant, string> = {
+const VARIANTS: Record<WcButtonVariant, string> = {
   default:
     "border-transparent bg-primary text-primary-foreground hover:bg-primary/80",
   outline: "border-border bg-background text-foreground hover:bg-muted",
@@ -34,14 +34,14 @@ const VARIANTS: Record<LkButtonVariant, string> = {
   link: "border-transparent text-primary underline-offset-4 hover:underline",
 };
 
-const SIZES: Record<LkButtonSize, string> = {
+const SIZES: Record<WcButtonSize, string> = {
   sm: "h-7 gap-1 rounded-md px-2.5 text-[0.8rem]",
   default: "h-8 gap-1.5 rounded-lg px-2.5",
   lg: "h-9 gap-1.5 rounded-lg px-3",
 };
 
 @customElement("wc-button")
-export class LkButton extends LitElement {
+export class WcButton extends LitElement {
   static override shadowRootOptions = {
     ...LitElement.shadowRootOptions,
     delegatesFocus: true,
@@ -62,9 +62,9 @@ export class LkButton extends LitElement {
     `,
   ];
 
-  @property() variant: LkButtonVariant = "default";
+  @property() variant: WcButtonVariant = "default";
 
-  @property() size: LkButtonSize = "default";
+  @property() size: WcButtonSize = "default";
 
   @property({ type: Boolean, reflect: true }) disabled = false;
 
@@ -106,6 +106,6 @@ export class LkButton extends LitElement {
 
 declare global {
   interface HTMLElementTagNameMap {
-    "wc-button": LkButton;
+    "wc-button": WcButton;
   }
 }

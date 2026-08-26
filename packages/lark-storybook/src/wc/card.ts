@@ -15,10 +15,10 @@ import { LitElement, css, html } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import { tailwindStyles } from "./tailwind-styles";
 
-export type LkCardSize = "default" | "sm";
+export type WcCardSize = "default" | "sm";
 
 @customElement("wc-card")
-export class LkCard extends LitElement {
+export class WcCard extends LitElement {
   static override styles = [
     tailwindStyles,
     css`
@@ -31,7 +31,7 @@ export class LkCard extends LitElement {
     `,
   ];
 
-  @property() size: LkCardSize = "default";
+  @property() size: WcCardSize = "default";
 
   @state() private hasHeader = false;
 
@@ -82,6 +82,6 @@ export class LkCard extends LitElement {
 
 declare global {
   interface HTMLElementTagNameMap {
-    "wc-card": LkCard;
+    "wc-card": WcCard;
   }
 }

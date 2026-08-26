@@ -9,10 +9,10 @@ import "./card";
 import "./select";
 import "./counter";
 
-export { LkButton } from "./button";
-export type { LkButtonSize, LkButtonVariant } from "./button";
-export { LkCard } from "./card";
-export type { LkCardSize } from "./card";
-export { LkSelect } from "./select";
-export type { LkSelectOption, LkSelectSize } from "./select";
-export { LkCounter } from "./counter";
+export { WcButton } from "./button";
+export type { WcButtonSize, WcButtonVariant } from "./button";
+export { WcCard } from "./card";
+export type { WcCardSize } from "./card";
+export { WcSelect } from "./select";
+export type { WcSelectOption, WcSelectSize } from "./select";
+export { WcCounter } from "./counter";

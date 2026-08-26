@@ -18,7 +18,7 @@ import { tailwindStyles } from "./tailwind-styles";
 import "./button";
 
 @customElement("wc-counter")
-export class LkCounter extends LitElement {
+export class WcCounter extends LitElement {
   static override styles = [
     tailwindStyles,
     css`
@@ -95,6 +95,6 @@ export class LkCounter extends LitElement {
 
 declare global {
   interface HTMLElementTagNameMap {
-    "wc-counter": LkCounter;
+    "wc-counter": WcCounter;
   }
 }

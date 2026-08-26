@@ -16,20 +16,20 @@ import { LitElement, css, html } from "lit";
 import { customElement, property } from "lit/decorators.js";
 import { tailwindStyles } from "./tailwind-styles";
 
-export type LkSelectOption = string | { label: string; value: string };
+export type WcSelectOption = string | { label: string; value: string };
 
-export type LkSelectSize = "sm" | "default";
+export type WcSelectSize = "sm" | "default";
 
 const BASE =
   "flex w-full appearance-none items-center justify-between gap-1.5 border border-input bg-transparent py-1 pr-8 pl-2.5 text-sm whitespace-nowrap transition-colors outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50";
 
-const SIZES: Record<LkSelectSize, string> = {
+const SIZES: Record<WcSelectSize, string> = {
   sm: "h-7 rounded-md",
   default: "h-8 rounded-lg",
 };
 
 @customElement("wc-select")
-export class LkSelect extends LitElement {
+export class WcSelect extends LitElement {
   static override shadowRootOptions = {
     ...LitElement.shadowRootOptions,
     delegatesFocus: true,
@@ -47,7 +47,7 @@ export class LkSelect extends LitElement {
     `,
   ];
 
-  @property({ type: Array }) options: LkSelectOption[] = [];
+  @property({ type: Array }) options: WcSelectOption[] = [];
 
   @property() value = "";
 
@@ -55,7 +55,7 @@ export class LkSelect extends LitElement {
 
   @property({ type: Boolean, reflect: true }) disabled = false;
 
-  @property() size: LkSelectSize = "default";
+  @property() size: WcSelectSize = "default";
 
   #changed(event: Event): void {
     const select = event.target as HTMLSelectElement;
@@ -125,6 +125,6 @@ export class LkSelect extends LitElement {
 
 declare global {
   interface HTMLElementTagNameMap {
-    "wc-select": LkSelect;
+    "wc-select": WcSelect;
   }
 }

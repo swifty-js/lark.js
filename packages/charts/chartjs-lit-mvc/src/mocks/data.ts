@@ -74,10 +74,7 @@ export const mockProjects: MockProject[] = [
 }));
 
 const chartName = (): string =>
-  `${faker.word.adjective()} ${faker.word.noun()} ${faker.commerce.productName()}`.slice(
-    0,
-    40,
-  );
+  `${faker.word.adjective()} ${faker.word.noun()} ${faker.commerce.productName()}`.slice(0, 40);
 
 export const mockCharts: MockChart[] = Array.from({ length: 36 }, (_, i) => ({
   id: i + 1,

@@ -34,9 +34,7 @@ import {
 } from "lucide-static";
 
 function resize(svg: string, size: number): string {
-  return svg
-    .replace(/width="24"/, `width="${size}"`)
-    .replace(/height="24"/, `height="${size}"`);
+  return svg.replace(/width="24"/, `width="${size}"`).replace(/height="24"/, `height="${size}"`);
 }
 
 const src = {

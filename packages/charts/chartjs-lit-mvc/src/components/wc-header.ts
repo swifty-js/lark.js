@@ -84,16 +84,12 @@ export class WcHeader extends WcElement {
           (item) => html`
             <button
               data-anim
-              class="${
-                this.activePath === item.path
-                  ? "bg-brand/10 font-medium text-brand"
-                  : "text-text-secondary hover:bg-surface-alt hover:text-text-primary"
-              } flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm transition-all duration-200"
+              class="${this.activePath === item.path
+                ? "bg-brand/10 font-medium text-brand"
+                : "text-text-secondary hover:bg-surface-alt hover:text-text-primary"} flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm transition-all duration-200"
               @click=${() => this.nav(item.path)}
             >
-              ${unsafeHTML(
-                `<span class="inline-flex opacity-70">${icon(item.icon, 14)}</span>`,
-              )}
+              ${unsafeHTML(`<span class="inline-flex opacity-70">${icon(item.icon, 14)}</span>`)}
               ${item.label}
             </button>
           `,
@@ -122,51 +118,42 @@ export class WcHeader extends WcElement {
           class="border-border hover:border-brand/40 hover:bg-surface-alt flex items-center gap-2 rounded-full border py-1 pr-3 pl-1 text-sm transition-all"
           @click=${() => (this.dropdownOpen = !this.dropdownOpen)}
         >
-          ${
-            u?.avatar
-              ? html`<img
-                  src=${u.avatar}
-                  alt=""
-                  class="ring-brand/30 h-7 w-7 rounded-full object-cover ring-2"
-                />`
-              : html`<span
-                  class="bg-brand/15 text-brand flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold"
-                >
-                  ${(u?.username || "?").charAt(0).toUpperCase()}
-                </span>`
-          }
-          <span class="text-text-primary max-w-28 truncate"
-            >${u?.username}</span
-          >
+          ${u?.avatar
+            ? html`<img
+                src=${u.avatar}
+                alt=""
+                class="ring-brand/30 h-7 w-7 rounded-full object-cover ring-2"
+              />`
+            : html`<span
+                class="bg-brand/15 text-brand flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold"
+              >
+                ${(u?.username || "?").charAt(0).toUpperCase()}
+              </span>`}
+          <span class="text-text-primary max-w-28 truncate">${u?.username}</span>
           ${unsafeHTML(
             `<span class="text-text-tertiary inline-flex transition-transform ${this.dropdownOpen ? "rotate-180" : ""}">${icon("chevronDown", 14)}</span>`,
           )}
         </button>
-        ${
-          this.dropdownOpen
-            ? html`<div
-                class="animate-scale-in border-border bg-surface absolute top-full right-0 z-50 mt-2 w-44 overflow-hidden rounded-xl border shadow-xl"
-                ${ref(this.popRef)}
+        ${this.dropdownOpen
+          ? html`<div
+              class="animate-scale-in border-border bg-surface absolute top-full right-0 z-50 mt-2 w-44 overflow-hidden rounded-xl border shadow-xl"
+              ${ref(this.popRef)}
+            >
+              <div class="border-border bg-surface-alt border-b px-4 py-2.5">
+                <p class="text-text-primary truncate text-sm font-medium">${u?.username}</p>
+                <p class="text-text-tertiary truncate text-xs">${u?.email}</p>
+              </div>
+              <button
+                class="text-text-secondary hover:bg-danger-light hover:text-danger flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm transition-colors"
+                @click=${() => {
+                  this.dropdownOpen = false;
+                  useAuthStore.getState().logout();
+                }}
               >
-                <div class="border-border bg-surface-alt border-b px-4 py-2.5">
-                  <p class="text-text-primary truncate text-sm font-medium">
-                    ${u?.username}
-                  </p>
-                  <p class="text-text-tertiary truncate text-xs">${u?.email}</p>
-                </div>
-                <button
-                  class="text-text-secondary hover:bg-danger-light hover:text-danger flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm transition-colors"
-                  @click=${() => {
-                    this.dropdownOpen = false;
-                    useAuthStore.getState().logout();
-                  }}
-                >
-                  ${unsafeHTML(`<span class="inline-flex">${icon("logout", 14)}</span>`)}
-                  Sign out
-                </button>
-              </div>`
-            : nothing
-        }
+                ${unsafeHTML(`<span class="inline-flex">${icon("logout", 14)}</span>`)} Sign out
+              </button>
+            </div>`
+          : nothing}
       </div>
     `;
   }
@@ -176,9 +163,7 @@ export class WcHeader extends WcElement {
       <header
         class="bg-surface/75 border-border sticky top-0 z-40 border-b backdrop-blur-xl backdrop-saturate-150"
       >
-        <div
-          class="mx-auto flex h-14 max-w-7xl items-center justify-between px-6"
-        >
+        <div class="mx-auto flex h-14 max-w-7xl items-center justify-between px-6">
           <div class="flex items-center gap-8">
             <button
               data-anim

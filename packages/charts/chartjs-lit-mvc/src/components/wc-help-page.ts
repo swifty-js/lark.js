@@ -100,15 +100,12 @@ export class WcHelpPage extends WcElement {
   }
 
   protected override render(): TemplateResult {
-    const current =
-      SECTIONS.find((s) => s.key === this.activeKey) || SECTIONS[0];
+    const current = SECTIONS.find((s) => s.key === this.activeKey) || SECTIONS[0];
     return html`
       <div class="mx-auto max-w-5xl px-6 py-10">
         <div class="mb-8">
           <h1 class="text-text-primary text-2xl font-semibold">Help</h1>
-          <p class="text-text-secondary mt-1 text-sm">
-            Learn how to use chart.js
-          </p>
+          <p class="text-text-secondary mt-1 text-sm">Learn how to use chart.js</p>
         </div>
 
         <div class="flex gap-10">
@@ -118,11 +115,9 @@ export class WcHelpPage extends WcElement {
                 (item) => html`
                   <button
                     data-anim
-                    class="${
-                      this.activeKey === item.key
-                        ? "bg-brand/10 text-brand font-medium"
-                        : "text-text-secondary hover:bg-surface-alt hover:text-text-primary"
-                    } flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition-all duration-200"
+                    class="${this.activeKey === item.key
+                      ? "bg-brand/10 text-brand font-medium"
+                      : "text-text-secondary hover:bg-surface-alt hover:text-text-primary"} flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition-all duration-200"
                     @click=${() => this.selectSection(item.key)}
                   >
                     ${unsafeHTML(
@@ -136,45 +131,37 @@ export class WcHelpPage extends WcElement {
           </aside>
 
           <article class="min-w-0 flex-1">
-            <h2
-              class="text-text-primary animate-slide-up text-xl font-semibold"
-            >
+            <h2 class="text-text-primary animate-slide-up text-xl font-semibold">
               ${current.title}
             </h2>
 
             <div class="mt-5 space-y-4">
               ${current.paragraphs.map(
                 (para) => html`
-                  <p
-                    class="text-text-secondary animate-slide-up text-sm leading-relaxed"
-                  >
+                  <p class="text-text-secondary animate-slide-up text-sm leading-relaxed">
                     ${para}
                   </p>
                 `,
               )}
             </div>
 
-            ${
-              current.code
-                ? html`<div
-                    class="border-border animate-scale-in mt-6 overflow-hidden rounded-xl border"
+            ${current.code
+              ? html`<div
+                  class="border-border animate-scale-in mt-6 overflow-hidden rounded-xl border"
+                >
+                  <div
+                    class="border-border bg-surface-alt flex items-center gap-2 border-b px-4 py-2"
                   >
-                    <div
-                      class="border-border bg-surface-alt flex items-center gap-2 border-b px-4 py-2"
-                    >
-                      ${unsafeHTML(
-                        `<span class="text-brand/70 inline-flex">${icon("code", 13)}</span>`,
-                      )}
-                      <span class="text-text-secondary text-xs font-medium">
-                        Example
-                      </span>
-                    </div>
-                    <pre
-                      class="bg-code-bg text-text-primary overflow-x-auto p-4 text-xs leading-relaxed"
-                    ><code>${current.code}</code></pre>
-                  </div>`
-                : null
-            }
+                    ${unsafeHTML(
+                      `<span class="text-brand/70 inline-flex">${icon("code", 13)}</span>`,
+                    )}
+                    <span class="text-text-secondary text-xs font-medium"> Example </span>
+                  </div>
+                  <pre
+                    class="bg-code-bg text-text-primary overflow-x-auto p-4 text-xs leading-relaxed"
+                  ><code>${current.code}</code></pre>
+                </div>`
+              : null}
           </article>
         </div>
       </div>

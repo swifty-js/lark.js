@@ -87,7 +87,8 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@preact/signals-core": "^1.14.4"
+    "@preact/signals-core": "^1.14.4",
+    "preact": "^10.29.8"
   },
   "devDependencies": {
     "@types/node": "^24.13.3",

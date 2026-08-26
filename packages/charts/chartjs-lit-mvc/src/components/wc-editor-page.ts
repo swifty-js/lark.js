@@ -72,9 +72,7 @@ export class WcEditorPage extends WcElement {
   @state() private chartName = "Untitled Chart";
   @state() private saving = false;
   @state() private status: "idle" | "saved" | "error" = "idle";
-  @state() private tableData: (string | number)[][] = DEFAULT_DATA.map((r) => [
-    ...r,
-  ]);
+  @state() private tableData: (string | number)[][] = DEFAULT_DATA.map((r) => [...r]);
   @state() private leftExpand = true;
   @state() private rightExpand = false;
   @state() private chartWidth = 600;
@@ -133,9 +131,7 @@ export class WcEditorPage extends WcElement {
     if (this.chartId && this.projectId) {
       getProjectDetailApi(Number(this.projectId)).then((res) => {
         if (this.destroyed || !res.ok || !res.data) return;
-        const chart = res.data.charts.find(
-          (c: ChartItem) => String(c.id) === this.chartId,
-        );
+        const chart = res.data.charts.find((c: ChartItem) => String(c.id) === this.chartId);
         if (chart) {
           this.chartName = chart.name || "Untitled Chart";
           if (chart.chartOptions) {
@@ -281,10 +277,7 @@ export class WcEditorPage extends WcElement {
 
   private addCol(): void {
     const name = "col" + ((this.tableData[0]?.length || 0) + 1);
-    const updated = this.tableData.map((row, i) => [
-      ...row,
-      i === 0 ? name : "",
-    ]);
+    const updated = this.tableData.map((row, i) => [...row, i === 0 ? name : ""]);
     this.tableData = updated;
     this.updateDimensionsFromData(updated);
   }
@@ -296,9 +289,7 @@ export class WcEditorPage extends WcElement {
 
   private removeCol(colIndex: number): void {
     if (!this.tableData[0] || this.tableData[0].length <= 1) return;
-    const updated = this.tableData.map((row) =>
-      row.filter((_, i) => i !== colIndex),
-    );
+    const updated = this.tableData.map((row) => row.filter((_, i) => i !== colIndex));
     this.tableData = updated;
     this.updateDimensionsFromData(updated);
   }
@@ -324,11 +315,7 @@ export class WcEditorPage extends WcElement {
           <button
             class="text-text-secondary hover:bg-surface-alt hover:text-text-primary flex items-center gap-1.5 rounded-md px-2 py-1 text-sm transition-colors"
             @click=${() =>
-              this.nav(
-                this.projectId
-                  ? `/projects?projectId=${this.projectId}`
-                  : "/projects",
-              )}
+              this.nav(this.projectId ? `/projects?projectId=${this.projectId}` : "/projects")}
           >
             ${unsafeHTML(icon("chevronLeft", 14))} Back
           </button>
@@ -337,27 +324,22 @@ export class WcEditorPage extends WcElement {
             type="text"
             .value=${this.chartName}
             class="text-text-primary hover:border-border focus:border-brand focus:ring-brand/20 rounded-md border border-transparent bg-transparent px-2 py-0.5 text-sm font-medium transition-colors outline-none focus:ring-2"
-            @input=${(e: InputEvent) =>
-              (this.chartName = (e.target as HTMLInputElement).value)}
+            @input=${(e: InputEvent) => (this.chartName = (e.target as HTMLInputElement).value)}
           />
-          ${
-            this.status === "saved"
-              ? html`<span
-                  class="bg-success-light text-success flex items-center gap-1 rounded-full px-2 py-0.5 text-xs"
-                >
-                  ${unsafeHTML(icon("check", 10))} Saved
-                </span>`
-              : nothing
-          }
-          ${
-            this.status === "error"
-              ? html`<span
-                  class="bg-danger-light text-danger flex items-center gap-1 rounded-full px-2 py-0.5 text-xs"
-                >
-                  ${unsafeHTML(icon("x", 10))} Failed
-                </span>`
-              : nothing
-          }
+          ${this.status === "saved"
+            ? html`<span
+                class="bg-success-light text-success flex items-center gap-1 rounded-full px-2 py-0.5 text-xs"
+              >
+                ${unsafeHTML(icon("check", 10))} Saved
+              </span>`
+            : nothing}
+          ${this.status === "error"
+            ? html`<span
+                class="bg-danger-light text-danger flex items-center gap-1 rounded-full px-2 py-0.5 text-xs"
+              >
+                ${unsafeHTML(icon("x", 10))} Failed
+              </span>`
+            : nothing}
         </div>
 
         <div class="flex items-center gap-2">
@@ -366,11 +348,9 @@ export class WcEditorPage extends WcElement {
             title="Copy code"
             @click=${() => this.copyCode()}
           >
-            ${
-              this.copied
-                ? html`${unsafeHTML(icon("check", 12))} Copied`
-                : html`${unsafeHTML(icon("copy", 12))} Copy`
-            }
+            ${this.copied
+              ? html`${unsafeHTML(icon("check", 12))} Copied`
+              : html`${unsafeHTML(icon("copy", 12))} Copy`}
           </button>
           <button
             class="border-border text-text-secondary hover:border-brand/50 hover:text-brand flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs transition-colors"
@@ -398,39 +378,27 @@ export class WcEditorPage extends WcElement {
     onAdd: (field: string) => void,
     onRemove: (field: string) => void,
   ): TemplateResult {
-    const selCls =
-      accent === "brand"
-        ? "bg-brand/10 text-brand"
-        : "bg-success/10 text-success";
+    const selCls = accent === "brand" ? "bg-brand/10 text-brand" : "bg-success/10 text-success";
     return html`
       <div class="mb-5">
-        <h4
-          class="text-text-tertiary mb-2.5 text-xs font-semibold tracking-widest uppercase"
-        >
+        <h4 class="text-text-tertiary mb-2.5 text-xs font-semibold tracking-widest uppercase">
           ${title}
         </h4>
         <div class="mb-2 flex flex-wrap gap-1.5">
-          ${
-            selected && selected.length > 0
-              ? selected.map(
-                  (f) => html`
-                    <span
-                      class="${selCls} inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs"
-                    >
-                      ${f}
-                      <button
-                        class="opacity-60 hover:opacity-100"
-                        @click=${() => onRemove(f)}
-                      >
-                        ${unsafeHTML(icon("x", 8))}
-                      </button>
-                    </span>
-                  `,
-                )
-              : html`<span class="text-text-tertiary text-xs italic">
-                  No selection
-                </span>`
-          }
+          ${selected && selected.length > 0
+            ? selected.map(
+                (f) => html`
+                  <span
+                    class="${selCls} inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs"
+                  >
+                    ${f}
+                    <button class="opacity-60 hover:opacity-100" @click=${() => onRemove(f)}>
+                      ${unsafeHTML(icon("x", 8))}
+                    </button>
+                  </span>
+                `,
+              )
+            : html`<span class="text-text-tertiary text-xs italic"> No selection </span>`}
         </div>
         <div class="flex flex-wrap gap-1">
           ${candidates.map(
@@ -452,20 +420,16 @@ export class WcEditorPage extends WcElement {
     return html`
       <div class="min-h-0 flex-1 overflow-y-auto p-4">
         <div class="mb-5">
-          <h4
-            class="text-text-tertiary mb-2.5 text-xs font-semibold tracking-widest uppercase"
-          >
+          <h4 class="text-text-tertiary mb-2.5 text-xs font-semibold tracking-widest uppercase">
             Chart Type
           </h4>
           <div class="grid grid-cols-4 gap-2">
             ${this.chartTypes.map(
               (ct) => html`
                 <button
-                  class="${
-                    this.chartType === ct.type
-                      ? "border-brand bg-brand/5 text-brand shadow-sm"
-                      : "border-border text-text-secondary hover:border-brand/30 hover:text-text-primary"
-                  } flex flex-col items-center gap-1.5 rounded-lg border p-2.5 transition-all duration-200"
+                  class="${this.chartType === ct.type
+                    ? "border-brand bg-brand/5 text-brand shadow-sm"
+                    : "border-border text-text-secondary hover:border-brand/30 hover:text-text-primary"} flex flex-col items-center gap-1.5 rounded-lg border p-2.5 transition-all duration-200"
                   @click=${() => {
                     if (ct.type === this.chartType) return;
                     this.chartType = ct.type;
@@ -535,35 +499,31 @@ export class WcEditorPage extends WcElement {
             this.applyVisualConfig();
           },
         )}
-        ${
-          this.datasource.y1 !== undefined
-            ? this.fieldChips(
-                "Secondary Axis",
-                this.datasource.y1,
-                this.metrics,
-                "brand",
-                (m) => {
-                  const ds = { ...this.datasource };
-                  if (!ds.y1) ds.y1 = [];
-                  if (ds.y1.includes(m)) return;
-                  ds.y1 = [...ds.y1, m];
-                  this.datasource = ds;
-                  this.applyVisualConfig();
-                },
-                (m) => {
-                  const ds = { ...this.datasource };
-                  ds.y1 = (ds.y1 || []).filter((f) => f !== m);
-                  this.datasource = ds;
-                  this.applyVisualConfig();
-                },
-              )
-            : nothing
-        }
+        ${this.datasource.y1 !== undefined
+          ? this.fieldChips(
+              "Secondary Axis",
+              this.datasource.y1,
+              this.metrics,
+              "brand",
+              (m) => {
+                const ds = { ...this.datasource };
+                if (!ds.y1) ds.y1 = [];
+                if (ds.y1.includes(m)) return;
+                ds.y1 = [...ds.y1, m];
+                this.datasource = ds;
+                this.applyVisualConfig();
+              },
+              (m) => {
+                const ds = { ...this.datasource };
+                ds.y1 = (ds.y1 || []).filter((f) => f !== m);
+                this.datasource = ds;
+                this.applyVisualConfig();
+              },
+            )
+          : nothing}
 
         <div>
-          <h4
-            class="text-text-tertiary mb-2.5 text-xs font-semibold tracking-widest uppercase"
-          >
+          <h4 class="text-text-tertiary mb-2.5 text-xs font-semibold tracking-widest uppercase">
             Theme Colors
           </h4>
           <div class="flex flex-wrap items-center gap-1.5">
@@ -611,9 +571,7 @@ export class WcEditorPage extends WcElement {
     const headers = this.tableData[0] || [];
     return html`
       <div class="flex min-h-0 flex-1 flex-col">
-        <div
-          class="border-border flex shrink-0 items-center gap-2 border-b px-3 py-2"
-        >
+        <div class="border-border flex shrink-0 items-center gap-2 border-b px-3 py-2">
           <button
             class="border-border text-text-secondary hover:border-brand/50 hover:text-brand flex items-center gap-1 rounded-md border px-2 py-1 text-xs transition-colors"
             @click=${() => this.addRow()}
@@ -673,9 +631,7 @@ export class WcEditorPage extends WcElement {
               ${this.tableData.map((row, ri) =>
                 ri > 0
                   ? html`
-                      <tr
-                        class="group/row hover:bg-surface-alt/60 transition-colors"
-                      >
+                      <tr class="group/row hover:bg-surface-alt/60 transition-colors">
                         <td
                           class="border-border bg-surface text-text-tertiary group-hover/row:bg-surface-alt/60 sticky left-0 z-10 border-r border-b px-1 py-1 text-center text-xs"
                         >
@@ -692,22 +648,16 @@ export class WcEditorPage extends WcElement {
                         </td>
                         ${row.map(
                           (cell, ci) => html`
-                            <td
-                              class="border-border border-r border-b px-1 py-0.5"
-                            >
+                            <td class="border-border border-r border-b px-1 py-0.5">
                               <input
                                 type="text"
                                 .value=${String(cell)}
                                 class="text-text-primary focus:bg-brand/5 focus:ring-brand/30 w-full min-w-15 rounded bg-transparent px-1.5 py-1 text-xs transition-colors outline-none focus:ring-1"
                                 @change=${(e: Event) => {
-                                  const value = (e.target as HTMLInputElement)
-                                    .value;
-                                  const data = this.tableData.map((r) => [
-                                    ...r,
-                                  ]);
+                                  const value = (e.target as HTMLInputElement).value;
+                                  const data = this.tableData.map((r) => [...r]);
                                   const num = Number(value);
-                                  data[ri][ci] =
-                                    value !== "" && !isNaN(num) ? num : value;
+                                  data[ri][ci] = value !== "" && !isNaN(num) ? num : value;
                                   this.tableData = data;
                                   this.scheduleAutoRun();
                                 }}
@@ -729,20 +679,14 @@ export class WcEditorPage extends WcElement {
   private renderLeftPanel(): TemplateResult | typeof nothing {
     if (!this.leftExpand) return nothing;
     return html`
-      <div
-        class="border-border bg-surface flex w-[50vw] shrink-0 flex-col border-r"
-      >
-        <div
-          class="border-border bg-surface-alt/50 flex shrink-0 items-center border-b"
-        >
+      <div class="border-border bg-surface flex w-[50vw] shrink-0 flex-col border-r">
+        <div class="border-border bg-surface-alt/50 flex shrink-0 items-center border-b">
           ${(["visual", "code", "data"] as const).map(
             (tab) => html`
               <button
-                class="${
-                  this.activeTab === tab
-                    ? "text-brand font-medium"
-                    : "text-text-secondary hover:text-text-primary"
-                } relative h-10 flex-1 text-center text-xs transition-colors"
+                class="${this.activeTab === tab
+                  ? "text-brand font-medium"
+                  : "text-text-secondary hover:text-text-primary"} relative h-10 flex-1 text-center text-xs transition-colors"
                 @click=${() => {
                   if (tab !== "code" && this.codeEditor) {
                     this.codeEditor.dispose();
@@ -752,30 +696,20 @@ export class WcEditorPage extends WcElement {
                 }}
               >
                 ${tab.charAt(0).toUpperCase() + tab.slice(1)}
-                ${
-                  this.activeTab === tab
-                    ? html`<span
-                        class="absolute inset-x-4 bottom-0 h-0.5 rounded-full"
-                      ></span>`
-                    : nothing
-                }
+                ${this.activeTab === tab
+                  ? html`<span class="absolute inset-x-4 bottom-0 h-0.5 rounded-full"></span>`
+                  : nothing}
               </button>
             `,
           )}
         </div>
 
         ${this.activeTab === "visual" ? this.renderVisualTab() : nothing}
-        ${
-          this.activeTab === "code"
-            ? html`<div class="min-h-0 flex-1">
-                <div
-                  id="monaco-host"
-                  class="h-full w-full"
-                  ${ref(this.monacoHost)}
-                ></div>
-              </div>`
-            : nothing
-        }
+        ${this.activeTab === "code"
+          ? html`<div class="min-h-0 flex-1">
+              <div id="monaco-host" class="h-full w-full" ${ref(this.monacoHost)}></div>
+            </div>`
+          : nothing}
         ${this.activeTab === "data" ? this.renderDataTab() : nothing}
       </div>
     `;
@@ -787,30 +721,18 @@ export class WcEditorPage extends WcElement {
         <div class="flex min-h-full items-center justify-center py-8">
           <div
             class="border-border bg-surface shadow-card rounded-xl border transition-all duration-200"
-            style="width: ${String(this.chartWidth)}px; height: ${String(
-              this.chartHeight,
-            )}px;"
+            style="width: ${String(this.chartWidth)}px; height: ${String(this.chartHeight)}px;"
           >
-            ${
-              this.previewError
-                ? html`<div
-                    class="flex h-full flex-col items-center justify-center gap-2 p-6"
-                  >
-                    ${unsafeHTML(
-                      `<span class="text-danger/50 inline-flex">${icon("alertCircle", 28)}</span>`,
-                    )}
-                    <p
-                      class="text-danger max-w-md text-center text-xs leading-relaxed"
-                    >
-                      ${this.previewError}
-                    </p>
-                  </div>`
-                : html`<div
-                    id="preview-host"
-                    class="h-full w-full"
-                    ${ref(this.previewHost)}
-                  ></div>`
-            }
+            ${this.previewError
+              ? html`<div class="flex h-full flex-col items-center justify-center gap-2 p-6">
+                  ${unsafeHTML(
+                    `<span class="text-danger/50 inline-flex">${icon("alertCircle", 28)}</span>`,
+                  )}
+                  <p class="text-danger max-w-md text-center text-xs leading-relaxed">
+                    ${this.previewError}
+                  </p>
+                </div>`
+              : html`<div id="preview-host" class="h-full w-full" ${ref(this.previewHost)}></div>`}
           </div>
         </div>
       </div>
@@ -828,9 +750,7 @@ export class WcEditorPage extends WcElement {
       <div class="mb-4">
         <div class="mb-1.5 flex items-center justify-between">
           <label class="text-text-secondary text-xs">${label}</label>
-          <span class="text-text-tertiary text-[10px] tabular-nums"
-            >${value}px</span
-          >
+          <span class="text-text-tertiary text-[10px] tabular-nums">${value}px</span>
         </div>
         <input
           type="range"
@@ -838,8 +758,7 @@ export class WcEditorPage extends WcElement {
           max=${String(max)}
           .value=${String(value)}
           class="accent-brand w-full"
-          @input=${(e: InputEvent) =>
-            onInput(Number((e.target as HTMLInputElement).value))}
+          @input=${(e: InputEvent) => onInput(Number((e.target as HTMLInputElement).value))}
         />
       </div>
     `;
@@ -862,12 +781,8 @@ export class WcEditorPage extends WcElement {
       >
         ${unsafeHTML(icon("chevronRight", 10))}
       </button>
-      <div
-        class="border-border bg-surface w-50 shrink-0 overflow-y-auto border-l p-4"
-      >
-        <h3
-          class="text-text-tertiary mb-3 text-xs font-semibold tracking-widest uppercase"
-        >
+      <div class="border-border bg-surface w-50 shrink-0 overflow-y-auto border-l p-4">
+        <h3 class="text-text-tertiary mb-3 text-xs font-semibold tracking-widest uppercase">
           Preview Settings
         </h3>
         ${slider("Width", this.chartWidth, 100, 1200, (v) => {
@@ -889,7 +804,9 @@ export class WcEditorPage extends WcElement {
         <div class="relative flex min-h-0 flex-1 overflow-hidden">
           ${this.renderLeftPanel()}
           <button
-            class="border-border bg-surface text-text-tertiary hover:text-brand ${this.leftExpand ? "left-[50vw]" : "left-0"} absolute top-1/2 z-10 flex h-10 w-5 -translate-y-1/2 items-center justify-center rounded-r-lg border border-l-0 shadow-sm transition-colors"
+            class="border-border bg-surface text-text-tertiary hover:text-brand ${this.leftExpand
+              ? "left-[50vw]"
+              : "left-0"} absolute top-1/2 z-10 flex h-10 w-5 -translate-y-1/2 items-center justify-center rounded-r-lg border border-l-0 shadow-sm transition-colors"
             title="Toggle panel"
             @click=${() => {
               this.leftExpand = !this.leftExpand;
@@ -898,11 +815,9 @@ export class WcEditorPage extends WcElement {
               }
             }}
           >
-            ${
-              this.leftExpand
-                ? unsafeHTML(icon("chevronLeft", 10))
-                : unsafeHTML(icon("chevronRight", 10))
-            }
+            ${this.leftExpand
+              ? unsafeHTML(icon("chevronLeft", 10))
+              : unsafeHTML(icon("chevronRight", 10))}
           </button>
           ${this.renderPreviewPane()} ${this.renderRightPanel()}
         </div>

@@ -1,9 +1,6 @@
 const API_BASE = import.meta.env.VITE_API_BASE || "";
 
-export async function apiFetch<T = unknown>(
-  path: string,
-  init?: RequestInit,
-): Promise<T> {
+export async function apiFetch<T = unknown>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     credentials: "include",
     headers: { "Content-Type": "application/json", ...init?.headers },
@@ -12,10 +9,7 @@ export async function apiFetch<T = unknown>(
   return res.json() as Promise<T>;
 }
 
-export async function apiPost<T = unknown>(
-  path: string,
-  body: unknown,
-): Promise<T> {
+export async function apiPost<T = unknown>(path: string, body: unknown): Promise<T> {
   return apiFetch<T>(path, {
     method: "POST",
     body: JSON.stringify(body),
@@ -77,11 +71,7 @@ export function loginApi(input: { email: string; password: string }) {
   return apiPost<Result<{ userId: number }>>("/api/auth/login", input);
 }
 
-export function registerApi(input: {
-  email: string;
-  password: string;
-  username?: string;
-}) {
+export function registerApi(input: { email: string; password: string; username?: string }) {
   return apiPost<Result<{ userId: number }>>("/api/auth/register", input);
 }
 
@@ -90,20 +80,14 @@ export function logoutApi() {
 }
 
 export function listProjectsApi() {
-  return apiFetch<Result<{ projects: ProjectSummary[]; message: string }>>(
-    "/api/projects",
-  );
+  return apiFetch<Result<{ projects: ProjectSummary[]; message: string }>>("/api/projects");
 }
 
 export function getProjectDetailApi(projectId: number) {
   return apiFetch<Result<ProjectDetail>>(`/api/projects/${projectId}`);
 }
 
-export function createProjectApi(input: {
-  name: string;
-  description?: string;
-  type?: string;
-}) {
+export function createProjectApi(input: { name: string; description?: string; type?: string }) {
   return apiPost<Result<{ projectId: number }>>("/api/projects/create", input);
 }
 
@@ -127,12 +111,6 @@ export function saveChartApi(payload: SaveChartPayload) {
   return apiPost<Result<{ chartId: number }>>("/api/charts/save", payload);
 }
 
-export function cloneChartApi(input: {
-  chartId: number;
-  targetProjectId: number;
-}) {
-  return apiPost<Result<{ chartId: number; projectChartId: number }>>(
-    "/api/charts/clone",
-    input,
-  );
+export function cloneChartApi(input: { chartId: number; targetProjectId: number }) {
+  return apiPost<Result<{ chartId: number; projectChartId: number }>>("/api/charts/clone", input);
 }

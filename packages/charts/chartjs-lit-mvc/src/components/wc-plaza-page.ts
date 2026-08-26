@@ -109,8 +109,7 @@ export class WcPlazaPage extends WcElement {
     this.groups = buildGroups(filtered);
     this.requestUpdate();
     queueMicrotask(() => {
-      if (this.isConnected)
-        animateIn(this, "[data-anim-card]", { y: 24, stagger: 0.03 });
+      if (this.isConnected) animateIn(this, "[data-anim-card]", { y: 24, stagger: 0.03 });
     });
   }
 
@@ -124,11 +123,9 @@ export class WcPlazaPage extends WcElement {
     const chip = (type: string, label: string, active: boolean) => html`
       <button
         data-anim
-        class="${
-          active
-            ? " bg-brand text-white shadow-sm"
-            : "border-border text-text-secondary hover:border-brand/50 hover:text-brand border hover:shadow-sm"
-        } rounded-full px-3 py-1.5 text-xs font-medium transition-all duration-200"
+        class="${active
+          ? " bg-brand text-white shadow-sm"
+          : "border-border text-text-secondary hover:border-brand/50 hover:text-brand border hover:shadow-sm"} rounded-full px-3 py-1.5 text-xs font-medium transition-all duration-200"
         @click=${() => this.applyFilter(type)}
       >
         ${label}
@@ -143,9 +140,7 @@ export class WcPlazaPage extends WcElement {
           ${this.types.map((t) =>
             chip(t.type, `${t.type} (${t.count})`, this.activeType === t.type),
           )}
-          <div
-            class="border-border ml-auto flex items-center gap-2 rounded-full border px-3 py-1"
-          >
+          <div class="border-border ml-auto flex items-center gap-2 rounded-full border px-3 py-1">
             ${unsafeHTML(
               `<span class="text-text-tertiary inline-flex">${icon("search", 13)}</span>`,
             )}
@@ -185,19 +180,15 @@ export class WcPlazaPage extends WcElement {
           />
         </div>
         <div class="border-border border-t px-4 py-3">
-          <p class="text-text-primary truncate text-sm font-medium">
-            ${item.name}
-          </p>
+          <p class="text-text-primary truncate text-sm font-medium">${item.name}</p>
           <div class="mt-1 flex items-center justify-between">
-            ${
-              item.chartType
-                ? html`<span
-                    class="bg-brand/10 text-brand rounded-full px-2 py-0.5 text-[10px] font-medium"
-                  >
-                    ${item.chartType}
-                  </span>`
-                : nothing
-            }
+            ${item.chartType
+              ? html`<span
+                  class="bg-brand/10 text-brand rounded-full px-2 py-0.5 text-[10px] font-medium"
+                >
+                  ${item.chartType}
+                </span>`
+              : nothing}
             <span class="text-text-tertiary text-[10px]">
               ${new Date(item.gmtModified).toLocaleDateString()}
             </span>
@@ -227,19 +218,11 @@ export class WcPlazaPage extends WcElement {
             ${unsafeHTML(icon("x", 16))}
           </button>
           <div class="p-6">
-            <h3 class="text-text-primary mb-1 text-lg font-medium">
-              ${p.name}
-            </h3>
-            ${
-              p.chartType
-                ? html`<p class="text-text-secondary mb-4 text-xs">
-                    ${p.chartType}
-                  </p>`
-                : nothing
-            }
-            <div
-              class="bg-surface-alt flex items-center justify-center rounded-lg p-4"
-            >
+            <h3 class="text-text-primary mb-1 text-lg font-medium">${p.name}</h3>
+            ${p.chartType
+              ? html`<p class="text-text-secondary mb-4 text-xs">${p.chartType}</p>`
+              : nothing}
+            <div class="bg-surface-alt flex items-center justify-center rounded-lg p-4">
               <img
                 src=${p.previewUrl || ""}
                 alt=${p.name || ""}
@@ -268,20 +251,15 @@ export class WcPlazaPage extends WcElement {
           <div class="flex items-end justify-between">
             <div>
               <div class="mb-2 flex items-center gap-2">
-                ${unsafeHTML(
-                  `<span class="text-brand inline-flex">${icon("sparkles", 16)}</span>`,
-                )}
-                <span
-                  class="text-brand text-xs font-semibold tracking-widest uppercase"
+                ${unsafeHTML(`<span class="text-brand inline-flex">${icon("sparkles", 16)}</span>`)}
+                <span class="text-brand text-xs font-semibold tracking-widest uppercase"
                   >Community Gallery</span
                 >
               </div>
               <h1 class="text-text-primary text-3xl font-bold tracking-tight">
                 Chart<span class="text-brand">Plaza</span>
               </h1>
-              <p class="text-text-secondary mt-1.5 text-sm">
-                Browse and discover community charts
-              </p>
+              <p class="text-text-secondary mt-1.5 text-sm">Browse and discover community charts</p>
             </div>
             <div class="hidden items-center gap-2 sm:flex">
               <span class="text-text-tertiary text-xs">Total</span>
@@ -295,82 +273,60 @@ export class WcPlazaPage extends WcElement {
         </div>
 
         ${this.renderFilterBar()}
-        ${
-          this.loading
-            ? html`<div
-                class="grid grid-cols-2 gap-5 sm:grid-cols-3 lg:grid-cols-4"
-              >
-                ${[1, 2, 3, 4, 5, 6, 7, 8].map(
-                  () => html`
-                    <div
-                      class="bg-surface-alt h-56 animate-pulse rounded-xl"
-                    ></div>
-                  `,
-                )}
-              </div>`
-            : html`
-                ${
-                  this.groups.length > 1 && !this.activeType
-                    ? html`<div class="mb-4 flex flex-wrap gap-1.5">
-                        ${this.groups.map(
-                          (g, gi) => html`
-                            <button
-                              data-anim
-                              class="text-text-secondary hover:bg-surface-alt hover:text-brand rounded-md px-2.5 py-1 text-xs transition-colors"
-                              @click=${() => this.scrollToGroup(gi)}
-                            >
-                              ${g.name} (${g.count})
-                            </button>
-                          `,
-                        )}
-                      </div>`
-                    : nothing
-                }
-                ${this.groups.map(
-                  (group) => html`
-                    <div data-group-section class="mb-10 scroll-mt-32">
-                      ${
-                        this.groups.length > 1 && !this.activeType
-                          ? html`<div class="mb-4 flex items-center gap-3">
-                              <h2
-                                class="text-text-primary text-base font-semibold"
-                              >
-                                ${group.name}
-                              </h2>
-                              <span
-                                class="bg-surface-alt text-text-secondary rounded-full px-2 py-0.5 text-xs tabular-nums"
-                              >
-                                ${group.count}
-                              </span>
-                              <div class="bg-border h-px flex-1"></div>
-                            </div>`
-                          : nothing
-                      }
-                      <div
-                        class="grid grid-cols-2 gap-5 sm:grid-cols-3 lg:grid-cols-4"
-                      >
-                        ${group.list.map((item) => this.renderCard(item))}
-                      </div>
+        ${this.loading
+          ? html`<div class="grid grid-cols-2 gap-5 sm:grid-cols-3 lg:grid-cols-4">
+              ${[1, 2, 3, 4, 5, 6, 7, 8].map(
+                () => html` <div class="bg-surface-alt h-56 animate-pulse rounded-xl"></div> `,
+              )}
+            </div>`
+          : html`
+              ${this.groups.length > 1 && !this.activeType
+                ? html`<div class="mb-4 flex flex-wrap gap-1.5">
+                    ${this.groups.map(
+                      (g, gi) => html`
+                        <button
+                          data-anim
+                          class="text-text-secondary hover:bg-surface-alt hover:text-brand rounded-md px-2.5 py-1 text-xs transition-colors"
+                          @click=${() => this.scrollToGroup(gi)}
+                        >
+                          ${g.name} (${g.count})
+                        </button>
+                      `,
+                    )}
+                  </div>`
+                : nothing}
+              ${this.groups.map(
+                (group) => html`
+                  <div data-group-section class="mb-10 scroll-mt-32">
+                    ${this.groups.length > 1 && !this.activeType
+                      ? html`<div class="mb-4 flex items-center gap-3">
+                          <h2 class="text-text-primary text-base font-semibold">${group.name}</h2>
+                          <span
+                            class="bg-surface-alt text-text-secondary rounded-full px-2 py-0.5 text-xs tabular-nums"
+                          >
+                            ${group.count}
+                          </span>
+                          <div class="bg-border h-px flex-1"></div>
+                        </div>`
+                      : nothing}
+                    <div class="grid grid-cols-2 gap-5 sm:grid-cols-3 lg:grid-cols-4">
+                      ${group.list.map((item) => this.renderCard(item))}
                     </div>
-                  `,
-                )}
-                ${
-                  !this.loading && this.groups.length === 0
-                    ? html`<div
-                        class="text-text-secondary flex h-64 flex-col items-center justify-center"
-                      >
-                        ${unsafeHTML(
-                          `<span class="text-text-tertiary/40 inline-flex">${icon("search", 40)}</span>`,
-                        )}
-                        <p class="mt-4 text-lg">No charts found</p>
-                        <p class="mt-1 text-sm">
-                          Try selecting a different chart type or search term
-                        </p>
-                      </div>`
-                    : nothing
-                }
-              `
-        }
+                  </div>
+                `,
+              )}
+              ${!this.loading && this.groups.length === 0
+                ? html`<div
+                    class="text-text-secondary flex h-64 flex-col items-center justify-center"
+                  >
+                    ${unsafeHTML(
+                      `<span class="text-text-tertiary/40 inline-flex">${icon("search", 40)}</span>`,
+                    )}
+                    <p class="mt-4 text-lg">No charts found</p>
+                    <p class="mt-1 text-sm">Try selecting a different chart type or search term</p>
+                  </div>`
+                : nothing}
+            `}
       </div>
       ${this.renderPreviewDialog()}
     `;

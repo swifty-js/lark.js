@@ -77,8 +77,7 @@ export class WcProjectsPage extends WcElement {
         this.charts = res.data.charts;
         this.requestUpdate();
         queueMicrotask(() => {
-          if (this.isConnected)
-            animateIn(this, "[data-anim-card]", { y: 20, stagger: 0.04 });
+          if (this.isConnected) animateIn(this, "[data-anim-card]", { y: 20, stagger: 0.04 });
         });
       }
     });
@@ -181,9 +180,7 @@ export class WcProjectsPage extends WcElement {
     return html`
       <aside class="w-56 shrink-0">
         <div class="mb-4 flex items-center justify-between">
-          <h2
-            class="text-text-tertiary text-xs font-semibold tracking-widest uppercase"
-          >
+          <h2 class="text-text-tertiary text-xs font-semibold tracking-widest uppercase">
             Projects
           </h2>
           <button
@@ -198,43 +195,34 @@ export class WcProjectsPage extends WcElement {
           </button>
         </div>
 
-        ${
-          this.loading
-            ? html`<div class="space-y-2">
-                ${[1, 2, 3].map(
-                  () =>
-                    html`<div
-                      class="bg-surface-alt h-9 animate-pulse rounded-lg"
-                    ></div>`,
+        ${this.loading
+          ? html`<div class="space-y-2">
+              ${[1, 2, 3].map(
+                () => html`<div class="bg-surface-alt h-9 animate-pulse rounded-lg"></div>`,
+              )}
+            </div>`
+          : html`
+              <nav class="space-y-1">
+                ${this.projects.map(
+                  (item) => html`
+                    <button
+                      data-anim
+                      class="${this.current && this.current.id === item.id
+                        ? "bg-brand/10 text-brand font-medium"
+                        : "text-text-secondary hover:bg-surface-alt hover:text-text-primary"} block w-full rounded-lg px-3 py-2 text-left text-sm transition-all duration-200"
+                      @click=${() => this.selectProject(item)}
+                    >
+                      ${item.name}
+                    </button>
+                  `,
                 )}
-              </div>`
-            : html`
-                <nav class="space-y-1">
-                  ${this.projects.map(
-                    (item) => html`
-                      <button
-                        data-anim
-                        class="${
-                          this.current && this.current.id === item.id
-                            ? "bg-brand/10 text-brand font-medium"
-                            : "text-text-secondary hover:bg-surface-alt hover:text-text-primary"
-                        } block w-full rounded-lg px-3 py-2 text-left text-sm transition-all duration-200"
-                        @click=${() => this.selectProject(item)}
-                      >
-                        ${item.name}
-                      </button>
-                    `,
-                  )}
-                </nav>
-                ${
-                  this.projects.length === 0
-                    ? html`<p class="text-text-tertiary mt-4 text-sm">
-                        No projects yet. Create one to get started.
-                      </p>`
-                    : nothing
-                }
-              `
-        }
+              </nav>
+              ${this.projects.length === 0
+                ? html`<p class="text-text-tertiary mt-4 text-sm">
+                    No projects yet. Create one to get started.
+                  </p>`
+                : nothing}
+            `}
       </aside>
     `;
   }
@@ -246,25 +234,17 @@ export class WcProjectsPage extends WcElement {
         class="group border-border bg-surface hover:shadow-card-hover relative overflow-hidden rounded-xl border transition-all duration-300 hover:-translate-y-0.5"
       >
         <div class="bg-surface-alt flex h-32 items-center justify-center p-3">
-          ${
-            item.previewUrl
-              ? html`<img
-                  src=${item.previewUrl}
-                  alt=${item.name || ""}
-                  class="max-h-full max-w-full object-contain"
-                />`
-              : html`<span class="text-text-tertiary/50"
-                  >${unsafeHTML(icon("image", 32))}</span
-                >`
-          }
+          ${item.previewUrl
+            ? html`<img
+                src=${item.previewUrl}
+                alt=${item.name || ""}
+                class="max-h-full max-w-full object-contain"
+              />`
+            : html`<span class="text-text-tertiary/50">${unsafeHTML(icon("image", 32))}</span>`}
         </div>
-        <div
-          class="border-border flex items-center justify-between border-t px-3 py-2"
-        >
+        <div class="border-border flex items-center justify-between border-t px-3 py-2">
           <span class="text-text-primary truncate text-sm"> ${item.name} </span>
-          <div
-            class="flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100"
-          >
+          <div class="flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
             <button
               class="text-text-secondary hover:text-brand rounded p-1 transition-colors"
               title="Edit"
@@ -283,9 +263,7 @@ export class WcProjectsPage extends WcElement {
               title="Clone to project"
               @click=${() => {
                 this.cloneChartId = item.id;
-                this.cloneTargetId = this.current
-                  ? String(this.current.id)
-                  : "";
+                this.cloneTargetId = this.current ? String(this.current.id) : "";
                 this.showCloneDialog = true;
               }}
             >
@@ -317,9 +295,7 @@ export class WcProjectsPage extends WcElement {
             ${unsafeHTML(
               `<span class="text-text-tertiary/40 inline-flex">${icon("folder", 40)}</span>`,
             )}
-            <p class="text-text-secondary mt-4 text-lg">
-              Please sign in to manage projects
-            </p>
+            <p class="text-text-secondary mt-4 text-lg">Please sign in to manage projects</p>
             <button
               class="hover:shadow-glow bg-brand mt-4 rounded-md px-5 py-2 text-sm font-medium text-white transition-all"
               @click=${() => openAuthModal()}
@@ -337,119 +313,90 @@ export class WcProjectsPage extends WcElement {
           ${this.renderSidebar()}
 
           <main class="min-w-0 flex-1">
-            ${
-              this.current
-                ? html`
-                    <div class="mb-6 flex items-center justify-between">
-                      <div>
-                        <h1 class="text-text-primary text-xl font-semibold">
-                          ${this.current.name}
-                        </h1>
-                        <p class="text-text-secondary mt-0.5 text-sm">
-                          ${this.charts.length} charts
-                        </p>
-                      </div>
-                      <button
-                        class="hover:shadow-glow flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-medium text-white transition-all duration-200 hover:scale-[1.02] active:scale-95"
-                        @click=${() =>
-                          this.nav(
-                            `/editor?projectId=${this.current!.id}&mode=develop`,
-                          )}
-                      >
-                        ${unsafeHTML(icon("plus", 14))} New Chart
-                      </button>
+            ${this.current
+              ? html`
+                  <div class="mb-6 flex items-center justify-between">
+                    <div>
+                      <h1 class="text-text-primary text-xl font-semibold">${this.current.name}</h1>
+                      <p class="text-text-secondary mt-0.5 text-sm">${this.charts.length} charts</p>
                     </div>
+                    <button
+                      class="hover:shadow-glow flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-medium text-white transition-all duration-200 hover:scale-[1.02] active:scale-95"
+                      @click=${() => this.nav(`/editor?projectId=${this.current!.id}&mode=develop`)}
+                    >
+                      ${unsafeHTML(icon("plus", 14))} New Chart
+                    </button>
+                  </div>
 
-                    ${
-                      this.charts.length > 0
-                        ? html`<div
-                            class="grid grid-cols-2 gap-4 lg:grid-cols-3"
-                          >
-                            ${this.charts.map((item) =>
-                              this.renderChartCard(item),
-                            )}
-                          </div>`
-                        : html`<div
-                            class="border-border text-text-secondary flex h-48 flex-col items-center justify-center rounded-xl border border-dashed"
-                          >
-                            <p>No charts in this project</p>
-                            <button
-                              class="text-brand mt-2 text-sm hover:underline"
-                              @click=${() =>
-                                this.nav(
-                                  `/editor?projectId=${this.current!.id}&mode=develop`,
-                                )}
-                            >
-                              Create your first chart
-                            </button>
-                          </div>`
-                    }
-                  `
-                : html`<div
-                    class="text-text-secondary flex h-64 items-center justify-center"
-                  >
-                    Select a project or create a new one
-                  </div>`
-            }
+                  ${this.charts.length > 0
+                    ? html`<div class="grid grid-cols-2 gap-4 lg:grid-cols-3">
+                        ${this.charts.map((item) => this.renderChartCard(item))}
+                      </div>`
+                    : html`<div
+                        class="border-border text-text-secondary flex h-48 flex-col items-center justify-center rounded-xl border border-dashed"
+                      >
+                        <p>No charts in this project</p>
+                        <button
+                          class="text-brand mt-2 text-sm hover:underline"
+                          @click=${() =>
+                            this.nav(`/editor?projectId=${this.current!.id}&mode=develop`)}
+                        >
+                          Create your first chart
+                        </button>
+                      </div>`}
+                `
+              : html`<div class="text-text-secondary flex h-64 items-center justify-center">
+                  Select a project or create a new one
+                </div>`}
           </main>
         </div>
       </div>
 
-      ${
-        this.showNewDialog
-          ? this.dialog(
-              "New Project",
-              html`<input
-                type="text"
-                .value=${this.dialogName}
-                placeholder="Project name"
-                class="border-border bg-surface text-text-primary placeholder:text-text-tertiary/60 focus:border-brand focus:ring-brand/25 w-full rounded-lg border px-3 py-2 text-sm transition-all outline-none focus:ring-3"
-                @input=${(e: InputEvent) =>
-                  (this.dialogName = (e.target as HTMLInputElement).value)}
-                @keydown=${(e: KeyboardEvent) => {
-                  if (e.key === "Enter") this.createProject();
-                }}
-              />`,
-              () => (this.showNewDialog = false),
-              () => this.createProject(),
-              "Create",
-              this.creating,
-            )
-          : nothing
-      }
-      ${
-        this.showCloneDialog
-          ? this.dialog(
-              "Clone Chart",
-              html`
-                <p class="text-text-secondary mb-3 text-sm">
-                  Select the target project for this chart copy.
-                </p>
-                <select
-                  class="border-border bg-surface text-text-primary focus:border-brand focus:ring-brand/25 w-full rounded-lg border px-3 py-2 text-sm transition-all outline-none focus:ring-3"
-                  @change=${(e: Event) =>
-                    (this.cloneTargetId = (
-                      e.target as HTMLSelectElement
-                    ).value)}
-                >
-                  ${this.projects.map(
-                    (proj) => html`
-                      <option
-                        value=${proj.id}
-                        ?selected=${this.cloneTargetId === String(proj.id)}
-                      >
-                        ${proj.name}
-                      </option>
-                    `,
-                  )}
-                </select>
-              `,
-              () => (this.showCloneDialog = false),
-              () => this.doClone(),
-              "Clone",
-            )
-          : nothing
-      }
+      ${this.showNewDialog
+        ? this.dialog(
+            "New Project",
+            html`<input
+              type="text"
+              .value=${this.dialogName}
+              placeholder="Project name"
+              class="border-border bg-surface text-text-primary placeholder:text-text-tertiary/60 focus:border-brand focus:ring-brand/25 w-full rounded-lg border px-3 py-2 text-sm transition-all outline-none focus:ring-3"
+              @input=${(e: InputEvent) => (this.dialogName = (e.target as HTMLInputElement).value)}
+              @keydown=${(e: KeyboardEvent) => {
+                if (e.key === "Enter") this.createProject();
+              }}
+            />`,
+            () => (this.showNewDialog = false),
+            () => this.createProject(),
+            "Create",
+            this.creating,
+          )
+        : nothing}
+      ${this.showCloneDialog
+        ? this.dialog(
+            "Clone Chart",
+            html`
+              <p class="text-text-secondary mb-3 text-sm">
+                Select the target project for this chart copy.
+              </p>
+              <select
+                class="border-border bg-surface text-text-primary focus:border-brand focus:ring-brand/25 w-full rounded-lg border px-3 py-2 text-sm transition-all outline-none focus:ring-3"
+                @change=${(e: Event) =>
+                  (this.cloneTargetId = (e.target as HTMLSelectElement).value)}
+              >
+                ${this.projects.map(
+                  (proj) => html`
+                    <option value=${proj.id} ?selected=${this.cloneTargetId === String(proj.id)}>
+                      ${proj.name}
+                    </option>
+                  `,
+                )}
+              </select>
+            `,
+            () => (this.showCloneDialog = false),
+            () => this.doClone(),
+            "Clone",
+          )
+        : nothing}
     `;
   }
 }

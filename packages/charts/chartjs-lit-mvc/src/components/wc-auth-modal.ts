@@ -92,9 +92,7 @@ export class WcAuthModal extends WcElement {
   ): TemplateResult {
     return html`
       <div>
-        <label
-          class="text-text-secondary mb-1.5 block text-xs font-semibold tracking-wide"
-        >
+        <label class="text-text-secondary mb-1.5 block text-xs font-semibold tracking-wide">
           ${label}
         </label>
         <div
@@ -110,8 +108,7 @@ export class WcAuthModal extends WcElement {
             .value=${value}
             placeholder=${placeholder}
             class="placeholder:text-text-tertiary/60 text-text-primary w-full bg-transparent px-3 py-2.5 text-sm outline-none"
-            @input=${(e: InputEvent) =>
-              onInput((e.target as HTMLInputElement).value)}
+            @input=${(e: InputEvent) => onInput((e.target as HTMLInputElement).value)}
             @keydown=${(e: KeyboardEvent) => {
               if (e.key === "Enter" && onEnter) onEnter();
             }}
@@ -169,19 +166,14 @@ export class WcAuthModal extends WcElement {
                 ${isLogin ? "Welcome back" : "Create your account"}
               </h2>
               <p class="text-text-secondary mt-1.5 text-sm">
-                ${
-                  isLogin
-                    ? "Sign in to continue to chart.js"
-                    : "Join chart.js to manage your charts"
-                }
+                ${isLogin
+                  ? "Sign in to continue to chart.js"
+                  : "Join chart.js to manage your charts"}
               </p>
             </div>
 
             <!-- mode switch pills -->
-            <div
-              class="bg-surface-alt mb-6 grid grid-cols-2 gap-1 rounded-xl p-1"
-              role="tablist"
-            >
+            <div class="bg-surface-alt mb-6 grid grid-cols-2 gap-1 rounded-xl p-1" role="tablist">
               ${(
                 [
                   ["login", "Sign in"],
@@ -192,11 +184,9 @@ export class WcAuthModal extends WcElement {
                   <button
                     role="tab"
                     aria-selected=${this.mode === value}
-                    class="${
-                      this.mode === value
-                        ? "bg-surface text-text-primary shadow-sm"
-                        : "text-text-secondary hover:text-text-primary"
-                    } rounded-lg py-2 text-sm font-medium transition-all duration-200"
+                    class="${this.mode === value
+                      ? "bg-surface text-text-primary shadow-sm"
+                      : "text-text-secondary hover:text-text-primary"} rounded-lg py-2 text-sm font-medium transition-all duration-200"
                     @click=${() => this.switchMode(value)}
                   >
                     ${label}
@@ -205,29 +195,25 @@ export class WcAuthModal extends WcElement {
               )}
             </div>
 
-            ${
-              this.errorMsg
-                ? html`<div
-                    class="bg-danger/10 text-danger animate-scale-in mb-4 flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm"
-                  >
-                    ${unsafeHTML(icon("alertCircle", 15))} ${this.errorMsg}
-                  </div>`
-                : nothing
-            }
+            ${this.errorMsg
+              ? html`<div
+                  class="bg-danger/10 text-danger animate-scale-in mb-4 flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm"
+                >
+                  ${unsafeHTML(icon("alertCircle", 15))} ${this.errorMsg}
+                </div>`
+              : nothing}
 
             <div class="space-y-4">
-              ${
-                !isLogin
-                  ? this.field(
-                      "USERNAME",
-                      "user",
-                      "text",
-                      this.username,
-                      "Display name (optional)",
-                      (v) => (this.username = v),
-                    )
-                  : nothing
-              }
+              ${!isLogin
+                ? this.field(
+                    "USERNAME",
+                    "user",
+                    "text",
+                    this.username,
+                    "Display name (optional)",
+                    (v) => (this.username = v),
+                  )
+                : nothing}
               ${this.field(
                 "EMAIL",
                 "globe",
@@ -252,20 +238,11 @@ export class WcAuthModal extends WcElement {
               ?disabled=${this.submitting}
               @click=${() => this.submit()}
             >
-              ${
-                this.submitting
-                  ? "Please wait..."
-                  : isLogin
-                    ? "Sign in"
-                    : "Create account"
-              }
+              ${this.submitting ? "Please wait..." : isLogin ? "Sign in" : "Create account"}
             </button>
 
-            <p
-              class="text-text-tertiary mt-5 text-center text-xs leading-relaxed"
-            >
-              By continuing you agree to chart.js's terms of service and privacy
-              policy.
+            <p class="text-text-tertiary mt-5 text-center text-xs leading-relaxed">
+              By continuing you agree to chart.js's terms of service and privacy policy.
             </p>
           </div>
         </div>

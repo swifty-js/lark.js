@@ -50,12 +50,7 @@ export function animatePop(el: HTMLElement): void {
 }
 
 /** Subtle count-up tween for stat numbers. */
-export function animateCount(
-  el: HTMLElement,
-  from: number,
-  to: number,
-  duration = 0.8,
-): void {
+export function animateCount(el: HTMLElement, from: number, to: number, duration = 0.8): void {
   const state = { v: from };
   gsap.to(state, {
     v: to,

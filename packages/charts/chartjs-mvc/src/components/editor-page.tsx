@@ -1,4 +1,4 @@
-import { useSignal, useRef, useEffect, useRouter } from "@lark.js/mvc";
+import { useSignal, useRef, useEffect, useSignalEffect, useRouter } from "@lark.js/mvc";
 import { raw } from "@lark.js/mvc/jsx-runtime";
 import { icon, chartTypeIcons } from "@/lib/icons";
 import * as monaco from "monaco-editor";
@@ -130,8 +130,15 @@ export default function EditorPage() {
   };
 
   const ensureMonaco = () => {
-    if (codeEditor.current || !monacoHost.current) return;
-    const ed = monaco.editor.create(monacoHost.current, {
+    const host = monacoHost.current;
+    if (!host) return;
+    if (codeEditor.current) {
+      if (codeEditor.current.getContainerDomNode() === host) return;
+      // host div was remounted; the old editor lives in detached DOM
+      codeEditor.current.dispose();
+      codeEditor.current = null;
+    }
+    const ed = monaco.editor.create(host, {
       value: code.current!,
       language: "javascript",
       theme: isDarkMode() ? "vs-dark" : "vs",
@@ -210,8 +217,9 @@ export default function EditorPage() {
     };
   });
 
-  useEffect(() => {
-    if (activeTab.value === "code" && !codeEditor.current) {
+  useSignalEffect(() => {
+    if (activeTab.value === "code" && leftExpand.value) {
+      // defer past the render commit so monacoHost.current is filled
       queueMicrotask(() => ensureMonaco());
     }
   });

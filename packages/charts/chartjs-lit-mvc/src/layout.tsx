@@ -32,9 +32,7 @@ export default function Layout({ router }: { router: RouterApi }) {
     >
       <wc-header activePath={currentPath} />
 
-      <main
-        class={`min-h-0 flex-1 ${isEditor ? "flex flex-col overflow-hidden" : ""}`}
-      >
+      <main class={`min-h-0 flex-1 ${isEditor ? "flex flex-col overflow-hidden" : ""}`}>
         <RouterView router={router} />
       </main>
 

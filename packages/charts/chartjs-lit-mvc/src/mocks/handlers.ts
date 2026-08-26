@@ -26,9 +26,7 @@ function setSession(active: boolean): void {
 export const handlers = [
   // --- auth ---
   http.get("/api/auth/me", () =>
-    sessionActive
-      ? HttpResponse.json(ok(MOCK_USER))
-      : HttpResponse.json(fail("Not authenticated")),
+    sessionActive ? HttpResponse.json(ok(MOCK_USER)) : HttpResponse.json(fail("Not authenticated")),
   ),
 
   http.post("/api/auth/login", async ({ request }) => {
@@ -61,17 +59,13 @@ export const handlers = [
   }),
 
   // --- projects ---
-  http.get("/api/projects", () =>
-    HttpResponse.json(ok({ projects: mockProjects, message: "ok" })),
-  ),
+  http.get("/api/projects", () => HttpResponse.json(ok({ projects: mockProjects, message: "ok" }))),
 
   http.get("/api/projects/:id", ({ params }) => {
     const id = Number(params.id);
     const project = mockProjects.find((p) => p.id === id);
     if (!project) return HttpResponse.json(fail("Project not found"));
-    return HttpResponse.json(
-      ok({ project, charts: chartsOfProject(id), users: [MOCK_USER] }),
-    );
+    return HttpResponse.json(ok({ project, charts: chartsOfProject(id), users: [MOCK_USER] }));
   }),
 
   http.post("/api/projects/create", async ({ request }) => {
@@ -95,9 +89,7 @@ export const handlers = [
   http.post("/api/projects/quit", () => HttpResponse.json(ok())),
 
   // --- charts ---
-  http.get("/api/charts/home", () =>
-    HttpResponse.json(ok({ charts: mockCharts.slice(0, 24) })),
-  ),
+  http.get("/api/charts/home", () => HttpResponse.json(ok({ charts: mockCharts.slice(0, 24) }))),
 
   http.post("/api/charts/save", async ({ request }) => {
     const body = (await request.json().catch(() => ({}))) as {

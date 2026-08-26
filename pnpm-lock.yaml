@@ -247,6 +247,9 @@ importers:
       '@preact/signals-core':
         specifier: ^1.14.4
         version: 1.14.4
+      preact:
+        specifier: ^10.29.8
+        version: 10.29.8
     devDependencies:
       '@types/node':
         specifier: ^24.13.3

@@ -370,10 +370,7 @@ export function getChartType(type: string): ChartTypeConfig | undefined {
   return chartRegistry.find((c) => c.type === type);
 }
 
-export function generateCode(
-  type: string,
-  datasource: Record<string, string[]>,
-): string {
+export function generateCode(type: string, datasource: Record<string, string[]>): string {
   const config = getChartType(type);
   if (!config) return "var options = {};";
   return config.translate(type, datasource);

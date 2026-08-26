@@ -93,7 +93,9 @@ ${this.error}</pre>`;
     if (!this.svg) {
       return html`<p class="text-sm text-[var(--vp-c-text-2)]">Mermaid loading...</p>`;
     }
-    return html`<div class="flex justify-center overflow-x-auto">${unsafeHTML(this.svg)}</div>`;
+    return html`<div class="flex justify-center overflow-x-auto [&_svg]:h-auto [&_svg]:max-w-full">
+      ${unsafeHTML(this.svg)}
+    </div>`;
   }
 }
 

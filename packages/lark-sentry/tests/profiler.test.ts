@@ -20,10 +20,10 @@
  * SOFTWARE.
  */
 
-import { render, signal, unmount } from "@lark.js/mvc";
+import { hotSwapByComponent, render, signal, unmount } from "@lark.js/mvc";
 import { jsx } from "@lark.js/mvc/jsx-runtime";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { useProfiler, withProfiler } from "../src/profiler.js";
+import { useProfiler } from "../src/profiler.js";
 
 vi.mock("@swifty.js/sentry", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@swifty.js/sentry")>();
@@ -104,33 +104,23 @@ describe("useProfiler", () => {
     expect(container.textContent).toBe("ok");
     expect(() => unmount(container)).not.toThrow();
   });
-});
 
-describe("withProfiler", () => {
-  function Inner(props: { label?: string }) {
-    return jsx("span", { children: props.label });
-  }
+  it("suppresses the mount metric when an HMR swap recreates the effect slot", () => {
+    function TargetV1() {
+      useProfiler("Target");
+      return jsx("div", { children: "v1" });
+    }
+    function TargetV2() {
+      useProfiler("Target");
+      return jsx("div", { children: "v2" });
+    }
 
-  it("renders the wrapped component with props passed through and profiles it", () => {
-    const Profiled = withProfiler(Inner, "custom");
+    render(jsx(TargetV1, {}), container);
+    expect(callsNamed("LarkComponentMount")).toHaveLength(1);
 
-    render(jsx(Profiled, { label: "hi" }), container);
+    hotSwapByComponent(TargetV1, TargetV2);
 
-    expect(container.textContent).toBe("hi");
-    expect(perfMock).toHaveBeenCalledWith({
-      name: "LarkComponentMount",
-      message: "custom",
-      value: expect.any(Number),
-    });
-  });
-
-  it("defaults the label to the component's function name", () => {
-    const Profiled = withProfiler(Inner);
-
-    render(jsx(Profiled, { label: "x" }), container);
-
-    expect(perfMock).toHaveBeenCalledWith(
-      expect.objectContaining({ name: "LarkComponentMount", message: "Inner" }),
-    );
+    expect(container.textContent).toBe("v2");
+    expect(callsNamed("LarkComponentMount")).toHaveLength(1); // no garbage re-mount metric
   });
 });

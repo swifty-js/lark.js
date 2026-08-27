@@ -44,6 +44,18 @@ function getExposurePlugin(): ExposurePlugin {
 }
 
 /**
+ * Destroy and forget the shared exposure plugin. The SDK's `destroy()`
+ * disconnects the plugin's observers but cannot reset this module's
+ * singleton — call this alongside `destroy()` (the `initLarkSentry`
+ * teardown does) so the next `useExposure` re-creates and re-registers
+ * a fresh plugin.
+ */
+export function resetExposurePlugin(): void {
+  sharedPlugin?.destroy();
+  sharedPlugin = null;
+}
+
+/**
  * Track element exposure duration declaratively — a lark-mvc hook over the
  * SDK's `ExposurePlugin` (one shared instance, lazily registered via
  * `enablePlugin`).
@@ -76,9 +88,8 @@ export function useExposure(options: UseExposureOptions = {}): (el: Element | nu
     slot.current = (el: Element | null): void => {
       if (el === current) return;
       try {
-        const plugin = getExposurePlugin();
-        if (current) plugin.unobserve(current);
-        if (el) plugin.observe({ target: el, threshold, params });
+        if (current) sharedPlugin?.unobserve(current);
+        if (el) getExposurePlugin().observe({ target: el, threshold, params });
       } catch (error) {
         console.error("[lark-sentry] exposure tracking failed:", error);
       }

@@ -22,8 +22,9 @@
 
 import { useRouter } from "@lark.js/mvc";
 import type { RouterApi } from "@lark.js/mvc";
-import { init } from "@swifty.js/sentry";
+import { destroy, init, isInitialized } from "@swifty.js/sentry";
 import type { InitOptions } from "@swifty.js/sentry";
+import { resetExposurePlugin } from "./exposure.js";
 import { installRouteTracking } from "./route-tracking.js";
 import { createStoreStateHook } from "./store-state.js";
 import type { StoreStateSource } from "./store-state.js";
@@ -39,14 +40,13 @@ export interface LarkSentryOptions extends InitOptions {
    */
   readonly router?: RouterApi;
   /**
-   * Install route-pattern tracking (see `installRouteTracking`).
+   * Install route-pattern tracking (`"LarkRoute"` PV per navigation).
    * @defaultValue true
    */
   readonly trackRoutes?: boolean;
   /**
-   * Named state sources whose snapshots are attached (as a top-level
-   * `storeState` field) to every error-class report — see
-   * `createStoreStateHook`. Composes with your own `onBeforeReportData`,
+   * Named state sources snapshotted into `payload.storeState` of every
+   * error-class report. Composes with your own `onBeforeReportData`,
    * which keeps running first.
    */
   readonly attachStores?: Readonly<Record<string, StoreStateSource>>;
@@ -55,65 +55,63 @@ export interface LarkSentryOptions extends InitOptions {
 const noop = (): void => {};
 
 /**
- * One-call lark-mvc integration: initialize `@swifty.js/sentry` and install
- * the framework-level instrumentation.
+ * One-call lark-mvc integration: initialize `@swifty.js/sentry`, install
+ * route-pattern page views (`trackRoutes`, default on), and attach store
+ * snapshots to error reports (`attachStores`, opt-in).
  *
- * lark-mvc has no error sink and no try-catch wrappers — errors thrown in
- * component bodies, effects, and event handlers BUBBLE to `window.onerror` /
- * `unhandledrejection`, which the SDK captures natively (`enableError` /
- * `enableUnhandledRejection`, both on by default). Calling this is all that
- * error reporting requires; what it adds on top:
+ * Error capture needs nothing more — lark-mvc errors BUBBLE to
+ * `window.onerror` / `unhandledrejection`, which the SDK captures natively.
  *
- * - route-pattern page views (`trackRoutes`, default on);
- * - store snapshots on error reports (`attachStores`, opt-in).
- *
- * Create the router BEFORE calling this (or pass `router` explicitly) —
+ * Create the router BEFORE calling this (or pass `router` explicitly);
  * when no router is resolvable, route tracking is skipped with a
- * `console.warn` instead of throwing, so non-routed apps can still use the
- * one-call form.
+ * `console.warn` so non-routed apps can still use the one-call form.
  *
- * @example
- * ```tsx
- * import { render, createRouter, RouterView } from "@lark.js/mvc";
- * import { initLarkSentry, instrumentRoutes } from "@lark.js/sentry";
+ * Idempotent like the SDK's `init`: a second call warns and returns a
+ * no-op. When the SDK stays inert (`disabled: true` or an empty `dsn`),
+ * nothing is installed and a no-op is returned — lark instrumentation
+ * never reports around a disabled SDK.
  *
- * const router = createRouter(
- *   instrumentRoutes([
- *     { path: "/", component: Home },
- *     { path: "/users/:id", component: UserDetail },
- *   ]),
- * );
- *
- * initLarkSentry({ dsn: "/api/log", projectId: "lark-app", router });
- *
- * render(<RouterView router={router} />, document.getElementById("root")!);
- * ```
- *
- * @param options - SDK init options plus lark integration switches.
- * @returns An uninstall function for the route tracking (a no-op when
- *   tracking was not installed); the SDK itself is torn down via
- *   `destroy()` from `@swifty.js/sentry`.
+ * @param options - SDK init options plus the lark integration switches.
+ * @returns A full teardown: uninstalls route tracking, `destroy()`s the
+ *   SDK, and resets the shared exposure plugin.
  */
 export function initLarkSentry(options: LarkSentryOptions): () => void {
   const { router, trackRoutes = true, attachStores, ...sdkOptions } = options;
 
-  const initOptions: InitOptions = attachStores
-    ? {
-        ...sdkOptions,
-        onBeforeReportData: createStoreStateHook(attachStores, sdkOptions.onBeforeReportData),
-      }
-    : sdkOptions;
-  init(initOptions);
-
-  if (!trackRoutes) return noop;
-  const target = router ?? resolveActiveRouter();
-  if (!target) {
+  if (isInitialized()) {
     console.warn(
-      "[lark-sentry] no active router — route tracking skipped. Create the router before initLarkSentry, or pass { router }.",
+      "[lark-sentry] already initialized — call the previous teardown (or destroy()) first.",
     );
     return noop;
   }
-  return installRouteTracking(target);
+
+  init(
+    attachStores
+      ? {
+          ...sdkOptions,
+          onBeforeReportData: createStoreStateHook(attachStores, sdkOptions.onBeforeReportData),
+        }
+      : sdkOptions,
+  );
+  if (!isInitialized()) return noop; // disabled or empty dsn — the SDK is inert
+
+  let uninstallTracking = noop;
+  if (trackRoutes) {
+    const target = router ?? resolveActiveRouter();
+    if (target) {
+      uninstallTracking = installRouteTracking(target);
+    } else {
+      console.warn(
+        "[lark-sentry] no active router — route tracking skipped. Create the router before initLarkSentry, or pass { router }.",
+      );
+    }
+  }
+
+  return () => {
+    uninstallTracking();
+    destroy();
+    resetExposurePlugin();
+  };
 }
 
 function resolveActiveRouter(): RouterApi | null {

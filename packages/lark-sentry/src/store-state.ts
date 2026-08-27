@@ -22,7 +22,7 @@
 
 import { untracked } from "@lark.js/mvc";
 import { EventType } from "@swifty.js/sentry";
-import type { IReportData, ReportDataHook } from "@swifty.js/sentry";
+import type { ReportDataHook } from "@swifty.js/sentry";
 
 /**
  * A source of state to snapshot: anything with a zustand-style `getState()`
@@ -68,20 +68,18 @@ function snapshot(source: StoreStateSource): unknown {
  *    drop / Promise result;
  * 2. for error-class events only (`Error`, `UnhandledRejection`,
  *    `Resource`, `Vue`, `React`, `OtherFrameworks`) returns the report
- *    enriched with a top-level `storeState` field —
- *    `{ [name]: snapshot }` per configured source.
+ *    with `payload.storeState` set to `{ [name]: snapshot }` per
+ *    configured source. Snapshots live under `payload` (not top-level)
+ *    because the SDK's offline-cache schema strips unknown envelope keys
+ *    while passing `payload` through opaquely.
  *
  * Snapshots are taken at report time inside `untracked()` (reading a store
  * proxy never subscribes a component, even when the report originates from
  * a tracked region).
  *
- * Prefer the `attachStores` option of `initLarkSentry`, which wires this
- * hook up for you; use this directly only when calling the SDK's `init`
- * yourself.
- *
  * @param stores - Named state sources to snapshot per error report.
  * @param next - An existing hook to compose (runs before attachment).
- * @returns A hook for `init({ onBeforeReportData })` / `beforeSendData`.
+ * @returns A hook for `init({ onBeforeReportData })`.
  */
 export function createStoreStateHook(
   stores: Readonly<Record<string, StoreStateSource>>,
@@ -97,6 +95,6 @@ export function createStoreStateHook(
       }
       return snapshots;
     });
-    return { ...result, storeState } as IReportData;
+    return { ...result, payload: Object.assign({}, result.payload, { storeState }) };
   };
 }

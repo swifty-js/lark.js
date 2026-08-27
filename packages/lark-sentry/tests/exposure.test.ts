@@ -23,17 +23,19 @@
 import { render, unmount } from "@lark.js/mvc";
 import { jsx } from "@lark.js/mvc/jsx-runtime";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { useExposure } from "../src/exposure.js";
+import { resetExposurePlugin, useExposure } from "../src/exposure.js";
 
-const { observe, unobserve } = vi.hoisted(() => ({
+const { observe, unobserve, destroy } = vi.hoisted(() => ({
   observe: vi.fn(),
   unobserve: vi.fn(),
+  destroy: vi.fn(),
 }));
 
 vi.mock("@swifty.js/sentry/plugins", () => ({
   ExposurePlugin: class MockExposurePlugin {
     observe = observe;
     unobserve = unobserve;
+    destroy = destroy;
   },
 }));
 
@@ -55,8 +57,11 @@ beforeEach(() => {
 afterEach(() => {
   unmount(container);
   container.remove();
+  resetExposurePlugin(); // isolate the module singleton between tests
   observe.mockReset();
   unobserve.mockReset();
+  destroy.mockReset();
+  enableMock.mockClear();
   vi.restoreAllMocks();
 });
 
@@ -127,5 +132,33 @@ describe("useExposure", () => {
       expect.any(Error),
     );
     errorSpy.mockRestore();
+  });
+});
+
+describe("resetExposurePlugin", () => {
+  it("destroys the shared plugin; the next use re-creates and re-registers it", () => {
+    function Banner() {
+      return jsx("div", { ref: useExposure() });
+    }
+
+    render(jsx(Banner, {}), container);
+    expect(enableMock).toHaveBeenCalledTimes(1);
+
+    resetExposurePlugin();
+    expect(destroy).toHaveBeenCalledTimes(1);
+
+    unmount(container); // no plugin re-created just to unobserve
+    expect(unobserve).not.toHaveBeenCalled();
+    expect(enableMock).toHaveBeenCalledTimes(1);
+
+    render(jsx(Banner, {}), container); // fresh mount re-creates the plugin
+    expect(enableMock).toHaveBeenCalledTimes(2);
+    expect(observe).toHaveBeenCalledTimes(2);
+  });
+
+  it("is idempotent — resetting with no plugin is a no-op", () => {
+    resetExposurePlugin();
+    resetExposurePlugin();
+    expect(destroy).not.toHaveBeenCalled();
   });
 });

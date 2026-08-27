@@ -109,19 +109,6 @@ describe("installRouteTracking", () => {
     );
   });
 
-  it("falls back to the ACTIVE router when none is passed", async () => {
-    const r = makeRouter(); // createRouter records the active router
-    uninstallers.push(installRouteTracking());
-    traceMock.mockClear();
-
-    await r.navigate("/users/7");
-    expect(traceMock).toHaveBeenCalledTimes(1);
-  });
-
-  it("throws when no router exists at all", () => {
-    expect(() => installRouteTracking()).toThrow(/no active router/);
-  });
-
   it("uninstall stops the tracking", async () => {
     const r = makeRouter();
     const uninstall = installRouteTracking(r);

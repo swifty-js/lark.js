@@ -27,11 +27,16 @@ import { describe, expect, it } from "vitest";
 import { createStoreStateHook } from "../src/store-state.js";
 
 function makeReport(type: EventType): IReportData {
-  return { type } as unknown as IReportData;
+  return { type, payload: { existing: true } } as unknown as IReportData;
+}
+
+function storeStateOf(result: IReportData | false): Record<string, unknown> {
+  return (result as IReportData & { payload: { storeState: Record<string, unknown> } }).payload
+    .storeState;
 }
 
 describe("createStoreStateHook", () => {
-  it("attaches snapshots of getState sources and selector sources to error reports", async () => {
+  it("attaches snapshots of getState sources and selector sources under payload.storeState", async () => {
     const cart = createStore(() => ({ items: ["a", "b"], total: 42 }));
     const hook = createStoreStateHook({
       cart,
@@ -43,10 +48,13 @@ describe("createStoreStateHook", () => {
     expect(result).toEqual(
       expect.objectContaining({
         type: EventType.Error,
-        storeState: {
-          cart: { items: ["a", "b"], total: 42 },
-          user: { id: "u1" },
-        },
+        payload: expect.objectContaining({
+          existing: true, // original payload fields preserved
+          storeState: {
+            cart: { items: ["a", "b"], total: 42 },
+            user: { id: "u1" },
+          },
+        }),
       }),
     );
   });
@@ -63,7 +71,7 @@ describe("createStoreStateHook", () => {
       EventType.OtherFrameworks,
     ]) {
       const result = await hook(makeReport(type));
-      expect(result).toEqual(expect.objectContaining({ storeState: { s: 1 } }));
+      expect(storeStateOf(result)).toEqual({ s: 1 });
     }
 
     for (const type of [EventType.Click, EventType.PV, EventType.Performance, EventType.Custom]) {
@@ -80,31 +88,32 @@ describe("createStoreStateHook", () => {
     // Click would be skipped, but the user hook reclassifies it as Error.
     const result = await hook(makeReport(EventType.Click));
 
-    expect(result).toEqual(
-      expect.objectContaining({ type: EventType.Error, storeState: { s: "x" } }),
-    );
+    expect(result).toEqual(expect.objectContaining({ type: EventType.Error }));
+    expect(storeStateOf(result)).toEqual({ s: "x" });
   });
 
   it("honors a user hook dropping the event (false) — sync and async", async () => {
     const syncHook = createStoreStateHook({ s: () => 1 }, () => false);
     await expect(syncHook(makeReport(EventType.Error))).resolves.toBe(false);
 
-    const asyncHook = createStoreStateHook({ s: () => 1 }, async () => false);
+    const asyncHook = createStoreStateHook({ s: () => 1 }, async () => false as const);
     await expect(asyncHook(makeReport(EventType.Error))).resolves.toBe(false);
   });
 
   it("drops store actions (functions) from snapshots via the JSON round-trip", async () => {
-    const store = createStore((set, get) => ({
+    interface CounterStore {
+      count: number;
+      increment: () => void;
+    }
+    const store = createStore<CounterStore>((set, get) => ({
       count: 1,
       increment: () => set({ count: get().count + 1 }),
     }));
     const hook = createStoreStateHook({ store });
 
-    const result = (await hook(makeReport(EventType.Error))) as IReportData & {
-      storeState: Record<string, unknown>;
-    };
+    const result = await hook(makeReport(EventType.Error));
 
-    expect(result.storeState["store"]).toEqual({ count: 1 });
+    expect(storeStateOf(result)["store"]).toEqual({ count: 1 });
   });
 
   it("collapses unserializable (circular) state to a marker", async () => {
@@ -112,21 +121,17 @@ describe("createStoreStateHook", () => {
     circular["self"] = circular;
     const hook = createStoreStateHook({ bad: () => circular, good: () => ({ ok: true }) });
 
-    const result = (await hook(makeReport(EventType.Error))) as IReportData & {
-      storeState: Record<string, unknown>;
-    };
+    const result = await hook(makeReport(EventType.Error));
 
-    expect(result.storeState["bad"]).toEqual({ $unserializable: true });
-    expect(result.storeState["good"]).toEqual({ ok: true });
+    expect(storeStateOf(result)["bad"]).toEqual({ $unserializable: true });
+    expect(storeStateOf(result)["good"]).toEqual({ ok: true });
   });
 
   it("maps an undefined selector result to null", async () => {
     const hook = createStoreStateHook({ empty: () => undefined });
 
-    const result = (await hook(makeReport(EventType.Error))) as IReportData & {
-      storeState: Record<string, unknown>;
-    };
+    const result = await hook(makeReport(EventType.Error));
 
-    expect(result.storeState["empty"]).toBeNull();
+    expect(storeStateOf(result)["empty"]).toBeNull();
   });
 });

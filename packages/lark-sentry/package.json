@@ -1,6 +1,6 @@
 {
   "name": "@lark.js/sentry",
-  "version": "0.1.0",
+  "version": "0.0.19",
   "description": "Framework-level @swifty.js/sentry integration for lark-mvc (@lark.js/mvc): route-pattern tracking, lazy-route instrumentation, component profiler, exposure hook, store state on error reports",
   "keywords": [
     "lark.js",
@@ -19,6 +19,7 @@
     "README.md"
   ],
   "type": "module",
+  "sideEffects": false,
   "main": "dist/index.cjs",
   "module": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -65,17 +66,16 @@
     }
   },
   "scripts": {
-    "prepublish": "pnpm build",
     "build": "tsup",
     "format": "oxfmt --write ./",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc -p tsconfig.build.json --noEmit",
+    "typecheck": "tsc -p tsconfig.build.json --noEmit && tsc --noEmit",
     "prepublishOnly": "pnpm build"
   },
   "devDependencies": {
     "@lark.js/mvc": "workspace:*",
-    "@swifty.js/sentry": "latest",
+    "@swifty.js/sentry": "^0.0.5",
     "jsdom": "^29.1.1",
     "oxfmt": "^0.61.0",
     "tsup": "^8.5.1",
@@ -83,7 +83,7 @@
     "vitest": "^4.1.11"
   },
   "peerDependencies": {
-    "@lark.js/mvc": "workspace:*",
+    "@lark.js/mvc": ">=0.0.34",
     "@swifty.js/sentry": ">=0.0.5",
     "vite": "^7.0.0 || ^8.0.0",
     "webpack": "^4.0.0 || ^5.0.0"

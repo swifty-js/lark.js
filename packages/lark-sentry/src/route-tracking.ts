@@ -20,44 +20,35 @@
  * SOFTWARE.
  */
 
-import { effect, untracked, useRouter } from "@lark.js/mvc";
+import { effect, untracked } from "@lark.js/mvc";
 import type { RouterApi } from "@lark.js/mvc";
 import { tracePageView } from "@swifty.js/sentry";
 
 /**
- * Subscribe route-pattern page views to `@swifty.js/sentry` — the lark-mvc
- * analog of Sentry's react-router browser-tracing integration.
- *
- * What the SDK cannot infer on its own is the MATCHED ROUTE PATTERN
- * (`/users/:id` instead of `/users/42`) — the key for grouping page views.
- * This installs a signals `effect` over the router's `location`/`match`
- * signals and reports one `PV` event named `"LarkRoute"` per committed
- * navigation (including the initial location), with:
+ * Report one `PV` event named `"LarkRoute"` per committed navigation
+ * (including the initial location) — the lark-mvc analog of Sentry's
+ * react-router browser tracing. What the SDK cannot infer on its own is
+ * the MATCHED ROUTE PATTERN (`/users/:id` instead of `/users/42`), the
+ * grouping key for page views:
  *
  * - `message` — `pathname + search` (logical, basename-stripped)
- * - `extra.pattern` — the matched `RouteObject.path` (`"/users/:id"`), or
- *   `null` when no route matched
+ * - `extra.pattern` — the matched `RouteObject.path`, or `null` when unmatched
  * - `extra.params` — decoded `:param` / `*` captures
  * - `extra.href` — the full `location.href`
  *
- * The SDK's native `HistoryChange` / `PageDwell` PV events (from its
- * `pushState`/`popstate` decoration) continue independently — `"LarkRoute"`
- * supplements them with the pattern, it does not replace them.
+ * The SDK's native `HistoryChange` / `PageDwell` PVs continue independently.
+ * Reporting never disturbs rendering: the report runs inside `untracked()`
+ * and reporter exceptions are swallowed.
  *
- * Reporting never disturbs rendering: the effect body runs the report
- * inside `untracked()` and swallows reporter exceptions.
- *
- * @param router - The router to observe. Defaults to the ACTIVE router
- *   (the last `createRouter(...)` result); throws when neither is available.
- * @returns An uninstall function disposing the tracking effect.
+ * @param router - The router to observe.
+ * @returns The disposer of the tracking effect.
  */
-export function installRouteTracking(router?: RouterApi): () => void {
-  const target = router ?? useRouter();
+export function installRouteTracking(router: RouterApi): () => void {
   let lastKey: string | undefined;
 
   return effect(() => {
-    const loc = target.location.value; // tracked — re-runs per navigation
-    const match = target.match.value; // tracked (same commit)
+    const loc = router.location.value; // tracked — re-runs per navigation
+    const match = router.match.value; // tracked (same commit)
     untracked(() => {
       if (loc.key === lastKey) return; // same-entry re-commit → skip
       lastKey = loc.key;

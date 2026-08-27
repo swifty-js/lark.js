@@ -22,40 +22,28 @@
 
 /**
  * `@lark.js/sentry` — framework-level `@swifty.js/sentry` integration for
- * lark-mvc (`@lark.js/mvc`, signals-only), modeled on Sentry's React and
- * React Router integrations:
+ * lark-mvc (`@lark.js/mvc`, signals-only):
  *
- * | Sentry reference                      | lark equivalent                                  |
- * | ------------------------------------- | ------------------------------------------------ |
- * | react-router browser tracing          | {@link installRouteTracking} — route-pattern PVs |
- * | `wrapCreateBrowserRouter`             | {@link instrumentRoutes} — lazy-route errors + load time |
- * | `useProfiler` / `withProfiler`        | {@link useProfiler} / {@link withProfiler}       |
- * | Redux enhancer state attachment       | `attachStores` / {@link createStoreStateHook}    |
- * | `ErrorBoundary`                       | none BY DESIGN — see below                       |
- * | (swifty `ExposurePlugin`)             | {@link useExposure} — `ref`-callback hook        |
+ * - {@link initLarkSentry} — the one-call entry: SDK init + route-pattern
+ *   PVs + store snapshots on error reports; returns a full teardown.
+ * - {@link instrumentRoutes} — lazy-route load metrics + route-context errors.
+ * - {@link useProfiler} — component mount / lifespan / render-count metrics.
+ * - {@link useExposure} / {@link resetExposurePlugin} — element exposure hook.
  *
- * ## Error capture — automatic, no boundary needed
+ * There is deliberately NO ErrorBoundary: lark-mvc has no error sink, so
+ * errors thrown in bodies, effects, and handlers BUBBLE to `window.onerror`
+ * / `unhandledrejection`, which the SDK captures natively.
  *
- * lark-mvc has no error sink and no try-catch wrappers: errors thrown in
- * component bodies, effects, and event handlers BUBBLE to `window.onerror` /
- * `unhandledrejection`, which `@swifty.js/sentry` captures natively
- * (`enableError` / `enableUnhandledRejection`, both on by default). An
- * ErrorBoundary equivalent is therefore neither possible nor necessary —
- * calling {@link initLarkSentry} (or the SDK's `init`) is all that error
- * reporting requires.
- *
- * The full `@swifty.js/sentry` core API is re-exported, so this package is
- * a drop-in superset: `import { initLarkSentry, traceError } from "@lark.js/sentry"`.
+ * The full `@swifty.js/sentry` core API is re-exported — this package is a
+ * drop-in superset.
  */
 
 export * from "@swifty.js/sentry";
 
 export { initLarkSentry } from "./init.js";
 export type { LarkSentryOptions } from "./init.js";
-export { installRouteTracking } from "./route-tracking.js";
 export { instrumentRoutes } from "./instrument-routes.js";
-export { useProfiler, withProfiler } from "./profiler.js";
-export { useExposure } from "./exposure.js";
+export { useProfiler } from "./profiler.js";
+export { resetExposurePlugin, useExposure } from "./exposure.js";
 export type { UseExposureOptions } from "./exposure.js";
-export { createStoreStateHook } from "./store-state.js";
 export type { StoreStateSource } from "./store-state.js";

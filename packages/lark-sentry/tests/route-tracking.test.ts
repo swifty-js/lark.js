@@ -23,15 +23,13 @@
 import { createRouter } from "@lark.js/mvc";
 import type { RouterApi } from "@lark.js/mvc";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { initLarkSentry, installLarkSentry } from "../src/index.js";
+import { installRouteTracking } from "../src/route-tracking.js";
 
 vi.mock("@swifty.js/sentry", () => ({
-  init: vi.fn(),
   tracePageView: vi.fn(),
 }));
 
-const { init, tracePageView } = await import("@swifty.js/sentry");
-const initMock = vi.mocked(init);
+const { tracePageView } = await import("@swifty.js/sentry");
 const traceMock = vi.mocked(tracePageView);
 
 const Home = (): string => "home";
@@ -49,7 +47,6 @@ afterEach(() => {
   uninstallers = [];
   router?.dispose();
   router = undefined;
-  initMock.mockClear();
   traceMock.mockReset();
 });
 
@@ -61,10 +58,10 @@ function makeRouter(): RouterApi {
   return router;
 }
 
-describe("installLarkSentry", () => {
+describe("installRouteTracking", () => {
   it("reports the initial location as a LarkRoute page view", () => {
     const r = makeRouter();
-    uninstallers.push(installLarkSentry(r));
+    uninstallers.push(installRouteTracking(r));
 
     expect(traceMock).toHaveBeenCalledTimes(1);
     expect(traceMock).toHaveBeenCalledWith({
@@ -80,7 +77,7 @@ describe("installLarkSentry", () => {
 
   it("reports the matched route PATTERN and decoded params per navigation", async () => {
     const r = makeRouter();
-    uninstallers.push(installLarkSentry(r));
+    uninstallers.push(installRouteTracking(r));
     traceMock.mockClear();
 
     await r.navigate("/users/42?tab=posts");
@@ -99,7 +96,7 @@ describe("installLarkSentry", () => {
 
   it("reports pattern null for unmatched locations", async () => {
     const r = makeRouter();
-    uninstallers.push(installLarkSentry(r));
+    uninstallers.push(installRouteTracking(r));
     traceMock.mockClear();
 
     await r.navigate("/nowhere");
@@ -114,7 +111,7 @@ describe("installLarkSentry", () => {
 
   it("falls back to the ACTIVE router when none is passed", async () => {
     const r = makeRouter(); // createRouter records the active router
-    uninstallers.push(installLarkSentry());
+    uninstallers.push(installRouteTracking());
     traceMock.mockClear();
 
     await r.navigate("/users/7");
@@ -122,12 +119,12 @@ describe("installLarkSentry", () => {
   });
 
   it("throws when no router exists at all", () => {
-    expect(() => installLarkSentry()).toThrow(/no active router/);
+    expect(() => installRouteTracking()).toThrow(/no active router/);
   });
 
   it("uninstall stops the tracking", async () => {
     const r = makeRouter();
-    const uninstall = installLarkSentry(r);
+    const uninstall = installRouteTracking(r);
     traceMock.mockClear();
 
     uninstall();
@@ -140,24 +137,9 @@ describe("installLarkSentry", () => {
       throw new Error("report exploded");
     });
     const r = makeRouter();
-    uninstallers.push(installLarkSentry(r));
+    uninstallers.push(installRouteTracking(r));
 
     await expect(r.navigate("/users/1")).resolves.toBe(true);
     expect(r.location.value.pathname).toBe("/users/1");
-  });
-});
-
-describe("initLarkSentry", () => {
-  it("initializes the SDK and installs route tracking", async () => {
-    const r = makeRouter();
-    const uninstall = initLarkSentry({ dsn: "/api/log", projectId: "app" }, r);
-    uninstallers.push(uninstall);
-
-    expect(initMock).toHaveBeenCalledTimes(1);
-    expect(initMock).toHaveBeenCalledWith({ dsn: "/api/log", projectId: "app" });
-
-    traceMock.mockClear();
-    await r.navigate("/users/9");
-    expect(traceMock).toHaveBeenCalledTimes(1);
   });
 });

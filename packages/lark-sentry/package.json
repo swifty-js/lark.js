@@ -1,7 +1,7 @@
 {
   "name": "@lark.js/sentry",
-  "version": "0.0.18",
-  "description": "@swifty.js/sentry framework-level integration for lark framework (@lark.js/mvc)",
+  "version": "0.1.0",
+  "description": "Framework-level @swifty.js/sentry integration for lark-mvc (@lark.js/mvc): route-pattern tracking, lazy-route instrumentation, component profiler, exposure hook, store state on error reports",
   "keywords": [
     "lark.js",
     "mvc",

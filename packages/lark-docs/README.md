@@ -1,12 +1,15 @@
 # @lark.js/docs
 
-Helpers that make VitePress work out of the box. The package does two things:
+Composable helpers for VitePress. The package does two things:
 
 - Generates `themeConfig.nav` and `themeConfig.sidebar` from the directory
   structure of your docs folder, so you never hand-write them.
 - Renders ` ```mermaid ` code fences as diagrams through a `<wc-mermaid>`
   custom element built with Lit, including automatic re-render when the
   VitePress light/dark theme changes.
+
+Everything is a plain function that you wire into the native VitePress
+`defineConfig()`. The package never wraps or rewrites your config.
 
 ESM only. VitePress 1 or 2 is a peer dependency; `lit` and `mermaid` are
 regular dependencies, so consumers install nothing else for diagrams.
@@ -22,12 +25,29 @@ pnpm add -D @lark.js/docs vitepress
 `.vitepress/config.ts`:
 
 ```ts
-import { defineDocsConfig } from "@lark.js/docs";
+import { defineConfig } from "vitepress";
+import { buildNav, buildSidebar, installMermaidFence, MERMAID_TAG } from "@lark.js/docs";
 
-export default defineDocsConfig({
+export default defineConfig({
   title: "My Docs",
   srcDir: "docs",
-  // every other native VitePress option works as usual
+  themeConfig: {
+    nav: buildNav("docs"),
+    sidebar: buildSidebar("docs"),
+  },
+  markdown: { config: installMermaidFence },
+  vue: {
+    template: {
+      compilerOptions: { isCustomElement: (tag) => tag === MERMAID_TAG },
+    },
+  },
+  vite: {
+    optimizeDeps: {
+      exclude: ["@lark.js/docs"],
+      include: ["@lark.js/docs > mermaid"],
+    },
+    ssr: { noExternal: ["@lark.js/docs"] },
+  },
 });
 ```
 
@@ -56,31 +76,75 @@ graph TD
 ```
 ````
 
-## What defineDocsConfig injects
+## API
 
-`defineDocsConfig()` wraps VitePress `defineConfig()` and fills in:
+### `buildNav(srcDir?)` and `buildSidebar(srcDir?)`
 
-- `themeConfig.nav`: a `homepage` link to `/`, then one dropdown per
-  top-level directory under `srcDir`, listing that directory's markdown
-  files. `index.md` files are skipped.
-- `themeConfig.sidebar`: one group per top-level directory. Nested
-  directories become collapsed groups, recursively. Files sort with numeric
-  awareness, so `2-foo.md` comes before `10-bar.md`.
-- A markdown fence rule that turns ` ```mermaid ` blocks into
-  `<wc-mermaid>` tags. Other fences keep the default renderer.
-- `vue.template.compilerOptions.isCustomElement` for the `wc-mermaid` tag.
-- `vite.optimizeDeps.exclude` and `vite.ssr.noExternal` entries for
-  `@lark.js/docs` itself.
+Scan the docs directory and return values for `themeConfig.nav` and
+`themeConfig.sidebar`:
 
-Your own values win. If the config passes `themeConfig.nav` or
-`themeConfig.sidebar`, generation for that field is skipped. A user
-`markdown.config` runs after the fence rule, and a user `isCustomElement`
-is composed with the built-in one.
+- `buildNav`: a `homepage` link to `/`, then one dropdown per top-level
+  directory, listing that directory's markdown files. `index.md` files are
+  skipped.
+- `buildSidebar`: one group per top-level directory. Nested directories
+  become collapsed groups, recursively. Files sort with numeric awareness,
+  so `2-foo.md` comes before `10-bar.md`.
 
-The docs directory is resolved as `process.cwd()` joined with `srcDir`
-(default `"."`), which matches running `vitepress dev` / `vitepress build`
-from the site root. Directories named `node_modules`, `public`, `dist`, or
-starting with a dot are ignored.
+`srcDir` (default `"."`) is resolved against `process.cwd()`, which matches
+running `vitepress dev` / `vitepress build` from the site root — pass the
+same value as the VitePress `srcDir` option. Directories named
+`node_modules`, `public`, `dist`, or starting with a dot are ignored.
+
+Both are plain functions returning plain data, so mixing generated and
+hand-written entries is ordinary array/object composition.
+
+### `installMermaidFence(md)`
+
+A markdown fence rule that turns ` ```mermaid ` blocks into `<wc-mermaid>`
+tags; other fences keep the default renderer. Pass it directly as
+`markdown.config`, or call it from your own config function alongside other
+markdown-it setup:
+
+```ts
+markdown: {
+  config(md) {
+    installMermaidFence(md);
+    // md.use(...) other plugins
+  },
+},
+```
+
+### `MERMAID_TAG`
+
+The custom element tag name (`"wc-mermaid"`). Vue must be told that the tag
+is a custom element, or the SSR build warns about an unresolvable component:
+
+```ts
+vue: {
+  template: {
+    compilerOptions: { isCustomElement: (tag) => tag === MERMAID_TAG },
+  },
+},
+```
+
+### The `vite` block
+
+`@lark.js/docs` is ESM-only and registers the element with a client-side
+dynamic import, so the mermaid setup needs both entries:
+
+- `optimizeDeps.exclude: ["@lark.js/docs"]` keeps the dev server from
+  prebundling the package.
+- `optimizeDeps.include: ["@lark.js/docs > mermaid"]` prebundles the nested
+  `mermaid` dependency. Because the package itself is excluded, its
+  `import("mermaid")` is served as source in dev, and mermaid's CommonJS
+  dependencies (such as `dayjs`) would reach the browser without ESM interop
+  and fail — pnpm's isolated `node_modules` hits this reliably.
+- `ssr.noExternal: ["@lark.js/docs"]` makes Vite bundle it during the
+  VitePress SSR build instead of externalizing it.
+
+Only the mermaid feature needs the `markdown` / `vue` / `vite` blocks; a
+site that just wants generated nav/sidebar can use `buildNav` /
+`buildSidebar` alone.
 
 ## Mermaid element
 
@@ -113,11 +177,11 @@ the VitePress SSR build.
 
 ## Exports
 
-| Entry                   | Purpose                                                          |
-| ----------------------- | ---------------------------------------------------------------- |
-| `@lark.js/docs`         | `defineDocsConfig()`, used in `.vitepress/config.ts` (Node side) |
-| `@lark.js/docs/theme`   | Drop-in theme extending the VitePress default theme              |
-| `@lark.js/docs/element` | Registers `<wc-mermaid>`; import client-side from custom themes  |
+| Entry                   | Purpose                                                                      |
+| ----------------------- | ---------------------------------------------------------------------------- |
+| `@lark.js/docs`         | `buildNav`, `buildSidebar`, `installMermaidFence`, `MERMAID_TAG` (Node side) |
+| `@lark.js/docs/theme`   | Drop-in theme extending the VitePress default theme                          |
+| `@lark.js/docs/element` | Registers `<wc-mermaid>`; import client-side from custom themes              |
 
 ## License
 

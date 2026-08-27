@@ -1,10 +1,8 @@
 import { readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { defineConfig, type DefaultTheme, type MarkdownRenderer, type UserConfig } from "vitepress";
+import type { DefaultTheme, MarkdownRenderer } from "vitepress";
 
-const PKG = "@lark.js/docs";
-
-const MERMAID_TAG = "wc-mermaid";
+export const MERMAID_TAG = "wc-mermaid";
 
 const EXCLUDED_DIRS = new Set(["node_modules", "dist", "public"]);
 
@@ -59,7 +57,8 @@ function buildNavItems(docsDir: string, dir: string): DefaultTheme.NavItemWithLi
     });
 }
 
-function buildSidebar(docsDir: string): DefaultTheme.Sidebar {
+export function buildSidebar(srcDir = "."): DefaultTheme.Sidebar {
+  const docsDir = resolve(process.cwd(), srcDir);
   return Object.fromEntries(
     getShallowDirs(docsDir).map((dir) => [
       `/${dir}/`,
@@ -68,7 +67,8 @@ function buildSidebar(docsDir: string): DefaultTheme.Sidebar {
   );
 }
 
-function buildNav(docsDir: string): DefaultTheme.NavItem[] {
+export function buildNav(srcDir = "."): DefaultTheme.NavItem[] {
+  const docsDir = resolve(process.cwd(), srcDir);
   return [
     { text: "homepage", link: "/" },
     ...getShallowDirs(docsDir).map((dir) => ({
@@ -79,7 +79,7 @@ function buildNav(docsDir: string): DefaultTheme.NavItem[] {
   ];
 }
 
-function installMermaidFence(md: MarkdownRenderer): void {
+export function installMermaidFence(md: MarkdownRenderer): void {
   const defaultFence = md.renderer.rules.fence?.bind(md.renderer.rules);
   md.renderer.rules.fence = (tokens, idx, options, env, self) => {
     const token = tokens[idx];
@@ -91,59 +91,4 @@ function installMermaidFence(md: MarkdownRenderer): void {
       ? defaultFence(tokens, idx, options, env, self)
       : self.renderToken(tokens, idx, options);
   };
-}
-
-type NoExternal = string | RegExp | (string | RegExp)[] | true;
-
-function withPkgNoExternal(noExternal: NoExternal | undefined): NoExternal {
-  if (noExternal === true) return true;
-  if (noExternal === undefined) return [PKG];
-  return Array.isArray(noExternal) ? [...noExternal, PKG] : [noExternal, PKG];
-}
-
-export function defineDocsConfig(
-  config: UserConfig<DefaultTheme.Config> = {},
-): UserConfig<DefaultTheme.Config> {
-  const docsDir = resolve(process.cwd(), config.srcDir ?? ".");
-
-  const userMarkdownConfig = config.markdown?.config;
-  const userIsCustomElement = config.vue?.template?.compilerOptions?.isCustomElement;
-  const userVite = config.vite ?? {};
-
-  return defineConfig({
-    ...config,
-    themeConfig: {
-      ...config.themeConfig,
-      nav: config.themeConfig?.nav ?? buildNav(docsDir),
-      sidebar: config.themeConfig?.sidebar ?? buildSidebar(docsDir),
-    },
-    markdown: {
-      ...config.markdown,
-      config(md) {
-        installMermaidFence(md);
-        userMarkdownConfig?.(md);
-      },
-    },
-    vue: {
-      ...config.vue,
-      template: {
-        ...config.vue?.template,
-        compilerOptions: {
-          ...config.vue?.template?.compilerOptions,
-          isCustomElement: (tag) => tag === MERMAID_TAG || (userIsCustomElement?.(tag) ?? false),
-        },
-      },
-    },
-    vite: {
-      ...userVite,
-      optimizeDeps: {
-        ...userVite.optimizeDeps,
-        exclude: [...(userVite.optimizeDeps?.exclude ?? []), PKG],
-      },
-      ssr: {
-        ...userVite.ssr,
-        noExternal: withPkgNoExternal(userVite.ssr?.noExternal as NoExternal | undefined),
-      },
-    },
-  });
 }

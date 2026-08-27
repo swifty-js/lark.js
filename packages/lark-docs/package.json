@@ -1,7 +1,7 @@
 {
   "name": "@lark.js/docs",
-  "version": "0.0.25",
-  "description": "Zero-config VitePress helpers: auto-generated nav/sidebar and Lit-rendered Mermaid diagrams.",
+  "version": "0.0.26",
+  "description": "Composable VitePress helpers: auto-generated nav/sidebar and Lit-rendered Mermaid diagrams.",
   "keywords": [
     "docs",
     "documentation",

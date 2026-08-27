@@ -11,7 +11,7 @@
   "license": "MIT",
   "author": "https://github.com/hangtiancheng",
   "repository": {
-    "url": "https://github.com/tianchenghang/lark.js",
+    "url": "https://github.com/swifty-js/lark.js",
     "directory": "packages/lark-mvc"
   },
   "files": [

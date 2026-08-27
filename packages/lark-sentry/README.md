@@ -1,6 +1,6 @@
 # @lark.js/sentry
 
-Framework-level [`@swifty.js/sentry`](https://www.npmjs.com/package/@swifty.js/sentry) integration for the [lark-mvc](https://github.com/tianchenghang/lark.js) frontend framework (`@lark.js/mvc`, signals-only) — modeled on Sentry's React and React Router integrations:
+Framework-level [`@swifty.js/sentry`](https://www.npmjs.com/package/@swifty.js/sentry) integration for the [lark-mvc](https://github.com/swifty-js/lark.js) frontend framework (`@lark.js/mvc`, signals-only) — modeled on Sentry's React and React Router integrations:
 
 | Sentry reference                                         | lark equivalent                                                            |
 | -------------------------------------------------------- | -------------------------------------------------------------------------- |
@@ -137,7 +137,10 @@ Options are captured on the first render. Telemetry failures are logged and swal
 
 ```tsx
 function Banner() {
-  const exposureRef = useExposure({ threshold: 0.75, params: { bannerId: "b1" } });
+  const exposureRef = useExposure({
+    threshold: 0.75,
+    params: { bannerId: "b1" },
+  });
   return <div ref={exposureRef}>...</div>;
 }
 ```

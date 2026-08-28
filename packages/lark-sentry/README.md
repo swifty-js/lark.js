@@ -23,7 +23,7 @@ lark-mvc has no error sink and no try-catch wrappers: errors thrown in component
 npm install @lark.js/sentry @swifty.js/sentry @lark.js/mvc
 ```
 
-`@lark.js/mvc` (>= 0.0.34) and `@swifty.js/sentry` (>= 0.0.5) are peer dependencies.
+`@lark.js/mvc` (>= 0.0.34) and `@swifty.js/sentry` (>= 0.0.6) are peer dependencies.
 
 ## Quick Start
 
@@ -95,7 +95,7 @@ The SDK's native `HistoryChange` / `PageDwell` PV events continue independently;
 
 For error-class events only (`Error`, `UnhandledRejection`, `Resource`, `Vue`, `React`, `OtherFrameworks` — the same set that carries breadcrumbs), each configured source is snapshotted into `payload.storeState` at report time. Snapshots live under `payload` (not top-level) so they survive the SDK's zod-validated offline-cache round trip.
 
-`StoreStateSource` is anything with a zustand-style `getState()` (a lark `createStore` store) or a selector function. Snapshots are JSON-round-tripped (store actions dropped, circular state collapses to `{ $unserializable: true }`) and taken inside `untracked()`, so reading a store proxy never subscribes a component. Your own `onBeforeReportData` composes — it runs **first**, and its transform / `false` drop / Promise result is honored.
+`StoreStateSource` is anything with a zustand-style `getState()` (a lark `createStore` store) or a selector function. Snapshots are JSON-round-tripped (store actions dropped, circular state collapses to `{ $unserializable: true }`) and taken inside `untracked()`, so reading a store proxy never subscribes a component. Your own `beforeSend` composes — it runs **first**, and its transform / `false` drop / Promise result is honored.
 
 ### `instrumentRoutes(routes: RouteObject[]): RouteObject[]`
 

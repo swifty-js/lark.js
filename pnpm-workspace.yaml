@@ -27,3 +27,6 @@ allowBuilds:
   keytar: true
   msw: true
   playwright-chromium: true
+
+minimumReleaseAgeExclude:
+  - '@swifty.js/sentry@0.0.6'

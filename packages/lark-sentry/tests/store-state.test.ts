@@ -22,7 +22,7 @@
 
 import { createStore } from "@lark.js/mvc";
 import { EventType } from "@swifty.js/sentry";
-import type { IReportData, ReportDataHook } from "@swifty.js/sentry";
+import type { BeforeSendHook, IReportData } from "@swifty.js/sentry";
 import { describe, expect, it } from "vitest";
 import { createStoreStateHook } from "../src/store-state.js";
 
@@ -82,7 +82,7 @@ describe("createStoreStateHook", () => {
   });
 
   it("runs the user hook FIRST and attaches based on its transform", async () => {
-    const next: ReportDataHook = (data) => ({ ...data, type: EventType.Error });
+    const next: BeforeSendHook = (data) => ({ ...data, type: EventType.Error });
     const hook = createStoreStateHook({ s: () => "x" }, next);
 
     // Click would be skipped, but the user hook reclassifies it as Error.

@@ -46,8 +46,8 @@ export interface LarkSentryOptions extends InitOptions {
   readonly trackRoutes?: boolean;
   /**
    * Named state sources snapshotted into `payload.storeState` of every
-   * error-class report. Composes with your own `onBeforeReportData`,
-   * which keeps running first.
+   * error-class report. Composes with your own `beforeSend`, which keeps
+   * running first.
    */
   readonly attachStores?: Readonly<Record<string, StoreStateSource>>;
 }
@@ -89,7 +89,7 @@ export function initLarkSentry(options: LarkSentryOptions): () => void {
     attachStores
       ? {
           ...sdkOptions,
-          onBeforeReportData: createStoreStateHook(attachStores, sdkOptions.onBeforeReportData),
+          beforeSend: createStoreStateHook(attachStores, sdkOptions.beforeSend),
         }
       : sdkOptions,
   );

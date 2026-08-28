@@ -23,7 +23,7 @@
 import { createRouter } from "@lark.js/mvc";
 import type { RouterApi } from "@lark.js/mvc";
 import { EventType } from "@swifty.js/sentry";
-import type { IReportData, InitOptions, ReportDataHook } from "@swifty.js/sentry";
+import type { BeforeSendHook, IReportData, InitOptions } from "@swifty.js/sentry";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { initLarkSentry } from "../src/init.js";
 
@@ -101,7 +101,7 @@ describe("initLarkSentry", () => {
       expect.objectContaining({
         dsn: "/api/log",
         projectId: "app",
-        onBeforeReportData: expect.any(Function),
+        beforeSend: expect.any(Function),
       }),
     );
     expect(arg).not.toHaveProperty("router");
@@ -201,17 +201,17 @@ describe("initLarkSentry", () => {
     expect(initMock).toHaveBeenCalledTimes(2);
   });
 
-  it("does not install onBeforeReportData when attachStores is absent", () => {
+  it("does not install beforeSend when attachStores is absent", () => {
     makeRouter();
     teardowns.push(initLarkSentry({ dsn: "/api/log" }));
 
-    expect(initMock.mock.calls[0]![0]).not.toHaveProperty("onBeforeReportData");
+    expect(initMock.mock.calls[0]![0]).not.toHaveProperty("beforeSend");
   });
 
   it("attachStores composes the user hook (user hook runs first)", async () => {
     const r = makeRouter();
     const seen: string[] = [];
-    const userHook: ReportDataHook = (data) => {
+    const userHook: BeforeSendHook = (data) => {
       seen.push("user");
       return data;
     };
@@ -221,11 +221,11 @@ describe("initLarkSentry", () => {
         dsn: "/api/log",
         router: r,
         attachStores: { cart: { getState: () => ({ items: 2 }) } },
-        onBeforeReportData: userHook,
+        beforeSend: userHook,
       }),
     );
 
-    const hook = initMock.mock.calls[0]![0].onBeforeReportData!;
+    const hook = initMock.mock.calls[0]![0].beforeSend!;
     const result = await hook(makeReport(EventType.Error));
 
     expect(seen).toEqual(["user"]);

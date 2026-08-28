@@ -21,8 +21,7 @@
  */
 
 import { untracked } from "@lark.js/mvc";
-import { EventType } from "@swifty.js/sentry";
-import type { ReportDataHook } from "@swifty.js/sentry";
+import { EventType, type BeforeSendHook } from "@swifty.js/sentry";
 
 /**
  * A source of state to snapshot: anything with a zustand-style `getState()`
@@ -49,7 +48,7 @@ const errorEventTypes: ReadonlySet<EventType> = new Set([
  */
 function snapshot(source: StoreStateSource): unknown {
   try {
-    const state = typeof source === "function" ? source() : { ...source.getState() };
+    const state = typeof source === "function" ? source() : source.getState();
     if (state === undefined) return null;
     return JSON.parse(JSON.stringify(state));
   } catch {
@@ -58,7 +57,7 @@ function snapshot(source: StoreStateSource): unknown {
 }
 
 /**
- * Build an `onBeforeReportData` hook that attaches store snapshots to
+ * Build a `beforeSend` hook that attaches store snapshots to
  * error-class reports — the lark-mvc analog of `@sentry/react`'s Redux
  * enhancer state attachment.
  *
@@ -79,12 +78,12 @@ function snapshot(source: StoreStateSource): unknown {
  *
  * @param stores - Named state sources to snapshot per error report.
  * @param next - An existing hook to compose (runs before attachment).
- * @returns A hook for `init({ onBeforeReportData })`.
+ * @returns A hook for `init({ beforeSend })`.
  */
 export function createStoreStateHook(
   stores: Readonly<Record<string, StoreStateSource>>,
-  next?: ReportDataHook,
-): ReportDataHook {
+  next?: BeforeSendHook,
+): BeforeSendHook {
   return async (data) => {
     const result = next ? await next(data) : data;
     if (result === false || !errorEventTypes.has(result.type)) return result;

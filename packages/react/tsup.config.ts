@@ -20,7 +20,22 @@
  * SOFTWARE.
  */
 
+import { cpSync } from "fs";
 import { defineConfig } from "tsup";
+
+// tsup runs array configs in parallel via Promise.all — a single config's
+// onSuccess fires before other configs' DTS generation finishes.
+// Defer the copy to process exit so all builds are fully complete.
+(() => {
+  process.on("exit", () => {
+    // copyFileSync("src/client.d.ts", "dist/client.d.ts");
+    cpSync("../../.agents/skills/lark-react", "skills/lark-react", {
+      errorOnExist: false,
+      force: true,
+      recursive: true,
+    });
+  });
+})();
 
 export default defineConfig([
   {

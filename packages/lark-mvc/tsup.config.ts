@@ -20,7 +20,7 @@
  * SOFTWARE.
  */
 
-import { copyFileSync } from "node:fs";
+import { copyFileSync, cpSync } from "node:fs";
 import { defineConfig } from "tsup";
 
 // tsup runs array configs in parallel via Promise.all — a single config's
@@ -29,6 +29,11 @@ import { defineConfig } from "tsup";
 (() => {
   process.on("exit", () => {
     copyFileSync("src/client.d.ts", "dist/client.d.ts");
+    cpSync("../../.agents/skills/lark-mvc", "skills/lark-mvc", {
+      errorOnExist: false,
+      force: true,
+      recursive: true,
+    });
   });
 })();
 

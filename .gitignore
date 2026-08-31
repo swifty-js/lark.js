@@ -221,3 +221,5 @@ dist-docs
 **/dist-app
 
 packages/lark-docs/playground/.vitepress/cache
+packages/lark-mvc/skills
+packages/lark-react/skills
